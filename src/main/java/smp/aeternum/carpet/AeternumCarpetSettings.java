@@ -9,4 +9,7 @@ public class AeternumCarpetSettings {
 
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean spectatorPortalTravel = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean openShulkerInHand = false;
 }
