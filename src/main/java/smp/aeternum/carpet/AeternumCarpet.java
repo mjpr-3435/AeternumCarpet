@@ -1,11 +1,18 @@
 package smp.aeternum.carpet;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 import net.minecraft.util.Identifier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import smp.aeternum.carpet.command.AeternumCommand;
+import smp.aeternum.carpet.config.AeternumCarpetConfig;
+import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -13,6 +20,9 @@ public class AeternumCarpet implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> AeternumCarpetConfig.load());
+		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> AeternumCommand.register(dispatcher));
 		LOGGER.info("Hello Fabric world!");
 	}
 
