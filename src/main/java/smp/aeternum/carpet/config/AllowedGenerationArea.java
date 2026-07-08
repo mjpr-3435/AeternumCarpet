@@ -4,7 +4,7 @@ public record AllowedGenerationArea(String name, String dimension, int centerX, 
     public static final String DEFAULT_DIMENSION = "minecraft:overworld";
 
     public boolean hasValidSize() {
-        return size > 0;
+        return size >= 0;
     }
 
     public String normalizedDimension() {
@@ -19,28 +19,20 @@ public record AllowedGenerationArea(String name, String dimension, int centerX, 
         return Math.floorDiv(centerZ, 16);
     }
 
-    public int halfBefore() {
-        return size / 2;
-    }
-
-    public int halfAfter() {
-        return size - halfBefore() - 1;
-    }
-
     public int minChunkX() {
-        return centerChunkX() - halfBefore();
+        return centerChunkX() - size;
     }
 
     public int maxChunkX() {
-        return centerChunkX() + halfAfter();
+        return centerChunkX() + size;
     }
 
     public int minChunkZ() {
-        return centerChunkZ() - halfBefore();
+        return centerChunkZ() - size;
     }
 
     public int maxChunkZ() {
-        return centerChunkZ() + halfAfter();
+        return centerChunkZ() + size;
     }
 
     public boolean containsChunk(int chunkX, int chunkZ) {

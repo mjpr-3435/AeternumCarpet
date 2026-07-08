@@ -44,8 +44,8 @@ public final class AeternumCommand {
         String name = StringArgumentType.getString(context, "name");
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
-        if (size <= 0) {
-            context.getSource().sendError(Text.literal("Region size must be greater than 0."));
+        if (size < 0) {
+            context.getSource().sendError(Text.literal("Region size must be 0 or greater."));
             return 0;
         }
         if (!VALID_NAME_PATTERN.matcher(name).matches()) {
