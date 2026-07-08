@@ -6,14 +6,10 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.Heightmap;
 import smp.aeternum.carpet.AeternumCarpet;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
-import smp.aeternum.carpet.config.AllowedGenerationArea;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -43,8 +39,7 @@ public final class PlayerExplorationGuard {
 
     private static void handlePlayer(ServerPlayerEntity player) {
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
-        List<AllowedGenerationArea> areas = AeternumCarpetConfig.findAreasByDimension(dimension);
-        if (areas.isEmpty()) {
+        if (AeternumCarpetConfig.findAreasByDimension(dimension).isEmpty()) {
             if (missingDimensionsWarningLogged.add(dimension)) {
                 AeternumCarpet.LOGGER.warn("allowPlayerExploration is false but no allowedGenerationAreas are configured for dimension {}. Exploration guard is disabled in that dimension until at least one area exists.", dimension);
             }
@@ -62,49 +57,8 @@ public final class PlayerExplorationGuard {
         LastValidPosition lastValidPosition = lastValidPositionByPlayer.get(player.getUuid());
         if (teleportToLastValidPosition(player, world, dimension, lastValidPosition)) {
             maybeSendMessage(player);
-            return;
         }
-
-        AreaBounds nearestArea = findNearestArea(player.getX(), player.getZ(), areas);
-        if (nearestArea == null) {
-            return;
-        }
-
-        int targetBlockX = MathHelper.clamp(player.getBlockX(), nearestArea.minBlockX(), nearestArea.maxBlockX());
-        int targetBlockZ = MathHelper.clamp(player.getBlockZ(), nearestArea.minBlockZ(), nearestArea.maxBlockZ());
-
-        BlockPos safePos = findSafeDestination(world, targetBlockX, player.getBlockY(), targetBlockZ);
-        if (safePos == null) {
-            BlockPos spawnPos = world.getSpawnPos();
-            safePos = findSafeDestination(world, spawnPos.getX(), spawnPos.getY(), spawnPos.getZ());
-        }
-        if (safePos == null) {
-            return;
-        }
-
-        player.teleport(world, safePos.getX() + 0.5D, safePos.getY(), safePos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch(), false);
-        rememberLastValidPosition(player, dimension, safePos.getX() + 0.5D, safePos.getY(), safePos.getZ() + 0.5D, player.getYaw(), player.getPitch());
-        maybeSendMessage(player);
-    }
-
-    private static boolean teleportToLastValidPosition(ServerPlayerEntity player, ServerWorld world, String dimension, LastValidPosition lastValidPosition) {
-        if (lastValidPosition == null || !lastValidPosition.dimension().equals(dimension)) {
-            return false;
-        }
-
-        int chunkX = Math.floorDiv(BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getX(), 16);
-        int chunkZ = Math.floorDiv(BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getZ(), 16);
-        if (!AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(dimension, chunkX, chunkZ)) {
-            return false;
-        }
-
-        BlockPos safePos = findSafeDestination(world, BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getX(), BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getY(), BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getZ());
-        if (safePos == null) {
-            return false;
-        }
-
-        player.teleport(world, lastValidPosition.x(), safePos.getY(), lastValidPosition.z(), Set.<PositionFlag>of(), lastValidPosition.yaw(), lastValidPosition.pitch(), false);
-        return true;
+        return;
     }
 
     private static void rememberLastValidPosition(ServerPlayerEntity player, String dimension) {
@@ -115,66 +69,20 @@ public final class PlayerExplorationGuard {
         lastValidPositionByPlayer.put(player.getUuid(), new LastValidPosition(dimension, x, y, z, yaw, pitch));
     }
 
-    private static AreaBounds findNearestArea(double playerX, double playerZ, List<AllowedGenerationArea> areas) {
-        AreaBounds nearestArea = null;
-        double nearestDistanceSquared = Double.MAX_VALUE;
-
-        for (AllowedGenerationArea area : areas) {
-            AreaBounds bounds = AreaBounds.from(area);
-            double clampedX = MathHelper.clamp(playerX, bounds.minBlockX(), bounds.maxBlockX());
-            double clampedZ = MathHelper.clamp(playerZ, bounds.minBlockZ(), bounds.maxBlockZ());
-            double deltaX = playerX - clampedX;
-            double deltaZ = playerZ - clampedZ;
-            double distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
-
-            if (distanceSquared < nearestDistanceSquared) {
-                nearestDistanceSquared = distanceSquared;
-                nearestArea = bounds;
-            }
-        }
-
-        return nearestArea;
-    }
-
-    private static BlockPos findSafeDestination(ServerWorld world, int blockX, int preferredY, int blockZ) {
-        if (isSafeStandingPos(world, blockX, preferredY, blockZ)) {
-            return new BlockPos(blockX, preferredY, blockZ);
-        }
-
-        int surfaceY = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, blockX, blockZ);
-        if (isSafeStandingPos(world, blockX, surfaceY, blockZ)) {
-            return new BlockPos(blockX, surfaceY, blockZ);
-        }
-
-        int bottomY = world.getBottomY();
-        int minY = Math.max(bottomY, surfaceY - 8);
-        int maxY = surfaceY + 8;
-        for (int y = minY; y <= maxY; y++) {
-            if (isSafeStandingPos(world, blockX, y, blockZ)) {
-                return new BlockPos(blockX, y, blockZ);
-            }
-        }
-
-        return null;
-    }
-
-    private static boolean isSafeStandingPos(ServerWorld world, int blockX, int blockY, int blockZ) {
-        if (blockY <= world.getBottomY()) {
+    private static boolean teleportToLastValidPosition(ServerPlayerEntity player, ServerWorld world, String dimension, LastValidPosition lastValidPosition) {
+        if (lastValidPosition == null || !lastValidPosition.dimension().equals(dimension)) {
             return false;
         }
 
-        BlockPos feetPos = new BlockPos(blockX, blockY, blockZ);
-        BlockPos headPos = feetPos.up();
-        BlockPos belowPos = feetPos.down();
-
-        if (!world.getBlockState(feetPos).isAir()) {
-            return false;
-        }
-        if (!world.getBlockState(headPos).isAir()) {
+        BlockPos lastPos = BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z());
+        int chunkX = Math.floorDiv(lastPos.getX(), 16);
+        int chunkZ = Math.floorDiv(lastPos.getZ(), 16);
+        if (!AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(dimension, chunkX, chunkZ)) {
             return false;
         }
 
-        return world.getBlockState(belowPos).blocksMovement();
+        player.teleport(world, lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z(), Set.<PositionFlag>of(), lastValidPosition.yaw(), lastValidPosition.pitch(), false);
+        return true;
     }
 
     private static void maybeSendMessage(ServerPlayerEntity player) {
@@ -186,28 +94,6 @@ public final class PlayerExplorationGuard {
 
         nextMessageTickByPlayer.put(player.getUuid(), currentTick + MESSAGE_COOLDOWN_TICKS);
         player.sendMessage(EXPLORATION_DISABLED_MESSAGE, true);
-    }
-
-    private record AreaBounds(int minBlockX, int maxBlockX, int minBlockZ, int maxBlockZ) {
-        private static AreaBounds from(AllowedGenerationArea area) {
-            int centerChunkX = Math.floorDiv(area.centerX(), 16);
-            int centerChunkZ = Math.floorDiv(area.centerZ(), 16);
-
-            int halfBefore = area.size() / 2;
-            int halfAfter = area.size() - halfBefore - 1;
-
-            int minChunkX = centerChunkX - halfBefore;
-            int maxChunkX = centerChunkX + halfAfter;
-            int minChunkZ = centerChunkZ - halfBefore;
-            int maxChunkZ = centerChunkZ + halfAfter;
-
-            return new AreaBounds(
-                minChunkX * 16,
-                maxChunkX * 16 + 15,
-                minChunkZ * 16,
-                maxChunkZ * 16 + 15
-            );
-        }
     }
 
     private record LastValidPosition(String dimension, double x, double y, double z, float yaw, float pitch) {
