@@ -3,6 +3,7 @@
 	"package": "smp.aeternum.carpet.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+		"PhantomSpawnerMixin",
 		"ServerPlayNetworkHandlerMixin",
 		"ServerPlayerEntityMixin"
 	],
