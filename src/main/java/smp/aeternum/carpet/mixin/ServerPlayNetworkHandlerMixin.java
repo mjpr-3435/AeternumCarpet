@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.enderchest.InHandEnderChestOpener;
 import smp.aeternum.carpet.shulker.InHandShulkerOpener;
 
 @Mixin(ServerPlayNetworkHandler.class)
@@ -25,16 +26,19 @@ public class ServerPlayNetworkHandlerMixin {
         ),
         cancellable = true
     )
-    private void aeternum$openShulkerInHand(PlayerInteractItemC2SPacket packet, CallbackInfo ci) {
-        if (!AeternumCarpetSettings.openShulkerInHand) {
-            return;
+    private void aeternum$openInHandContainers(PlayerInteractItemC2SPacket packet, CallbackInfo ci) {
+        Hand openedHand = null;
+        if (AeternumCarpetSettings.openShulkerInHand) {
+            openedHand = InHandShulkerOpener.tryOpen(player, packet.getHand());
         }
 
-        Hand openedHand = InHandShulkerOpener.tryOpen(player, packet.getHand());
+        if (openedHand == null && AeternumCarpetSettings.openEnderChestInHand) {
+            openedHand = InHandEnderChestOpener.tryOpen(player, packet.getHand());
+        }
+
         if (openedHand == null) {
             return;
         }
-
         player.swingHand(openedHand, true);
         ci.cancel();
     }

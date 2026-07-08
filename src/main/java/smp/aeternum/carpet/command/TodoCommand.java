@@ -7,7 +7,11 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.todo.TodoListStore;
 
@@ -36,17 +40,7 @@ public final class TodoCommand {
 
     private static int listNotes(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
-        List<String> notes = TodoListStore.getNotes(player.getUuid());
-        if (notes.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("No tienes notas. Usa /todo add <texto> para crear una."), false);
-            return 1;
-        }
-
-        for (int i = 0; i < notes.size(); i++) {
-            int index = i + 1;
-            String note = notes.get(i);
-            context.getSource().sendFeedback(() -> Text.literal("[" + index + "] " + note), false);
-        }
+        sendNotesList(context.getSource(), player);
         return 1;
     }
 
@@ -58,8 +52,9 @@ public final class TodoCommand {
             return 0;
         }
 
-        TodoListStore.addNote(player.getUuid(), note);
-        context.getSource().sendFeedback(() -> Text.literal("Nota agregada."), false);
+        TodoListStore.addNote(player.getUuid(), capitalizeNote(note));
+        context.getSource().sendFeedback(() -> Text.literal("Anadiste una nota a tu lista.").formatted(Formatting.GRAY), false);
+        sendNotesList(context.getSource(), player);
         return 1;
     }
 
@@ -71,7 +66,43 @@ public final class TodoCommand {
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Nota eliminada."), false);
+        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una nota de tu lista.").formatted(Formatting.GRAY), false);
+        sendNotesList(context.getSource(), player);
         return 1;
+    }
+
+    private static void sendNotesList(ServerCommandSource source, ServerPlayerEntity player) {
+        List<String> notes = TodoListStore.getNotes(player.getUuid());
+        if (notes.isEmpty()) {
+            source.sendFeedback(() -> Text.literal("No tienes notas. Usa /todo add <texto> para crear una.").formatted(Formatting.GRAY), false);
+            return;
+        }
+
+        source.sendFeedback(() -> Text.literal("Estas son tus notas:").formatted(Formatting.GRAY), false);
+        for (int i = 0; i < notes.size(); i++) {
+            int index = i + 1;
+            String note = notes.get(i);
+            source.sendFeedback(() -> buildNoteLine(index, note), false);
+        }
+    }
+
+    private static Text buildNoteLine(int index, String note) {
+        MutableText deleteButton = Text.literal("[x]")
+            .setStyle(Style.EMPTY
+                .withColor(Formatting.RED)
+                .withClickEvent(new ClickEvent.RunCommand("/todo delete " + index)));
+
+        return Text.empty()
+            .append(deleteButton)
+            .append(Text.literal(" ").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal("[" + index + "]").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal(" " + capitalizeNote(note)).formatted(Formatting.GRAY));
+    }
+
+    private static String capitalizeNote(String note) {
+        if (note.isEmpty()) {
+            return note;
+        }
+        return Character.toUpperCase(note.charAt(0)) + note.substring(1);
     }
 }

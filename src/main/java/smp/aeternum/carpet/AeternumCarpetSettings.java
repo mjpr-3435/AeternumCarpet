@@ -13,6 +13,9 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean openShulkerInHand = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean openEnderChestInHand = false;
+
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandTodoList = false;
 }
