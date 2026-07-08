@@ -1,5 +1,6 @@
 package smp.aeternum.carpet;
 
+import carpet.CarpetServer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -20,6 +21,7 @@ public class AeternumCarpet implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> AeternumCarpetConfig.load());
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> AeternumCommand.register(dispatcher));
