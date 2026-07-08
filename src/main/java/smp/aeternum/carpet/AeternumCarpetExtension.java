@@ -23,6 +23,8 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.openShulkerInHand.desc", "Allows opening a shulker box directly from the hand when using it in the air."),
             Map.entry("carpet.rule.openEnderChestInHand.name", "Open Ender Chest In Hand"),
             Map.entry("carpet.rule.openEnderChestInHand.desc", "Allows opening an ender chest directly from the hand when using it in the air."),
+            Map.entry("carpet.rule.instamineDeepslate.name", "Instamine Deepslate"),
+            Map.entry("carpet.rule.instamineDeepslate.desc", "Allows instant mining of deepslate with a netherite pickaxe and Haste II or higher."),
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
             Map.entry("carpet.rule.commandTodoList.name", "Command Todo List"),
