@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.enderchest.InHandEnderChestOpener;
+import smp.aeternum.carpet.quickaccess.QuickAccessSubscriptionStore;
 import smp.aeternum.carpet.shulker.InHandShulkerOpener;
 
 @Mixin(ServerPlayNetworkHandler.class)
@@ -36,11 +37,13 @@ public class ServerPlayNetworkHandlerMixin {
     )
     private void aeternum$openInHandContainers(PlayerInteractItemC2SPacket packet, CallbackInfo ci) {
         Hand openedHand = null;
-        if (AeternumCarpetSettings.openShulkerInHand) {
+        if (AeternumCarpetSettings.openShulkerInHand && QuickAccessSubscriptionStore.isQuickShulkerEnabled(player.getUuid())) {
             openedHand = InHandShulkerOpener.tryOpen(player, packet.getHand());
         }
 
-        if (openedHand == null && AeternumCarpetSettings.openEnderChestInHand) {
+        if (openedHand == null
+            && AeternumCarpetSettings.openEnderChestInHand
+            && QuickAccessSubscriptionStore.isQuickEnderChestEnabled(player.getUuid())) {
             openedHand = InHandEnderChestOpener.tryOpen(player, packet.getHand());
         }
 
