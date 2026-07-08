@@ -15,13 +15,13 @@ public final class InHandShulkerOpener {
 
     public static Hand tryOpen(ServerPlayerEntity player, Hand packetHand) {
         ItemStack mainHandStack = player.getMainHandStack();
-        if (packetHand == Hand.MAIN_HAND && isShulkerBox(mainHandStack)) {
+        if (packetHand == Hand.MAIN_HAND && canOpenInHand(mainHandStack)) {
             open(player, new HandSlotSource(Hand.MAIN_HAND, player.getInventory().getSelectedSlot()), mainHandStack);
             return Hand.MAIN_HAND;
         }
 
         ItemStack offHandStack = player.getOffHandStack();
-        if (!isShulkerBox(mainHandStack) && packetHand == Hand.OFF_HAND && isShulkerBox(offHandStack)) {
+        if (!isShulkerBox(mainHandStack) && packetHand == Hand.OFF_HAND && canOpenInHand(offHandStack)) {
             open(player, new HandSlotSource(Hand.OFF_HAND, -1), offHandStack);
             return Hand.OFF_HAND;
         }
@@ -31,6 +31,10 @@ public final class InHandShulkerOpener {
 
     public static boolean isShulkerBox(ItemStack stack) {
         return stack.getItem() instanceof BlockItem blockItem && blockItem.getBlock() instanceof ShulkerBoxBlock;
+    }
+
+    public static boolean canOpenInHand(ItemStack stack) {
+        return isShulkerBox(stack) && stack.getCount() == 1;
     }
 
     private static void open(ServerPlayerEntity player, HandSlotSource source, ItemStack trackedStack) {
