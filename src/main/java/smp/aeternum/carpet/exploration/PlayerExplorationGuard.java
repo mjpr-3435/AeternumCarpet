@@ -16,7 +16,6 @@ import smp.aeternum.carpet.config.AllowedGenerationArea;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,6 +24,7 @@ public final class PlayerExplorationGuard {
     private static final int MESSAGE_COOLDOWN_TICKS = 100;
 
     private static final Map<UUID, Integer> nextMessageTickByPlayer = new ConcurrentHashMap<>();
+    private static final Map<UUID, LastValidPosition> lastValidPositionByPlayer = new ConcurrentHashMap<>();
     private static final Set<String> missingDimensionsWarningLogged = ConcurrentHashMap.newKeySet();
 
     private PlayerExplorationGuard() {
@@ -54,6 +54,14 @@ public final class PlayerExplorationGuard {
         int chunkX = Math.floorDiv(player.getBlockX(), 16);
         int chunkZ = Math.floorDiv(player.getBlockZ(), 16);
         if (AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(dimension, chunkX, chunkZ)) {
+            rememberLastValidPosition(player, dimension);
+            return;
+        }
+
+        ServerWorld world = (ServerWorld) player.getWorld();
+        LastValidPosition lastValidPosition = lastValidPositionByPlayer.get(player.getUuid());
+        if (teleportToLastValidPosition(player, world, dimension, lastValidPosition)) {
+            maybeSendMessage(player);
             return;
         }
 
@@ -62,7 +70,6 @@ public final class PlayerExplorationGuard {
             return;
         }
 
-        ServerWorld world = (ServerWorld) player.getWorld();
         int targetBlockX = MathHelper.clamp(player.getBlockX(), nearestArea.minBlockX(), nearestArea.maxBlockX());
         int targetBlockZ = MathHelper.clamp(player.getBlockZ(), nearestArea.minBlockZ(), nearestArea.maxBlockZ());
 
@@ -76,7 +83,36 @@ public final class PlayerExplorationGuard {
         }
 
         player.teleport(world, safePos.getX() + 0.5D, safePos.getY(), safePos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch(), false);
+        rememberLastValidPosition(player, dimension, safePos.getX() + 0.5D, safePos.getY(), safePos.getZ() + 0.5D, player.getYaw(), player.getPitch());
         maybeSendMessage(player);
+    }
+
+    private static boolean teleportToLastValidPosition(ServerPlayerEntity player, ServerWorld world, String dimension, LastValidPosition lastValidPosition) {
+        if (lastValidPosition == null || !lastValidPosition.dimension().equals(dimension)) {
+            return false;
+        }
+
+        int chunkX = Math.floorDiv(BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getX(), 16);
+        int chunkZ = Math.floorDiv(BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getZ(), 16);
+        if (!AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(dimension, chunkX, chunkZ)) {
+            return false;
+        }
+
+        BlockPos safePos = findSafeDestination(world, BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getX(), BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getY(), BlockPos.ofFloored(lastValidPosition.x(), lastValidPosition.y(), lastValidPosition.z()).getZ());
+        if (safePos == null) {
+            return false;
+        }
+
+        player.teleport(world, lastValidPosition.x(), safePos.getY(), lastValidPosition.z(), Set.<PositionFlag>of(), lastValidPosition.yaw(), lastValidPosition.pitch(), false);
+        return true;
+    }
+
+    private static void rememberLastValidPosition(ServerPlayerEntity player, String dimension) {
+        rememberLastValidPosition(player, dimension, player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch());
+    }
+
+    private static void rememberLastValidPosition(ServerPlayerEntity player, String dimension, double x, double y, double z, float yaw, float pitch) {
+        lastValidPositionByPlayer.put(player.getUuid(), new LastValidPosition(dimension, x, y, z, yaw, pitch));
     }
 
     private static AreaBounds findNearestArea(double playerX, double playerZ, List<AllowedGenerationArea> areas) {
@@ -172,5 +208,8 @@ public final class PlayerExplorationGuard {
                 maxChunkZ * 16 + 15
             );
         }
+    }
+
+    private record LastValidPosition(String dimension, double x, double y, double z, float yaw, float pitch) {
     }
 }
