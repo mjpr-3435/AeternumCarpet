@@ -20,7 +20,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             "carpet.rule.spectatorPortalTravel.name", "Spectator Portal Travel",
             "carpet.rule.spectatorPortalTravel.desc", "Allows spectator players to use portals normally.",
             "carpet.rule.openShulkerInHand.name", "Open Shulker In Hand",
-            "carpet.rule.openShulkerInHand.desc", "Allows opening a shulker box directly from the hand when using it in the air."
+            "carpet.rule.openShulkerInHand.desc", "Allows opening a shulker box directly from the hand when using it in the air.",
+            "carpet.rule.commandTodoList.name", "Command Todo List",
+            "carpet.rule.commandTodoList.desc", "Enables personal todo notes through the /todo command."
         );
     }
 }

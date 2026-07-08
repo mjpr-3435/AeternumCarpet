@@ -12,8 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import smp.aeternum.carpet.command.ExplorationCommand;
+import smp.aeternum.carpet.command.TodoCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
+import smp.aeternum.carpet.todo.TodoListStore;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -22,9 +24,15 @@ public class AeternumCarpet implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> AeternumCarpetConfig.load());
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+			AeternumCarpetConfig.load();
+			TodoListStore.load(server);
+		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> ExplorationCommand.register(dispatcher));
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			ExplorationCommand.register(dispatcher);
+			TodoCommand.register(dispatcher);
+		});
 		LOGGER.info("Hello Fabric world!");
 	}
 
