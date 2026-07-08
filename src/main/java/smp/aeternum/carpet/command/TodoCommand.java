@@ -8,6 +8,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
@@ -90,7 +91,8 @@ public final class TodoCommand {
         MutableText deleteButton = Text.literal("[x]")
             .setStyle(Style.EMPTY
                 .withColor(Formatting.RED)
-                .withClickEvent(new ClickEvent.RunCommand("/todo delete " + index)));
+                .withClickEvent(new ClickEvent.RunCommand("/todo delete " + index))
+                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar nota"))));
 
         return Text.empty()
             .append(deleteButton)

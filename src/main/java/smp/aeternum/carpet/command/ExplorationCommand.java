@@ -6,7 +6,12 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.config.AllowedGenerationArea;
 
@@ -48,21 +53,22 @@ public final class ExplorationCommand {
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
         if (size < 0) {
-            context.getSource().sendError(Text.literal("Region size must be 0 or greater."));
+            context.getSource().sendError(Text.literal("El tamano de la region debe ser 0 o mayor."));
             return 0;
         }
         if (!VALID_NAME_PATTERN.matcher(name).matches()) {
-            context.getSource().sendError(Text.literal("Region name may only contain letters, numbers, underscores, and hyphens."));
+            context.getSource().sendError(Text.literal("El nombre de la region solo puede tener letras, numeros, guiones bajos y guiones medios."));
             return 0;
         }
 
         AllowedGenerationArea area = new AllowedGenerationArea(name, dimension, player.getBlockX(), player.getBlockZ(), size);
         if (!AeternumCarpetConfig.addAllowedGenerationArea(area)) {
-            context.getSource().sendError(Text.literal("A region with that name already exists or the region is invalid."));
+            context.getSource().sendError(Text.literal("Ya existe una region con ese nombre o la region no es valida."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Added region to the registry: " + area.name()), false);
+        context.getSource().sendFeedback(() -> Text.literal("Anadiste una region al registro: " + area.name()).formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> buildAreaLine(area), false);
         return 1;
     }
 
@@ -70,24 +76,24 @@ public final class ExplorationCommand {
         String name = StringArgumentType.getString(context, "name");
         AllowedGenerationArea removedArea = AeternumCarpetConfig.removeAllowedGenerationAreaByName(name);
         if (removedArea == null) {
-            context.getSource().sendError(Text.literal("No region exists with name '" + name + "'."));
+            context.getSource().sendError(Text.literal("No existe una region con el nombre '" + name + "'."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Removed region from the registry: " + removedArea.name()), false);
+        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una region del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
         return 1;
     }
 
     private static int listRegions(CommandContext<ServerCommandSource> context) {
         List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
         if (areas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("There are no registered exploration regions."), false);
+            context.getSource().sendFeedback(() -> Text.literal("No hay regiones de exploracion registradas.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("These are the registered exploration regions:"), false);
+        context.getSource().sendFeedback(() -> Text.literal("Estas son las regiones de exploracion registradas:").formatted(Formatting.GRAY), false);
         for (AllowedGenerationArea area : areas) {
-            context.getSource().sendFeedback(() -> Text.literal(formatAreaSummary(area)), false);
+            context.getSource().sendFeedback(() -> buildAreaLine(area), false);
         }
         return 1;
     }
@@ -100,18 +106,27 @@ public final class ExplorationCommand {
 
         List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("You are not inside any registered exploration region."), false);
+            context.getSource().sendFeedback(() -> Text.literal("No estas dentro de ninguna region de exploracion registrada.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("These are the regions that contain your current chunk:"), false);
+        context.getSource().sendFeedback(() -> Text.literal("Estas son las regiones que contienen tu chunk actual:").formatted(Formatting.GRAY), false);
         for (AllowedGenerationArea area : containingAreas) {
-            context.getSource().sendFeedback(() -> Text.literal(formatAreaSummary(area)), false);
+            context.getSource().sendFeedback(() -> buildAreaLine(area), false);
         }
         return 1;
     }
 
-    private static String formatAreaSummary(AllowedGenerationArea area) {
-        return "[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), " + area.size() + "]";
+    private static Text buildAreaLine(AllowedGenerationArea area) {
+        MutableText deleteButton = Text.literal("[x]")
+            .setStyle(Style.EMPTY
+                .withColor(Formatting.RED)
+                .withClickEvent(new ClickEvent.RunCommand("/exploration region del " + area.name()))
+                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar region"))));
+
+        return Text.empty()
+            .append(deleteButton)
+            .append(Text.literal(" ").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal("[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamano " + area.size() + "]").formatted(Formatting.GRAY));
     }
 }
