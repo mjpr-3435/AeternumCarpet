@@ -53,21 +53,21 @@ public final class ExplorationCommand {
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
         if (size < 0) {
-            context.getSource().sendError(Text.literal("El tamano de la region debe ser 0 o mayor."));
+            context.getSource().sendError(Text.literal("El tamaño de la región debe ser 0 o mayor."));
             return 0;
         }
         if (!VALID_NAME_PATTERN.matcher(name).matches()) {
-            context.getSource().sendError(Text.literal("El nombre de la region solo puede tener letras, numeros, guiones bajos y guiones medios."));
+            context.getSource().sendError(Text.literal("El nombre de la región solo puede tener letras, números, guiones bajos y guiones medios."));
             return 0;
         }
 
         AllowedGenerationArea area = new AllowedGenerationArea(name, dimension, player.getBlockX(), player.getBlockZ(), size);
         if (!AeternumCarpetConfig.addAllowedGenerationArea(area)) {
-            context.getSource().sendError(Text.literal("Ya existe una region con ese nombre o la region no es valida."));
+            context.getSource().sendError(Text.literal("Ya existe una región con ese nombre o la región no es válida."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Anadiste una region al registro: " + area.name()).formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Añadiste una región al registro: " + area.name()).formatted(Formatting.GRAY), false);
         context.getSource().sendFeedback(() -> buildAreaLine(area), false);
         return 1;
     }
@@ -76,22 +76,22 @@ public final class ExplorationCommand {
         String name = StringArgumentType.getString(context, "name");
         AllowedGenerationArea removedArea = AeternumCarpetConfig.removeAllowedGenerationAreaByName(name);
         if (removedArea == null) {
-            context.getSource().sendError(Text.literal("No existe una region con el nombre '" + name + "'."));
+            context.getSource().sendError(Text.literal("No existe una región con el nombre '" + name + "'."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una region del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una región del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
         return 1;
     }
 
     private static int listRegions(CommandContext<ServerCommandSource> context) {
         List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
         if (areas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("No hay regiones de exploracion registradas.").formatted(Formatting.GRAY), false);
+            context.getSource().sendFeedback(() -> Text.literal("No hay regiones de exploración registradas.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Estas son las regiones de exploracion registradas:").formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Estas son las regiones de exploración registradas:").formatted(Formatting.GRAY), false);
         for (AllowedGenerationArea area : areas) {
             context.getSource().sendFeedback(() -> buildAreaLine(area), false);
         }
@@ -106,7 +106,7 @@ public final class ExplorationCommand {
 
         List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("No estas dentro de ninguna region de exploracion registrada.").formatted(Formatting.GRAY), false);
+            context.getSource().sendFeedback(() -> Text.literal("No estás dentro de ninguna región de exploración registrada.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
@@ -122,11 +122,11 @@ public final class ExplorationCommand {
             .setStyle(Style.EMPTY
                 .withColor(Formatting.RED)
                 .withClickEvent(new ClickEvent.RunCommand("/exploration region del " + area.name()))
-                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar region"))));
+                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar región"))));
 
         return Text.empty()
             .append(deleteButton)
             .append(Text.literal(" ").formatted(Formatting.DARK_GRAY))
-            .append(Text.literal("[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamano " + area.size() + "]").formatted(Formatting.GRAY));
+            .append(Text.literal("[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamaño " + area.size() + "]").formatted(Formatting.GRAY));
     }
 }

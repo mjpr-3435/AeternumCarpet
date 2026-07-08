@@ -49,12 +49,12 @@ public final class TodoCommand {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         String note = StringArgumentType.getString(context, "text").trim();
         if (note.isEmpty()) {
-            context.getSource().sendError(Text.literal("La nota no puede estar vacia."));
+            context.getSource().sendError(Text.literal("La nota no puede estar vacía."));
             return 0;
         }
 
         TodoListStore.addNote(player.getUuid(), capitalizeNote(note));
-        context.getSource().sendFeedback(() -> Text.literal("Anadiste una nota a tu lista.").formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Añadiste una nota a tu lista.").formatted(Formatting.GRAY), false);
         sendNotesList(context.getSource(), player);
         return 1;
     }
@@ -63,7 +63,7 @@ public final class TodoCommand {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         int index = IntegerArgumentType.getInteger(context, "index");
         if (!TodoListStore.removeNote(player.getUuid(), index - 1)) {
-            context.getSource().sendError(Text.literal("Indice invalido.")); 
+            context.getSource().sendError(Text.literal("Índice inválido."));
             return 0;
         }
 
