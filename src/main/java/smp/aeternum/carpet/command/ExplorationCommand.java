@@ -68,7 +68,7 @@ public final class ExplorationCommand {
         }
 
         context.getSource().sendFeedback(() -> Text.literal("Añadiste una región al registro: " + area.name()).formatted(Formatting.GRAY), false);
-        context.getSource().sendFeedback(() -> buildAreaLine(area), false);
+        sendRegionsList(context.getSource());
         return 1;
     }
 
@@ -81,20 +81,12 @@ public final class ExplorationCommand {
         }
 
         context.getSource().sendFeedback(() -> Text.literal("Eliminaste una región del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
+        sendRegionsList(context.getSource());
         return 1;
     }
 
     private static int listRegions(CommandContext<ServerCommandSource> context) {
-        List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
-        if (areas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("No hay regiones de exploración registradas.").formatted(Formatting.GRAY), false);
-            return 1;
-        }
-
-        context.getSource().sendFeedback(() -> Text.literal("Estas son las regiones de exploración registradas:").formatted(Formatting.GRAY), false);
-        for (AllowedGenerationArea area : areas) {
-            context.getSource().sendFeedback(() -> buildAreaLine(area), false);
-        }
+        sendRegionsList(context.getSource());
         return 1;
     }
 
@@ -128,5 +120,18 @@ public final class ExplorationCommand {
             .append(deleteButton)
             .append(Text.literal(" ").formatted(Formatting.DARK_GRAY))
             .append(Text.literal("[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamaño " + area.size() + "]").formatted(Formatting.GRAY));
+    }
+
+    private static void sendRegionsList(ServerCommandSource source) {
+        List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
+        if (areas.isEmpty()) {
+            source.sendFeedback(() -> Text.literal("No hay regiones de exploración registradas.").formatted(Formatting.GRAY), false);
+            return;
+        }
+
+        source.sendFeedback(() -> Text.literal("Estas son las regiones de exploración registradas:").formatted(Formatting.GRAY), false);
+        for (AllowedGenerationArea area : areas) {
+            source.sendFeedback(() -> buildAreaLine(area), false);
+        }
     }
 }
