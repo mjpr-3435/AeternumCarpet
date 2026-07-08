@@ -15,8 +15,10 @@ public class AeternumCarpetExtension implements CarpetExtension {
     public Map<String, String> canHasTranslations(String lang) {
         return Map.ofEntries(
             Map.entry("carpet.category.AETERNUM", "Aeternum"),
+            Map.entry("carpet.rule.explorationManager.name", "Exploration Manager"),
+            Map.entry("carpet.rule.explorationManager.desc", "Shows or hides the /exploration command. While enabled, exploration restrictions are not enforced."),
             Map.entry("carpet.rule.allowPlayerExploration.name", "Allow Player Exploration"),
-            Map.entry("carpet.rule.allowPlayerExploration.desc", "Allow players to explore outside configured generation areas."),
+            Map.entry("carpet.rule.allowPlayerExploration.desc", "When disabled, players are restricted to configured generation areas."),
             Map.entry("carpet.rule.spectatorPortalTravel.name", "Spectator Portal Travel"),
             Map.entry("carpet.rule.spectatorPortalTravel.desc", "Allows spectator players to use portals normally."),
             Map.entry("carpet.rule.openShulkerInHand.name", "Open Shulker In Hand"),

@@ -6,7 +6,8 @@ import smp.aeternum.carpet.AeternumCarpetSettings;
 
 public final class CommandAvailabilityRefresher {
     private static boolean lastTodoEnabled;
-    private static boolean lastExplorationEnabled;
+    private static boolean lastExplorationManagerEnabled;
+    private static boolean lastExplorationGuardEnabled;
     private static boolean lastQuickShulkerEnabled;
     private static boolean lastQuickEnderChestEnabled;
 
@@ -15,25 +16,29 @@ public final class CommandAvailabilityRefresher {
 
     public static void initialize() {
         lastTodoEnabled = AeternumCarpetSettings.commandTodoList;
-        lastExplorationEnabled = AeternumCarpetSettings.allowPlayerExploration;
+        lastExplorationManagerEnabled = AeternumCarpetSettings.explorationManager;
+        lastExplorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         lastQuickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         lastQuickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
     }
 
     public static void tick(MinecraftServer server) {
         boolean todoEnabled = AeternumCarpetSettings.commandTodoList;
-        boolean explorationEnabled = AeternumCarpetSettings.allowPlayerExploration;
+        boolean explorationManagerEnabled = AeternumCarpetSettings.explorationManager;
+        boolean explorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         boolean quickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         boolean quickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
         if (todoEnabled == lastTodoEnabled
-            && explorationEnabled == lastExplorationEnabled
+            && explorationManagerEnabled == lastExplorationManagerEnabled
+            && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled) {
             return;
         }
 
         lastTodoEnabled = todoEnabled;
-        lastExplorationEnabled = explorationEnabled;
+        lastExplorationManagerEnabled = explorationManagerEnabled;
+        lastExplorationGuardEnabled = explorationGuardEnabled;
         lastQuickShulkerEnabled = quickShulkerEnabled;
         lastQuickEnderChestEnabled = quickEnderChestEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {

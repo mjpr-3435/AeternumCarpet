@@ -27,7 +27,7 @@ public final class PlayerExplorationGuard {
     }
 
     public static void tick(MinecraftServer server) {
-        if (AeternumCarpetSettings.allowPlayerExploration) {
+        if (AeternumCarpetSettings.explorationManager || AeternumCarpetSettings.allowPlayerExploration) {
             missingDimensionsWarningLogged.clear();
             return;
         }
