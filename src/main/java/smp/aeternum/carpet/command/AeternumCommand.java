@@ -42,6 +42,7 @@ public final class AeternumCommand {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         int size = IntegerArgumentType.getInteger(context, "size");
         String name = StringArgumentType.getString(context, "name");
+        String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
         if (size <= 0) {
             context.getSource().sendError(Text.literal("Region size must be greater than 0."));
@@ -52,7 +53,7 @@ public final class AeternumCommand {
             return 0;
         }
 
-        AllowedGenerationArea area = new AllowedGenerationArea(name, player.getBlockX(), player.getBlockZ(), size);
+        AllowedGenerationArea area = new AllowedGenerationArea(name, dimension, player.getBlockX(), player.getBlockZ(), size);
         if (!AeternumCarpetConfig.addAllowedGenerationArea(area)) {
             context.getSource().sendError(Text.literal("A region with that name already exists or the region is invalid."));
             return 0;
@@ -80,15 +81,16 @@ public final class AeternumCommand {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         int chunkX = Math.floorDiv(player.getBlockX(), 16);
         int chunkZ = Math.floorDiv(player.getBlockZ(), 16);
+        String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
-        List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(chunkX, chunkZ);
+        List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("Current chunk: (" + chunkX + ", " + chunkZ + ")."), false);
+            context.getSource().sendFeedback(() -> Text.literal("Current dimension: " + dimension + ". Current chunk: (" + chunkX + ", " + chunkZ + ")."), false);
             context.getSource().sendFeedback(() -> Text.literal("You are not inside any allowed generation region."), false);
             return 1;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Current chunk: (" + chunkX + ", " + chunkZ + "). Inside " + containingAreas.size() + " allowed region(s)."), false);
+        context.getSource().sendFeedback(() -> Text.literal("Current dimension: " + dimension + ". Current chunk: (" + chunkX + ", " + chunkZ + "). Inside " + containingAreas.size() + " allowed region(s)."), false);
         for (AllowedGenerationArea area : containingAreas) {
             sendAreaDetails(context.getSource(), area);
             context.getSource().sendFeedback(() -> Text.literal(
@@ -104,6 +106,7 @@ public final class AeternumCommand {
     private static void sendAreaDetails(ServerCommandSource source, AllowedGenerationArea area) {
         source.sendFeedback(() -> Text.literal(
             "name=" + area.name()
+                + ", dimension=" + area.normalizedDimension()
                 + ", centerX=" + area.centerX()
                 + ", centerZ=" + area.centerZ()
                 + ", centerChunkX=" + area.centerChunkX()

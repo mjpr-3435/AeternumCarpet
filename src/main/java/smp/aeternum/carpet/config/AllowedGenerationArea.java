@@ -1,8 +1,14 @@
 package smp.aeternum.carpet.config;
 
-public record AllowedGenerationArea(String name, int centerX, int centerZ, int size) {
+public record AllowedGenerationArea(String name, String dimension, int centerX, int centerZ, int size) {
+    public static final String DEFAULT_DIMENSION = "minecraft:overworld";
+
     public boolean hasValidSize() {
         return size > 0;
+    }
+
+    public String normalizedDimension() {
+        return dimension == null || dimension.isBlank() ? DEFAULT_DIMENSION : dimension;
     }
 
     public int centerChunkX() {
@@ -39,5 +45,9 @@ public record AllowedGenerationArea(String name, int centerX, int centerZ, int s
 
     public boolean containsChunk(int chunkX, int chunkZ) {
         return chunkX >= minChunkX() && chunkX <= maxChunkX() && chunkZ >= minChunkZ() && chunkZ <= maxChunkZ();
+    }
+
+    public boolean matchesDimension(String dimension) {
+        return normalizedDimension().equals(dimension);
     }
 }

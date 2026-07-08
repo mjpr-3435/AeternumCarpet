@@ -51,7 +51,7 @@ public final class AeternumCarpetConfig {
         }
 
         List<AllowedGenerationArea> updatedAreas = new ArrayList<>(allowedGenerationAreas);
-        updatedAreas.add(area);
+        updatedAreas.add(normalize(area));
         allowedGenerationAreas = List.copyOf(updatedAreas);
         save();
         return true;
@@ -76,18 +76,28 @@ public final class AeternumCarpetConfig {
         return null;
     }
 
-    public static List<AllowedGenerationArea> findAreasContainingChunk(int chunkX, int chunkZ) {
+    public static List<AllowedGenerationArea> findAreasContainingChunk(String dimension, int chunkX, int chunkZ) {
         List<AllowedGenerationArea> matchingAreas = new ArrayList<>();
         for (AllowedGenerationArea area : allowedGenerationAreas) {
-            if (area.containsChunk(chunkX, chunkZ)) {
+            if (area.matchesDimension(dimension) && area.containsChunk(chunkX, chunkZ)) {
                 matchingAreas.add(area);
             }
         }
         return List.copyOf(matchingAreas);
     }
 
-    public static boolean isChunkInsideAllowedGenerationArea(int chunkX, int chunkZ) {
-        return !findAreasContainingChunk(chunkX, chunkZ).isEmpty();
+    public static boolean isChunkInsideAllowedGenerationArea(String dimension, int chunkX, int chunkZ) {
+        return !findAreasContainingChunk(dimension, chunkX, chunkZ).isEmpty();
+    }
+
+    public static List<AllowedGenerationArea> findAreasByDimension(String dimension) {
+        List<AllowedGenerationArea> matchingAreas = new ArrayList<>();
+        for (AllowedGenerationArea area : allowedGenerationAreas) {
+            if (area.matchesDimension(dimension)) {
+                matchingAreas.add(area);
+            }
+        }
+        return List.copyOf(matchingAreas);
     }
 
     public static void save() {
@@ -102,10 +112,20 @@ public final class AeternumCarpetConfig {
         List<AllowedGenerationArea> sanitizedAreas = new ArrayList<>();
         for (AllowedGenerationArea area : areas) {
             if (area != null && area.hasValidSize()) {
-                sanitizedAreas.add(area);
+                sanitizedAreas.add(normalize(area));
             }
         }
         return List.copyOf(sanitizedAreas);
+    }
+
+    private static AllowedGenerationArea normalize(AllowedGenerationArea area) {
+        return new AllowedGenerationArea(
+            area.name(),
+            area.normalizedDimension(),
+            area.centerX(),
+            area.centerZ(),
+            area.size()
+        );
     }
 
     private static Optional<AllowedGenerationArea> findAreaByName(String name) {

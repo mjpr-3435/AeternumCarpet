@@ -16,6 +16,7 @@ import smp.aeternum.carpet.config.AllowedGenerationArea;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,36 +25,35 @@ public final class PlayerExplorationGuard {
     private static final int MESSAGE_COOLDOWN_TICKS = 100;
 
     private static final Map<UUID, Integer> nextMessageTickByPlayer = new ConcurrentHashMap<>();
-    private static boolean missingAreasWarningLogged;
+    private static final Set<String> missingDimensionsWarningLogged = ConcurrentHashMap.newKeySet();
 
     private PlayerExplorationGuard() {
     }
 
     public static void tick(MinecraftServer server) {
         if (AeternumCarpetSettings.allowPlayerExploration) {
-            missingAreasWarningLogged = false;
+            missingDimensionsWarningLogged.clear();
             return;
         }
 
-        List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            handlePlayer(player);
+        }
+    }
+
+    private static void handlePlayer(ServerPlayerEntity player) {
+        String dimension = player.getWorld().getRegistryKey().getValue().toString();
+        List<AllowedGenerationArea> areas = AeternumCarpetConfig.findAreasByDimension(dimension);
         if (areas.isEmpty()) {
-            if (!missingAreasWarningLogged) {
-                AeternumCarpet.LOGGER.warn("allowPlayerExploration is false but no allowedGenerationAreas are configured. Exploration guard is disabled until at least one area exists.");
-                missingAreasWarningLogged = true;
+            if (missingDimensionsWarningLogged.add(dimension)) {
+                AeternumCarpet.LOGGER.warn("allowPlayerExploration is false but no allowedGenerationAreas are configured for dimension {}. Exploration guard is disabled in that dimension until at least one area exists.", dimension);
             }
             return;
         }
 
-        missingAreasWarningLogged = false;
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            handlePlayer(player, areas);
-        }
-    }
-
-    private static void handlePlayer(ServerPlayerEntity player, List<AllowedGenerationArea> areas) {
         int chunkX = Math.floorDiv(player.getBlockX(), 16);
         int chunkZ = Math.floorDiv(player.getBlockZ(), 16);
-        if (AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(chunkX, chunkZ)) {
+        if (AeternumCarpetConfig.isChunkInsideAllowedGenerationArea(dimension, chunkX, chunkZ)) {
             return;
         }
 
