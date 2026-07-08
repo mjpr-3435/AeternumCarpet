@@ -6,4 +6,7 @@ import carpet.api.settings.RuleCategory;
 public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean allowPlayerExploration = true;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean spectatorPortalTravel = false;
 }

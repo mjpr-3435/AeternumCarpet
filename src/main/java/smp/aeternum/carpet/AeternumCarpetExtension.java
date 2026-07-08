@@ -14,9 +14,11 @@ public class AeternumCarpetExtension implements CarpetExtension {
     @Override
     public Map<String, String> canHasTranslations(String lang) {
         return Map.of(
+            "carpet.category.AETERNUM", "Aeternum",
             "carpet.rule.allowPlayerExploration.name", "Allow Player Exploration",
             "carpet.rule.allowPlayerExploration.desc", "Allow players to explore outside configured generation areas.",
-            "carpet.category.AETERNUM", "Aeternum"
+            "carpet.rule.spectatorPortalTravel.name", "Spectator Portal Travel",
+            "carpet.rule.spectatorPortalTravel.desc", "Allows spectator players to use portals normally."
         );
     }
 }
