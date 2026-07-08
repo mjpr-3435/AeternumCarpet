@@ -16,10 +16,10 @@ import java.util.regex.Pattern;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
-public final class AeternumCommand {
+public final class ExplorationCommand {
     private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9_-]+$");
 
-    private AeternumCommand() {
+    private ExplorationCommand() {
     }
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
@@ -29,13 +29,15 @@ public final class AeternumCommand {
                     .requires(source -> source.hasPermissionLevel(2))
                     .then(argument("size", IntegerArgumentType.integer())
                         .then(argument("name", StringArgumentType.word())
-                            .executes(AeternumCommand::addRegion))))
+                            .executes(ExplorationCommand::addRegion))))
                 .then(literal("del")
                     .requires(source -> source.hasPermissionLevel(2))
                     .then(argument("name", StringArgumentType.word())
-                        .executes(AeternumCommand::deleteRegion)))
+                        .executes(ExplorationCommand::deleteRegion)))
+                .then(literal("list")
+                    .executes(ExplorationCommand::listRegions))
                 .then(literal("info")
-                    .executes(AeternumCommand::regionInfo))));
+                    .executes(ExplorationCommand::regionInfo))));
     }
 
     private static int addRegion(CommandContext<ServerCommandSource> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -59,7 +61,7 @@ public final class AeternumCommand {
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal(area.name()), false);
+        context.getSource().sendFeedback(() -> Text.literal("Added region to the registry: " + area.name()), false);
         return 1;
     }
 
@@ -71,7 +73,21 @@ public final class AeternumCommand {
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal(removedArea.name()), false);
+        context.getSource().sendFeedback(() -> Text.literal("Removed region from the registry: " + removedArea.name()), false);
+        return 1;
+    }
+
+    private static int listRegions(CommandContext<ServerCommandSource> context) {
+        List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
+        if (areas.isEmpty()) {
+            context.getSource().sendFeedback(() -> Text.literal("There are no registered exploration regions."), false);
+            return 1;
+        }
+
+        context.getSource().sendFeedback(() -> Text.literal("These are the registered exploration regions:"), false);
+        for (AllowedGenerationArea area : areas) {
+            context.getSource().sendFeedback(() -> Text.literal(formatAreaSummary(area)), false);
+        }
         return 1;
     }
 
@@ -83,10 +99,11 @@ public final class AeternumCommand {
 
         List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("You are not inside any allowed generation region."), false);
+            context.getSource().sendFeedback(() -> Text.literal("You are not inside any registered exploration region."), false);
             return 1;
         }
 
+        context.getSource().sendFeedback(() -> Text.literal("These are the regions that contain your current chunk:"), false);
         for (AllowedGenerationArea area : containingAreas) {
             context.getSource().sendFeedback(() -> Text.literal(formatAreaSummary(area)), false);
         }

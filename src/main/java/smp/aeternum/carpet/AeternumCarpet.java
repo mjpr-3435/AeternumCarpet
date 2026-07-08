@@ -11,7 +11,7 @@ import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import smp.aeternum.carpet.command.AeternumCommand;
+import smp.aeternum.carpet.command.ExplorationCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
 
@@ -24,7 +24,7 @@ public class AeternumCarpet implements ModInitializer {
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> AeternumCarpetConfig.load());
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> AeternumCommand.register(dispatcher));
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> ExplorationCommand.register(dispatcher));
 		LOGGER.info("Hello Fabric world!");
 	}
 
