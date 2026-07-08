@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.enderchest.InHandEnderChestOpener;
 import smp.aeternum.carpet.shulker.InHandShulkerOpener;
@@ -17,6 +18,13 @@ import smp.aeternum.carpet.shulker.InHandShulkerOpener;
 @Mixin(ServerPlayNetworkHandler.class)
 public class ServerPlayNetworkHandlerMixin {
     @Shadow @Final public ServerPlayerEntity player;
+
+    @Inject(method = "shouldCheckMovement", at = @At("HEAD"), cancellable = true)
+    private void aeternum$allowUnlimitedPlayerSpeed(boolean elytra, CallbackInfoReturnable<Boolean> cir) {
+        if (AeternumCarpetSettings.allowUnlimitedPlayerSpeed) {
+            cir.setReturnValue(false);
+        }
+    }
 
     @Inject(
         method = "onPlayerInteractItem",

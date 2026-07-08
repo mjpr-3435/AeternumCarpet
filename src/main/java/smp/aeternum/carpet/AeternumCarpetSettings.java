@@ -19,6 +19,15 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean instamineDeepslate = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean breakEndPortalFrames = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean breakEndPortalsWithWindCharge = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean allowUnlimitedPlayerSpeed = false;
+
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "mobcap", "disable"})
     public static String phantomSpawning = "vanilla";
 

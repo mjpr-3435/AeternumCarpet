@@ -16,7 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlayerExplorationGuard {
-    private static final Text EXPLORATION_DISABLED_MESSAGE = Text.literal("Exploration is disabled outside allowed areas.");
+    private static final Text EXPLORATION_DISABLED_MESSAGE = Text.literal("Zona no permitida. Si quieres ir a este lugar, pide a los administradores que permitan el uso de esta zona.");
     private static final int MESSAGE_COOLDOWN_TICKS = 100;
 
     private static final Map<UUID, Integer> nextMessageTickByPlayer = new ConcurrentHashMap<>();
