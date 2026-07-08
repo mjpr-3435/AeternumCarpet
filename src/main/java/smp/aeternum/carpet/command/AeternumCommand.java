@@ -23,7 +23,7 @@ public final class AeternumCommand {
     }
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
-        dispatcher.register(literal("aeternum")
+        dispatcher.register(literal("exploration")
             .then(literal("region")
                 .then(literal("add")
                     .requires(source -> source.hasPermissionLevel(2))
@@ -59,9 +59,7 @@ public final class AeternumCommand {
             return 0;
         }
 
-        ServerCommandSource source = context.getSource();
-        source.sendFeedback(() -> Text.literal("Added allowed region '" + area.name() + "'."), false);
-        sendAreaDetails(source, area);
+        context.getSource().sendFeedback(() -> Text.literal(area.name()), false);
         return 1;
     }
 
@@ -73,7 +71,7 @@ public final class AeternumCommand {
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Deleted allowed region '" + removedArea.name() + "'."), false);
+        context.getSource().sendFeedback(() -> Text.literal(removedArea.name()), false);
         return 1;
     }
 
@@ -85,33 +83,17 @@ public final class AeternumCommand {
 
         List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("Current dimension: " + dimension + ". Current chunk: (" + chunkX + ", " + chunkZ + ")."), false);
             context.getSource().sendFeedback(() -> Text.literal("You are not inside any allowed generation region."), false);
             return 1;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Current dimension: " + dimension + ". Current chunk: (" + chunkX + ", " + chunkZ + "). Inside " + containingAreas.size() + " allowed region(s)."), false);
         for (AllowedGenerationArea area : containingAreas) {
-            sendAreaDetails(context.getSource(), area);
-            context.getSource().sendFeedback(() -> Text.literal(
-                "minChunkX=" + area.minChunkX()
-                    + ", maxChunkX=" + area.maxChunkX()
-                    + ", minChunkZ=" + area.minChunkZ()
-                    + ", maxChunkZ=" + area.maxChunkZ()
-            ), false);
+            context.getSource().sendFeedback(() -> Text.literal(formatAreaSummary(area)), false);
         }
         return 1;
     }
 
-    private static void sendAreaDetails(ServerCommandSource source, AllowedGenerationArea area) {
-        source.sendFeedback(() -> Text.literal(
-            "name=" + area.name()
-                + ", dimension=" + area.normalizedDimension()
-                + ", centerX=" + area.centerX()
-                + ", centerZ=" + area.centerZ()
-                + ", centerChunkX=" + area.centerChunkX()
-                + ", centerChunkZ=" + area.centerChunkZ()
-                + ", size=" + area.size()
-        ), false);
+    private static String formatAreaSummary(AllowedGenerationArea area) {
+        return "[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), " + area.size() + "]";
     }
 }
