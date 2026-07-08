@@ -11,6 +11,7 @@ import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import smp.aeternum.carpet.command.CommandAvailabilityRefresher;
 import smp.aeternum.carpet.command.ExplorationCommand;
 import smp.aeternum.carpet.command.TodoCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
@@ -27,8 +28,10 @@ public class AeternumCarpet implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
 			TodoListStore.load(server);
+			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
+		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			ExplorationCommand.register(dispatcher);
 			TodoCommand.register(dispatcher);

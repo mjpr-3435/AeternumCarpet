@@ -24,6 +24,7 @@ public final class ExplorationCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("exploration")
+            .requires(source -> !smp.aeternum.carpet.AeternumCarpetSettings.allowPlayerExploration)
             .then(literal("region")
                 .then(literal("add")
                     .requires(source -> source.hasPermissionLevel(2))

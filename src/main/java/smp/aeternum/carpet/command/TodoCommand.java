@@ -22,6 +22,7 @@ public final class TodoCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("todo")
+            .requires(source -> AeternumCarpetSettings.commandTodoList)
             .executes(TodoCommand::listNotes)
             .then(literal("list")
                 .executes(TodoCommand::listNotes))
@@ -30,16 +31,11 @@ public final class TodoCommand {
                     .executes(TodoCommand::addNote)))
             .then(literal("delete")
                 .then(argument("index", IntegerArgumentType.integer(1))
-                    .executes(TodoCommand::deleteNote)))
-            .then(literal("clear")
-                .executes(TodoCommand::clearNotes)));
+                    .executes(TodoCommand::deleteNote))));
     }
 
     private static int listNotes(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayerAndRule(context);
-        if (player == null) {
-            return 0;
-        }
+        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         List<String> notes = TodoListStore.getNotes(player.getUuid());
         if (notes.isEmpty()) {
             context.getSource().sendFeedback(() -> Text.literal("No tienes notas. Usa /todo add <texto> para crear una."), false);
@@ -55,10 +51,7 @@ public final class TodoCommand {
     }
 
     private static int addNote(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayerAndRule(context);
-        if (player == null) {
-            return 0;
-        }
+        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         String note = StringArgumentType.getString(context, "text").trim();
         if (note.isEmpty()) {
             context.getSource().sendError(Text.literal("La nota no puede estar vacia."));
@@ -71,10 +64,7 @@ public final class TodoCommand {
     }
 
     private static int deleteNote(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayerAndRule(context);
-        if (player == null) {
-            return 0;
-        }
+        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         int index = IntegerArgumentType.getInteger(context, "index");
         if (!TodoListStore.removeNote(player.getUuid(), index - 1)) {
             context.getSource().sendError(Text.literal("Indice invalido.")); 
@@ -83,23 +73,5 @@ public final class TodoCommand {
 
         context.getSource().sendFeedback(() -> Text.literal("Nota eliminada."), false);
         return 1;
-    }
-
-    private static int clearNotes(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        ServerPlayerEntity player = requirePlayerAndRule(context);
-        if (player == null) {
-            return 0;
-        }
-        TodoListStore.clearNotes(player.getUuid());
-        context.getSource().sendFeedback(() -> Text.literal("Notas eliminadas."), false);
-        return 1;
-    }
-
-    private static ServerPlayerEntity requirePlayerAndRule(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        if (!AeternumCarpetSettings.commandTodoList) {
-            context.getSource().sendError(Text.literal("La regla commandTodoList esta desactivada."));
-            return null;
-        }
-        return context.getSource().getPlayerOrThrow();
     }
 }
