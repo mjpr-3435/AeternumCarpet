@@ -8,8 +8,6 @@ import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.debug.DebugRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Vec3d;
@@ -46,7 +44,6 @@ public final class BlockerGuide {
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.player == null) return;
             MatrixStack matrices = context.matrixStack();
-            VertexConsumer vertices = context.consumers().getBuffer(RenderLayer.getLines());
             double cameraX = context.camera().getPos().x;
             double cameraY = context.camera().getPos().y;
             double cameraZ = context.camera().getPos().z;
@@ -55,7 +52,7 @@ public final class BlockerGuide {
                 double x = entry.x() - cameraX;
                 double y = entry.y() - cameraY;
                 double z = entry.z() - cameraZ;
-                DebugRenderer.drawBox(matrices, vertices,
+                DebugRenderer.drawBox(matrices, context.consumers(),
                     x - 0.002, y - 0.002, z - 0.002,
                     x + 1.002, y + 1.002, z + 1.002,
                     0.72f, 0.32f, 1.0f, 1.0f);
