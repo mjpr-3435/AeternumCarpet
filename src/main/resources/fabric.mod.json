@@ -18,6 +18,9 @@
 		"main": [
 			"smp.aeternum.carpet.AeternumCarpet"
 		],
+		"client": [
+			"smp.aeternum.carpet.client.AeternumCarpetClient"
+		],
 		"carpet": [
 			"smp.aeternum.carpet.AeternumCarpetExtension"
 		]

@@ -38,7 +38,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
             Map.entry("carpet.rule.commandTodoList.name", "Command Todo List"),
-            Map.entry("carpet.rule.commandTodoList.desc", "Enables personal todo notes through the /todo command.")
+            Map.entry("carpet.rule.commandTodoList.desc", "Enables personal todo notes through the /todo command."),
+            Map.entry("carpet.rule.commandBlockers.name", "Command Blockers"),
+            Map.entry("carpet.rule.commandBlockers.desc", "Enables /blockers scans for blocks that can stop piston machines.")
         );
     }
 }
