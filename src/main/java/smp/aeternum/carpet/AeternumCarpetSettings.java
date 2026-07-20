@@ -31,6 +31,9 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean allowUnlimitedPlayerSpeed = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean naturalIceFormation = true;
+
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "mobcap", "disable"})
     public static String phantomSpawning = "vanilla";
 

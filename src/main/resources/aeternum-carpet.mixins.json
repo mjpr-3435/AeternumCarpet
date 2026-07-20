@@ -6,6 +6,7 @@
 		"PhantomSpawnerMixin",
 		"PlayerEntityMixin",
 		"ProjectileEntityMixin",
+		"ServerWorldMixin",
 		"ServerPlayNetworkHandlerMixin",
 		"ServerPlayerInteractionManagerMixin",
 		"ServerPlayerEntityMixin"

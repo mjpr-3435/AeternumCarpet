@@ -33,6 +33,8 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.breakEndPortalsWithWindCharge.desc", "Allows wind charges to remove end portal blocks in a small area."),
             Map.entry("carpet.rule.allowUnlimitedPlayerSpeed.name", "Allow Unlimited Player Speed"),
             Map.entry("carpet.rule.allowUnlimitedPlayerSpeed.desc", "Disables the vanilla server movement speed check that causes moved too quickly rubberbanding."),
+            Map.entry("carpet.rule.naturalIceFormation.name", "Natural Ice Formation"),
+            Map.entry("carpet.rule.naturalIceFormation.desc", "Controls whether water freezes into ice naturally."),
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
             Map.entry("carpet.rule.commandTodoList.name", "Command Todo List"),

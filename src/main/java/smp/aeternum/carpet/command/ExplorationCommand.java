@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.ClickEvent;
@@ -15,7 +16,14 @@ import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.config.AllowedGenerationArea;
 
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import static net.minecraft.server.command.CommandManager.argument;
@@ -23,6 +31,12 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class ExplorationCommand {
     private static final Pattern VALID_NAME_PATTERN = Pattern.compile("^[A-Za-z0-9_-]+$");
+    private static final Path EXPORT_DIRECTORY = FabricLoader.getInstance().getConfigDir();
+    private static final List<SelectionExportTarget> EXPORT_TARGETS = List.of(
+        new SelectionExportTarget("minecraft:overworld", "ExplorerManagerOverworldSelection.csv", "Overworld"),
+        new SelectionExportTarget("minecraft:the_nether", "ExplorerManagerNetherSelection.csv", "Nether"),
+        new SelectionExportTarget("minecraft:the_end", "ExplorerManagerEndSelection.csv", "End")
+    );
 
     private ExplorationCommand() {
     }
@@ -43,7 +57,11 @@ public final class ExplorationCommand {
                 .then(literal("list")
                     .executes(ExplorationCommand::listRegions))
                 .then(literal("info")
-                    .executes(ExplorationCommand::regionInfo))));
+                    .executes(ExplorationCommand::regionInfo)))
+            .then(literal("export")
+                .requires(source -> source.hasPermissionLevel(2))
+                .then(literal("selection")
+                    .executes(ExplorationCommand::exportSelection))));
     }
 
     private static int addRegion(CommandContext<ServerCommandSource> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -53,21 +71,21 @@ public final class ExplorationCommand {
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
 
         if (size < 0) {
-            context.getSource().sendError(Text.literal("El tamaño de la región debe ser 0 o mayor."));
+            context.getSource().sendError(Text.literal("El tamano de la region debe ser 0 o mayor."));
             return 0;
         }
         if (!VALID_NAME_PATTERN.matcher(name).matches()) {
-            context.getSource().sendError(Text.literal("El nombre de la región solo puede tener letras, números, guiones bajos y guiones medios."));
+            context.getSource().sendError(Text.literal("El nombre de la region solo puede tener letras, numeros, guiones bajos y guiones medios."));
             return 0;
         }
 
         AllowedGenerationArea area = new AllowedGenerationArea(name, dimension, player.getBlockX(), player.getBlockZ(), size);
         if (!AeternumCarpetConfig.addAllowedGenerationArea(area)) {
-            context.getSource().sendError(Text.literal("Ya existe una región con ese nombre o la región no es válida."));
+            context.getSource().sendError(Text.literal("Ya existe una region con ese nombre o la region no es valida."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Añadiste una región al registro: " + area.name()).formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Anadiste una region al registro: " + area.name()).formatted(Formatting.GRAY), false);
         sendRegionsList(context.getSource());
         return 1;
     }
@@ -76,11 +94,11 @@ public final class ExplorationCommand {
         String name = StringArgumentType.getString(context, "name");
         AllowedGenerationArea removedArea = AeternumCarpetConfig.removeAllowedGenerationAreaByName(name);
         if (removedArea == null) {
-            context.getSource().sendError(Text.literal("No existe una región con el nombre '" + name + "'."));
+            context.getSource().sendError(Text.literal("No existe una region con el nombre '" + name + "'."));
             return 0;
         }
 
-        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una región del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
+        context.getSource().sendFeedback(() -> Text.literal("Eliminaste una region del registro: " + removedArea.name()).formatted(Formatting.GRAY), false);
         sendRegionsList(context.getSource());
         return 1;
     }
@@ -98,7 +116,7 @@ public final class ExplorationCommand {
 
         List<AllowedGenerationArea> containingAreas = AeternumCarpetConfig.findAreasContainingChunk(dimension, chunkX, chunkZ);
         if (containingAreas.isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("No estás dentro de ninguna región de exploración registrada.").formatted(Formatting.GRAY), false);
+            context.getSource().sendFeedback(() -> Text.literal("No estas dentro de ninguna region de exploracion registrada.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
@@ -109,29 +127,87 @@ public final class ExplorationCommand {
         return 1;
     }
 
+    private static int exportSelection(CommandContext<ServerCommandSource> context) {
+        List<String> exportedFiles = new ArrayList<>();
+
+        try {
+            Files.createDirectories(EXPORT_DIRECTORY);
+            for (SelectionExportTarget exportTarget : EXPORT_TARGETS) {
+                Path exportPath = EXPORT_DIRECTORY.resolve(exportTarget.fileName());
+                writeSelectionFile(exportPath, collectSelectionEntries(exportTarget.dimension()));
+                exportedFiles.add(exportTarget.label() + ": " + exportPath.toAbsolutePath());
+            }
+        } catch (IOException exception) {
+            context.getSource().sendError(Text.literal("No se pudo exportar la seleccion: " + exception.getMessage()));
+            return 0;
+        }
+
+        context.getSource().sendFeedback(() -> Text.literal("Exportaste las selecciones por dimension a:").formatted(Formatting.GRAY), false);
+        for (String exportedFile : exportedFiles) {
+            context.getSource().sendFeedback(() -> Text.literal(exportedFile).formatted(Formatting.GRAY), false);
+        }
+        return 1;
+    }
+
     private static Text buildAreaLine(AllowedGenerationArea area) {
         MutableText deleteButton = Text.literal("[x]")
             .setStyle(Style.EMPTY
                 .withColor(Formatting.RED)
                 .withClickEvent(new ClickEvent.RunCommand("/exploration region del " + area.name()))
-                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar región"))));
+                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Borrar region"))));
 
         return Text.empty()
             .append(deleteButton)
             .append(Text.literal(" ").formatted(Formatting.DARK_GRAY))
-            .append(Text.literal("[" + area.name() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamaño " + area.size() + "]").formatted(Formatting.GRAY));
+            .append(Text.literal("[" + area.name() + ", " + area.normalizedDimension() + ", (" + area.centerX() + ", " + area.centerZ() + "), tamano " + area.size() + "]").formatted(Formatting.GRAY));
     }
 
     private static void sendRegionsList(ServerCommandSource source) {
         List<AllowedGenerationArea> areas = AeternumCarpetConfig.getAllowedGenerationAreas();
         if (areas.isEmpty()) {
-            source.sendFeedback(() -> Text.literal("No hay regiones de exploración registradas.").formatted(Formatting.GRAY), false);
+            source.sendFeedback(() -> Text.literal("No hay regiones de exploracion registradas.").formatted(Formatting.GRAY), false);
             return;
         }
 
-        source.sendFeedback(() -> Text.literal("Estas son las regiones de exploración registradas:").formatted(Formatting.GRAY), false);
+        source.sendFeedback(() -> Text.literal("Estas son las regiones de exploracion registradas:").formatted(Formatting.GRAY), false);
         for (AllowedGenerationArea area : areas) {
             source.sendFeedback(() -> buildAreaLine(area), false);
         }
+    }
+
+    private static List<SelectionEntry> collectSelectionEntries(String dimension) {
+        TreeSet<SelectionEntry> selectionEntries = new TreeSet<>(Comparator
+            .comparingInt(SelectionEntry::regionX)
+            .thenComparingInt(SelectionEntry::regionZ)
+            .thenComparingInt(SelectionEntry::chunkX)
+            .thenComparingInt(SelectionEntry::chunkZ));
+
+        for (AllowedGenerationArea area : AeternumCarpetConfig.findAreasByDimension(dimension)) {
+            for (int chunkX = area.minChunkX(); chunkX <= area.maxChunkX(); chunkX++) {
+                for (int chunkZ = area.minChunkZ(); chunkZ <= area.maxChunkZ(); chunkZ++) {
+                    selectionEntries.add(new SelectionEntry(Math.floorDiv(chunkX, 32), Math.floorDiv(chunkZ, 32), chunkX, chunkZ));
+                }
+            }
+        }
+
+        return List.copyOf(selectionEntries);
+    }
+
+    private static void writeSelectionFile(Path exportPath, List<SelectionEntry> selectionEntries) throws IOException {
+        try (Writer writer = Files.newBufferedWriter(exportPath)) {
+            for (SelectionEntry selectionEntry : selectionEntries) {
+                writer.write(selectionEntry.toCsvLine());
+                writer.write(System.lineSeparator());
+            }
+        }
+    }
+
+    private record SelectionEntry(int regionX, int regionZ, int chunkX, int chunkZ) {
+        private String toCsvLine() {
+            return regionX + ";" + regionZ + ";" + chunkX + ";" + chunkZ;
+        }
+    }
+
+    private record SelectionExportTarget(String dimension, String fileName, String label) {
     }
 }
