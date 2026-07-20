@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.debug.DebugRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.Vec3d;
 import smp.aeternum.carpet.blockers.BlockerEntry;
@@ -50,26 +51,15 @@ public final class BlockerGuide {
             double cameraY = context.camera().getPos().y;
             double cameraZ = context.camera().getPos().z;
             for (BlockerEntry entry : targets) {
-                Vec3d end = Vec3d.ofCenter(entry.pos());
-                float dx = (float) (end.x - cameraX), dy = (float) (end.y - cameraY), dz = (float) (end.z - cameraZ);
-                float distance = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance < 0.001f) continue;
-                float limit = Math.min(distance, 96.0f);
-                float scale = limit / distance;
-                // Do not start inside the near clipping plane; keep the route segment inside render distance.
-                float start = Math.min(1.0f, limit * 0.25f) / distance;
-                line(matrices, vertices, dx * start, dy * start, dz * start, dx * scale, dy * scale, dz * scale);
+                // A pure selection outline, like a Litematica selection: no particles, no texture replacement.
+                double x = entry.x() - cameraX;
+                double y = entry.y() - cameraY;
+                double z = entry.z() - cameraZ;
+                DebugRenderer.drawBox(matrices, vertices,
+                    x - 0.002, y - 0.002, z - 0.002,
+                    x + 1.002, y + 1.002, z + 1.002,
+                    0.72f, 0.32f, 1.0f, 1.0f);
             }
         });
-    }
-
-    private static void line(MatrixStack matrices, VertexConsumer vertices, float x1, float y1, float z1, float x2, float y2, float z2) {
-        MatrixStack.Entry entry = matrices.peek();
-        float dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
-        float length = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (length < 0.0001f) return;
-        dx /= length; dy /= length; dz /= length;
-        vertices.vertex(entry.getPositionMatrix(), x1, y1, z1).color(184, 82, 255, 255).normal(entry, dx, dy, dz);
-        vertices.vertex(entry.getPositionMatrix(), x2, y2, z2).color(184, 82, 255, 255).normal(entry, dx, dy, dz);
     }
 }
