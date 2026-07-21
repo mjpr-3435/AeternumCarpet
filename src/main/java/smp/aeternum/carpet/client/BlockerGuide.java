@@ -55,7 +55,7 @@ public final class BlockerGuide {
                 DebugRenderer.drawBox(matrices, context.consumers(),
                     x - 0.002, y - 0.002, z - 0.002,
                     x + 1.002, y + 1.002, z + 1.002,
-                    0.72f, 0.32f, 1.0f, 1.0f);
+                    0.72f, 0.32f, 1.0f, 0.22f);
             }
         });
     }
