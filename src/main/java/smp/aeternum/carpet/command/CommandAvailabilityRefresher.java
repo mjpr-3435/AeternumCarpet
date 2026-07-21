@@ -14,6 +14,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastFinderEnabled;
     private static boolean lastProtectEnabled;
     private static boolean lastActionsEnabled;
+    private static boolean lastJoinMotdEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -28,6 +29,7 @@ public final class CommandAvailabilityRefresher {
         lastFinderEnabled = AeternumCarpetSettings.commandFinder;
         lastProtectEnabled = AeternumCarpetSettings.commandProtect;
         lastActionsEnabled = AeternumCarpetSettings.commandActions;
+        lastJoinMotdEnabled = AeternumCarpetSettings.joinMotd;
     }
 
     public static void tick(MinecraftServer server) {
@@ -40,12 +42,13 @@ public final class CommandAvailabilityRefresher {
         boolean finderEnabled = AeternumCarpetSettings.commandFinder;
         boolean protectEnabled = AeternumCarpetSettings.commandProtect;
         boolean actionsEnabled = AeternumCarpetSettings.commandActions;
+        boolean joinMotdEnabled = AeternumCarpetSettings.joinMotd;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled) {
             return;
         }
 
@@ -58,6 +61,7 @@ public final class CommandAvailabilityRefresher {
         lastFinderEnabled = finderEnabled;
         lastProtectEnabled = protectEnabled;
         lastActionsEnabled = actionsEnabled;
+        lastJoinMotdEnabled = joinMotdEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }

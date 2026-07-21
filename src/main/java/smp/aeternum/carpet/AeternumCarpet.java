@@ -5,6 +5,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 
@@ -40,6 +41,8 @@ import smp.aeternum.carpet.actions.CommandPackStore;
 import smp.aeternum.carpet.actions.CommandRunner;
 import smp.aeternum.carpet.command.ActionsCommand;
 import smp.aeternum.carpet.network.CommandPacksNetworking;
+import smp.aeternum.carpet.command.MotdCommand;
+import smp.aeternum.carpet.motd.JoinMotd;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -68,6 +71,9 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			if (AeternumCarpetSettings.joinMotd) JoinMotd.send(handler.player);
+		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});
@@ -93,6 +99,7 @@ public class AeternumCarpet implements ModInitializer {
 			FinderCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);
 			ActionsCommand.register(dispatcher);
+			MotdCommand.register(dispatcher);
 		});
 		LOGGER.info("Hello Fabric world!");
 	}

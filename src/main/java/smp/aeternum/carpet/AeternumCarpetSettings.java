@@ -52,4 +52,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandActions = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean joinMotd = true;
+
 }

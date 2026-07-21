@@ -46,7 +46,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandProtect.name", "Command Protect"),
             Map.entry("carpet.rule.commandProtect.desc", "Enables OP-managed persistent protection for selected blocks through /protect."),
             Map.entry("carpet.rule.commandActions.name", "Command Actions"),
-            Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation.")
+            Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation."),
+            Map.entry("carpet.rule.joinMotd.name", "Join MOTD"),
+            Map.entry("carpet.rule.joinMotd.desc", "Shows Aeternum's welcome banner when a player joins. Enabled by default.")
         );
     }
 }
