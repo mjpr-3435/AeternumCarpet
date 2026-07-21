@@ -6,16 +6,45 @@ import java.util.Set;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.debug.DebugRenderer;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.Vec3d;
+import smp.aeternum.carpet.AeternumCarpet;
 import smp.aeternum.carpet.blockers.BlockerEntry;
 import smp.aeternum.carpet.blockers.BlockerScan;
 
 /** Selected target. World-line rendering is intentionally client-only. */
 public final class BlockerGuide {
+    /*
+     * A normal debug box has a depth test, so terrain hides it. These pipelines deliberately
+     * have no depth buffer: the selection behaves like a Litematica ghost overlay, not like
+     * a recoloured world block.
+     */
+    private static final RenderLayer THROUGH_WALLS_FILL = RenderLayer.of(
+        "aeternum_blockers_fill_through_walls", RenderLayer.DEFAULT_BUFFER_SIZE, false, true,
+        RenderPipelines.register(RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
+            .withLocation(AeternumCarpet.id("blockers_fill_through_walls"))
+            .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.TRIANGLE_STRIP)
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withDepthWrite(false)
+            .build()),
+        RenderLayer.MultiPhaseParameters.builder().build(false));
+    private static final RenderLayer THROUGH_WALLS_OUTLINE = RenderLayer.of(
+        "aeternum_blockers_outline_through_walls", RenderLayer.DEFAULT_BUFFER_SIZE, false, true,
+        RenderPipelines.register(RenderPipeline.builder(RenderPipelines.RENDERTYPE_LINES_SNIPPET)
+            .withLocation(AeternumCarpet.id("blockers_outline_through_walls"))
+            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+            .withDepthWrite(false)
+            .build()),
+        RenderLayer.MultiPhaseParameters.builder().build(false));
     private static List<BlockerEntry> targets = List.of();
     private static final Gson GSON = new Gson();
     private static final Type SCANS = new TypeToken<List<BlockerScan>>() {}.getType();
@@ -47,15 +76,21 @@ public final class BlockerGuide {
             double cameraX = context.camera().getPos().x;
             double cameraY = context.camera().getPos().y;
             double cameraZ = context.camera().getPos().z;
+            VertexConsumer fill = context.consumers().getBuffer(THROUGH_WALLS_FILL);
+            VertexConsumer outline = context.consumers().getBuffer(THROUGH_WALLS_OUTLINE);
             for (BlockerEntry entry : targets) {
-                // A pure selection outline, like a Litematica selection: no particles, no texture replacement.
                 double x = entry.x() - cameraX;
                 double y = entry.y() - cameraY;
                 double z = entry.z() - cameraZ;
-                DebugRenderer.drawBox(matrices, context.consumers(),
+                // Abstract translucent prism plus a crisp outline; neither samples nor replaces the block texture.
+                VertexRendering.drawFilledBox(matrices, fill,
+                    x + 0.003, y + 0.003, z + 0.003,
+                    x + 0.997, y + 0.997, z + 0.997,
+                    0.55f, 0.20f, 0.92f, 0.22f);
+                VertexRendering.drawBox(matrices, outline,
                     x - 0.002, y - 0.002, z - 0.002,
                     x + 1.002, y + 1.002, z + 1.002,
-                    0.72f, 0.32f, 1.0f, 0.22f);
+                    0.78f, 0.34f, 1.0f, 0.95f);
             }
         });
     }
