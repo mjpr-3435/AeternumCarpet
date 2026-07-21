@@ -1,6 +1,8 @@
 package smp.aeternum.carpet.finder;
 
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -49,10 +51,26 @@ public final class FinderScanner {
                 String block=Registries.BLOCK.getId(be.getCachedState().getBlock()).toString();
                 if (!isStorage(block)) continue;
                 FinderContainer found=new FinderContainer(be.getPos().getX(),be.getPos().getY(),be.getPos().getZ(),block);
-                for (int slot=0; slot<inventory.size(); slot++) { ItemStack stack=inventory.getStack(slot); if (stack.isEmpty()) continue; String id=Registries.ITEM.getId(stack.getItem()).toString(); found.items.merge(id,stack.getCount(),Integer::sum); found.stacks.merge(id,1,Integer::sum); }
+                for (int slot=0; slot<inventory.size(); slot++) snapshotStack(found, inventory.getStack(slot), 1);
                 place.containers.add(found);
             }
             done++; if (++cx>maxCX) { cx=minCX; cz++; } return false;
+        }
+
+        /**
+         * Shulker contents live on the item as the CONTAINER data component, not in a world
+         * block entity. Fold them into their outer container so /find reports the chest's
+         * coordinates, including deliberately nested shulkers.
+         */
+        private void snapshotStack(FinderContainer found, ItemStack stack, int copies) {
+            if (stack.isEmpty() || copies <= 0) return;
+            String id = Registries.ITEM.getId(stack.getItem()).toString();
+            found.items.merge(id, Math.multiplyExact(stack.getCount(), copies), Integer::sum);
+            found.stacks.merge(id, copies, Integer::sum);
+            ContainerComponent contents = stack.get(DataComponentTypes.CONTAINER);
+            if (contents == null) return;
+            int nestedCopies = Math.multiplyExact(copies, stack.getCount());
+            for (ItemStack nested : contents.iterateNonEmpty()) snapshotStack(found, nested, nestedCopies);
         }
         
         void progress(MinecraftServer server) { if (System.currentTimeMillis()-lastProgress<2000) return; lastProgress=System.currentTimeMillis(); message(server,"Progreso " + done + "/" + total + " chunks (" + (done*100/total) + "%).",Formatting.GRAY); }

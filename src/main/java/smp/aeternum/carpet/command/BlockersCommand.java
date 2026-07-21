@@ -5,15 +5,18 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.command.argument.BlockPosArgumentType;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.Identifier;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.blockers.BlockerScan;
 import smp.aeternum.carpet.blockers.BlockerScanner;
 import smp.aeternum.carpet.blockers.BlockerScanStore;
+import smp.aeternum.carpet.blockers.BlockerBlockList;
 import smp.aeternum.carpet.network.BlockerNetworking;
 
 import java.util.regex.Pattern;
@@ -38,16 +41,45 @@ public final class BlockersCommand {
                 }
                 return 1;
             })
+            .then(literal("list")
+                .executes(BlockersCommand::listBlocks)
+                .then(literal("add").then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, true))))
+                .then(literal("remove").then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, false)))))
             .then(argument("coord1", BlockPosArgumentType.blockPos())
                 .then(argument("coord2", BlockPosArgumentType.blockPos())
-                    .then(argument("id", StringArgumentType.word())
+                    .then(argument("nombre", StringArgumentType.word())
                         .executes(BlockersCommand::start)))));
     }
 
+    private static int listBlocks(CommandContext<ServerCommandSource> context) {
+        var blocks = BlockerBlockList.all();
+        context.getSource().sendFeedback(() -> Text.empty()
+            .append(Text.literal("[Blockers] ").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal(blocks.isEmpty() ? "La lista está vacía." : "Lista de bloqueadores: " + String.join(", ", blocks)).formatted(blocks.isEmpty() ? Formatting.GRAY : Formatting.AQUA)), false);
+        return blocks.size();
+    }
+
+    private static int changeBlock(CommandContext<ServerCommandSource> context, boolean add) {
+        String raw = StringArgumentType.getString(context, "block");
+        Identifier id = Identifier.tryParse(raw.contains(":") ? raw : "minecraft:" + raw);
+        if (id == null || !Registries.BLOCK.containsId(id)) {
+            context.getSource().sendError(Text.literal("Bloque inválido: " + raw));
+            return 0;
+        }
+        boolean changed = add ? BlockerBlockList.add(id.toString()) : BlockerBlockList.remove(id.toString());
+        String text = changed
+            ? (add ? "Añadido a la lista: " : "Quitado de la lista: ") + id
+            : (add ? "Ese bloque ya estaba en la lista." : "Ese bloque no estaba en la lista.");
+        context.getSource().sendFeedback(() -> Text.empty()
+            .append(Text.literal("[Blockers] ").formatted(Formatting.DARK_GRAY))
+            .append(Text.literal(text).formatted(changed ? Formatting.AQUA : Formatting.GRAY)), false);
+        return changed ? 1 : 0;
+    }
+
     private static int start(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        String id = StringArgumentType.getString(context, "id").toLowerCase();
+        String id = StringArgumentType.getString(context, "nombre").toLowerCase();
         if (!ID.matcher(id).matches()) {
-            context.getSource().sendError(Text.literal("El id debe usar letras minúsculas, números, _ o -, con máximo 48 caracteres."));
+            context.getSource().sendError(Text.literal("El nombre debe usar letras minúsculas, números, _ o -, con máximo 48 caracteres."));
             return 0;
         }
         BlockPos first = BlockPosArgumentType.getBlockPos(context, "coord1");

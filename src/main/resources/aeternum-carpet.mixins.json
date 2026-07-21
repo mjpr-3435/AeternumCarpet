@@ -10,6 +10,8 @@
 		"ServerPlayNetworkHandlerMixin",
 		"ServerPlayerInteractionManagerMixin",
 		"ServerPlayerEntityMixin"
+		,"ExplosionImplMixin"
+		,"PistonHandlerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

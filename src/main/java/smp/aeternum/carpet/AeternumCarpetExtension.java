@@ -42,7 +42,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandBlockers.name", "Command Blockers"),
             Map.entry("carpet.rule.commandBlockers.desc", "Enables /blockers scans for blocks that can stop piston machines."),
             Map.entry("carpet.rule.commandFinder.name", "Command Finder"),
-            Map.entry("carpet.rule.commandFinder.desc", "Enables the persistent /find and /count storage finder commands.")
+            Map.entry("carpet.rule.commandFinder.desc", "Enables the persistent /find and /count storage finder commands."),
+            Map.entry("carpet.rule.commandProtect.name", "Command Protect"),
+            Map.entry("carpet.rule.commandProtect.desc", "Enables OP-managed persistent protection for selected blocks through /protect.")
         );
     }
 }

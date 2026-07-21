@@ -69,7 +69,7 @@ public final class BlockersScreen extends Screen {
         context.drawTextWithShadow(textRenderer, "×", left + panelW - 18, top + 10, 0xFFFFFFFF);
         if (scans.isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, "No hay análisis guardados.", width / 2, top + panelH / 2 - 8, 0xFFAAAAAA);
-            context.drawCenteredTextWithShadow(textRenderer, "Usa /blockers <coord1> <coord2> <id>.", width / 2, top + panelH / 2 + 8, 0xFF888888);
+            context.drawCenteredTextWithShadow(textRenderer, "Usa /blockers <coord1> <coord2> <nombre>.", width / 2, top + panelH / 2 + 8, 0xFF888888);
             return;
         }
         int rowY = top + 52;

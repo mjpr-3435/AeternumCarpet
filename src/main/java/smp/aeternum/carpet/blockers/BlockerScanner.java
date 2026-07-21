@@ -1,8 +1,7 @@
 package smp.aeternum.carpet.blockers;
 
 import net.minecraft.block.BlockState;
-import net.minecraft.block.PistonBlock;
-import net.minecraft.block.piston.PistonBehavior;
+import net.minecraft.state.property.Properties;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
@@ -127,7 +126,7 @@ public final class BlockerScanner {
                 BlockState state = world.getBlockState(pos);
                 if (isBlocker(state, pos)) {
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
-                    String reason = state.hasBlockEntity() ? "block entity / piston blocker" : "piston blocker";
+                    String reason = isWaterlogged(state) ? "waterlogged blocker" : "configured explosion blocker";
                     scan.entries.add(new BlockerEntry(x, y, z, id, reason));
                 }
                 advance();
@@ -159,9 +158,12 @@ public final class BlockerScanner {
 
         private boolean isBlocker(BlockState state, BlockPos pos) {
             if (state.isAir()) return false;
-            // Blocks that pistons intentionally destroy (rails, torches, plants...) do not obstruct a sweeper.
-            if (state.getPistonBehavior() == PistonBehavior.DESTROY) return false;
-            return !PistonBlock.isMovable(state, world, pos, Direction.NORTH, false, Direction.NORTH);
+            if (isWaterlogged(state)) return true;
+            return BlockerBlockList.contains(Registries.BLOCK.getId(state.getBlock()).toString());
+        }
+
+        private boolean isWaterlogged(BlockState state) {
+            return state.contains(Properties.WATERLOGGED) && state.get(Properties.WATERLOGGED);
         }
 
         private void sendProgress(MinecraftServer server) {
