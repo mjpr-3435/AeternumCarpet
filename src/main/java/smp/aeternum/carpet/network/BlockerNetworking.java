@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.blockers.BlockerScanStore;
+import smp.aeternum.carpet.blockers.BlockerScanner;
 
 public final class BlockerNetworking {
     private static final Gson GSON = new GsonBuilder().create();
@@ -22,10 +23,14 @@ public final class BlockerNetworking {
         ServerPlayNetworking.registerGlobalReceiver(BlockerDeletePayload.ID, (payload, context) -> {
             if (!context.player().hasPermissionLevel(2)) return;
             if (BlockerScanStore.remove(payload.id())) {
-                context.player().sendMessage(Text.empty()
+                BlockerScanner.cancel(payload.id());
+                Text notice = Text.empty()
                     .append(Text.literal("[Blockers] ").formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal("Scan eliminado: ").formatted(Formatting.GRAY))
-                    .append(Text.literal(payload.id()).formatted(Formatting.AQUA)), false);
+                    .append(Text.literal("Scan eliminado; se limpiaron sus selecciones: ").formatted(Formatting.GRAY))
+                    .append(Text.literal(payload.id()).formatted(Formatting.AQUA));
+                for (ServerPlayerEntity player : context.server().getPlayerManager().getPlayerList()) {
+                    player.sendMessage(notice, false);
+                }
                 broadcastSnapshot(context.server());
             }
         });

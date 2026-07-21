@@ -36,6 +36,11 @@ public final class BlockerScanner {
         return true;
     }
 
+    /** Deleting a scan also stops an unfinished job from recreating it in memory. */
+    public static void cancel(String scanId) {
+        JOBS.removeIf(job -> job.scan.id.equals(scanId));
+    }
+
     public static void tick(MinecraftServer server) {
         Job job = JOBS.peek();
         if (job == null) return;

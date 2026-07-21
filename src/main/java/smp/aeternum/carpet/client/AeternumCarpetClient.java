@@ -15,6 +15,7 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(BlockerDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
                 BlockerGuide.reconcile(payload.json());
+                BlockerSelectionStore.reconcile(payload.json());
                 if (context.client().currentScreen instanceof BlockersScreen screen) screen.replaceData(payload.json(), payload.canDelete());
                 else if (payload.openScreen()) context.client().setScreen(new BlockersScreen(payload.json(), payload.canDelete()));
             })
