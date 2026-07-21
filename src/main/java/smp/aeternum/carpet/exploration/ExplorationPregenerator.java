@@ -63,12 +63,12 @@ public final class ExplorationPregenerator {
     public static void stop() { state = new State(state.maxChunksPerMinute); workCredits = 0; save(); }
     public static void setSpeed(int chunksPerMinute) { state.maxChunksPerMinute = chunksPerMinute; save(); }
 
-    public static String status() {
-        String health = MSPT_SAMPLES.size() < REQUIRED_SAMPLES ? "calentando muestras " + MSPT_SAMPLES.size() + "/" + REQUIRED_SAMPLES
+    public static List<String> statusLines() {
+        String health = MSPT_SAMPLES.size() < REQUIRED_SAMPLES ? "analizando rendimiento " + MSPT_SAMPLES.size() + "/" + REQUIRED_SAMPLES
             : isHealthy() ? "estable" : "pausado por MSPT";
         String mode = state.active ? "Activo" : state.paused ? "Pausado" : "Detenido";
         String region = state.regionKey.isEmpty() ? "sin región actual" : state.regionKey;
-        return mode + " · " + region + " · máximo " + state.maxChunksPerMinute + " ch/min · " + health + " · " + msptSummary();
+        return List.of("Estado: " + mode, "Región: " + region, "Velocidad máxima: " + state.maxChunksPerMinute + " chunks/minuto", "Rendimiento: " + health, "MSPT: " + msptSummary());
     }
 
     private static boolean generateOne(MinecraftServer server) {
