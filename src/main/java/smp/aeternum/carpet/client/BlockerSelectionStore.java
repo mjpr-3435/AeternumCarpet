@@ -21,6 +21,7 @@ final class BlockerSelectionStore {
         if (selected.isEmpty()) SELECTED.remove(scanId);
     }
     static void clear(String scanId) { SELECTED.remove(scanId); }
+    static void clearAll() { SELECTED.clear(); }
     static void selectAll(String scanId, Collection<BlockerEntry> entries) {
         Set<String> selected = SELECTED.computeIfAbsent(scanId, ignored -> new LinkedHashSet<>());
         for (BlockerEntry entry : entries) selected.add(key(entry));
