@@ -21,6 +21,7 @@ final class ExplorationMapScreen extends Screen {
     private final Set<Key> requested = new HashSet<>();
     private String dimension;
     private double centerX, centerZ, zoom = 1;
+    private int maxRequests;
     private boolean dragging, showChunkGrid, showRegionGrid, formOpen;
     private double lastX, lastY;
     private ButtonWidget chunkGridButton, regionGridButton, submitButton, cancelButton, deleteButton;
@@ -33,11 +34,12 @@ final class ExplorationMapScreen extends Screen {
         dimension = data.dimension();
         centerX = data.centerChunkX() * 16.0;
         centerZ = data.centerChunkZ() * 16.0;
+        maxRequests = data.maxRequests();
         areas = data.areas();
     }
 
     /** A server save sends a fresh area list; keep the map viewport and loaded textures intact. */
-    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); }
+    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); maxRequests = data.maxRequests(); }
 
     @Override protected void init() {
         int y = height - 28;
@@ -147,12 +149,12 @@ final class ExplorationMapScreen extends Screen {
     }
 
     private void request(int l, int t, int r, int b, int cx, int cy) {
-        if (requested.size() >= 2) return;
+        if (requested.size() >= maxRequests) return;
         int minX = (int) Math.floor(centerX + (l - cx) / zoom), maxX = (int) Math.ceil(centerX + (r - cx) / zoom), minZ = (int) Math.floor(centerZ + (t - cy) / zoom), maxZ = (int) Math.ceil(centerZ + (b - cy) / zoom);
         int crx = Math.floorDiv((int) centerX, TILE), crz = Math.floorDiv((int) centerZ, TILE); List<Key> todo = new ArrayList<>();
         for (int z = Math.floorDiv(minZ, TILE); z <= Math.floorDiv(maxZ, TILE); z++) for (int x = Math.floorDiv(minX, TILE); x <= Math.floorDiv(maxX, TILE); x++) { Key key = new Key(dimension, x, z); if (!tiles.containsKey(key) && !requested.contains(key)) todo.add(key); }
         todo.sort(Comparator.comparingInt(key -> Math.abs(key.x - crx) + Math.abs(key.z - crz)));
-        for (Key key : todo) { if (requested.size() >= 2) break; requested.add(key); ClientPlayNetworking.send(new ExplorationMapTileRequestPayload(dimension, key.x, key.z)); }
+        for (Key key : todo) { if (requested.size() >= maxRequests) break; requested.add(key); ClientPlayNetworking.send(new ExplorationMapTileRequestPayload(dimension, key.x, key.z)); }
     }
 
     private void areas(DrawContext c, int l, int t, int r, int b, int cx, int cy) {

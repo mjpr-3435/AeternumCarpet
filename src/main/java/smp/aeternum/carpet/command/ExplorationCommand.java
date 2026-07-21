@@ -46,7 +46,9 @@ public final class ExplorationCommand {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("exploration")
             .requires(source -> smp.aeternum.carpet.AeternumCarpetSettings.explorationManager)
-            .then(literal("map").executes(context -> { try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); return 1; } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { context.getSource().sendError(Text.literal("Este comando solo puede abrirse dentro del juego.")); return 0; } }))
+            .then(literal("map")
+                .executes(context -> { try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); return 1; } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { context.getSource().sendError(Text.literal("Este comando solo puede abrirse dentro del juego.")); return 0; } })
+                .then(literal("maxrequest").requires(source -> source.hasPermissionLevel(2)).then(argument("cantidad", IntegerArgumentType.integer(1, 16)).executes(context -> { int amount = IntegerArgumentType.getInteger(context, "cantidad"); ExplorationMapNetworking.setMaxRequests(amount); try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); } catch (com.mojang.brigadier.exceptions.CommandSyntaxException ignored) { } context.getSource().sendFeedback(() -> Text.literal("Mapa: máximo " + amount + " solicitudes de tiles pendientes por cliente.").formatted(Formatting.GRAY), false); return 1; }))))
             .then(literal("region")
                 .then(literal("add")
                     .requires(source -> source.hasPermissionLevel(2))
