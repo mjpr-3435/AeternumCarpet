@@ -65,10 +65,13 @@ public class AeternumCarpet implements ModInitializer {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});
 		PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
-			AeternumCarpetSettings.commandProtect && !player.hasPermissionLevel(2) && ProtectedBlockStore.isProtected(world, pos) ? false : true);
+			AeternumCarpetSettings.commandProtect && !player.hasPermissionLevel(2) && ProtectedBlockStore.isProtectedInventory(world, pos) ? false : true);
 		UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
 			if (world.isClient || !AeternumCarpetSettings.commandProtect || player.hasPermissionLevel(2)) return ActionResult.PASS;
-			if (ProtectedBlockStore.isProtected(world, hit.getBlockPos())) return ActionResult.FAIL;
+			if (ProtectedBlockStore.isProtectedInventory(world, hit.getBlockPos())) {
+				player.sendMessage(net.minecraft.text.Text.literal("[Protect] Solo administradores pueden abrir este inventario.").formatted(net.minecraft.util.Formatting.RED), true);
+				return ActionResult.FAIL;
+			}
 			if (player.getStackInHand(hand).getItem() instanceof BlockItem item && item.getBlock() instanceof ChestBlock) {
 				if (ProtectedBlockStore.wouldJoinProtectedChest(world, hit.getBlockPos())
 					|| ProtectedBlockStore.wouldJoinProtectedChest(world, hit.getBlockPos().offset(hit.getSide()))) return ActionResult.FAIL;

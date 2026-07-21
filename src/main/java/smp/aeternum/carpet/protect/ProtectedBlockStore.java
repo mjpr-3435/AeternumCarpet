@@ -57,6 +57,17 @@ public final class ProtectedBlockStore {
         return PROTECTED.stream().anyMatch(entry -> entry.matches(world, pos));
     }
 
+    /** Either half of a protected double chest is one protected inventory. */
+    public static boolean isProtectedInventory(World world, BlockPos pos) {
+        if (isProtected(world, pos)) return true;
+        if (!(world.getBlockState(pos).getBlock() instanceof ChestBlock)) return false;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos neighbor = pos.offset(direction);
+            if (isProtected(world, neighbor) && world.getBlockState(neighbor).getBlock() instanceof ChestBlock) return true;
+        }
+        return false;
+    }
+
     /** Prevent turning a protected single chest into a double chest from its unprotected half. */
     public static boolean wouldJoinProtectedChest(World world, BlockPos placement) {
         for (Direction direction : Direction.Type.HORIZONTAL) {

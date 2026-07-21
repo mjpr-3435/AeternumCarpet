@@ -12,6 +12,7 @@
 		"ServerPlayerEntityMixin"
 		,"ExplosionImplMixin"
 		,"PistonHandlerMixin"
+		,"HopperBlockEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
