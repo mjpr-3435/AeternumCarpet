@@ -21,7 +21,7 @@ final class CommandPackEditorScreen extends Screen {
     private boolean dirty;
     CommandPackEditorScreen(Screen parent,List<CommandPack> packs,CommandPack pack,boolean canEdit){super(Text.literal("Editar paquete"));this.parent=parent;this.packs=packs;this.pack=pack;this.canEdit=canEdit;}
     @Override protected void init(){int l=width/2-245,t=height/2-170;stepFields.clear();
-        name=field(l+14,t+54,452,pack.name,80,"Nombre del paquete");description=field(l+14,t+102,452,pack.description,240,"Descripción opcional");
+        name=field(l+14,t+46,452,pack.name,80,"Nombre del paquete");description=field(l+14,t+94,452,pack.description,240,"Descripción opcional");
         commandScroll=Math.max(0,Math.min(commandScroll,maxCommandScroll()));
         for(int i=0;i<6&&i+commandScroll<pack.commands.size();i++){int index=i+commandScroll,y=t+164+i*22;CommandStep step=pack.commands.get(index);
             ButtonWidget type=ButtonWidget.builder(Text.literal(step.type==CommandStep.Type.COMMAND?"CMD":"ESPERA"),b->{commit();CommandStep current=pack.commands.get(index);current.type=current.type==CommandStep.Type.COMMAND?CommandStep.Type.WAIT:CommandStep.Type.COMMAND;current.value=current.type==CommandStep.Type.WAIT?"1":"say ";dirty=true;clearAndInit();}).dimensions(l+14,y,68,18).build();type.active=canEdit;addDrawableChild(type);
