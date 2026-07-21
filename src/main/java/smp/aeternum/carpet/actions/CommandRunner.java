@@ -32,8 +32,13 @@ public final class CommandRunner {
         if (step.type == CommandStep.Type.WAIT) job.waitTicks = Integer.parseInt(step.value) * 20;
         else {
             String command = step.value.startsWith("/") ? step.value.substring(1) : step.value;
-            ServerCommandSource source = server.getCommandSource().withSilent();
-            server.getCommandManager().executeWithPrefix(source, command);
+            // Commands such as Carpet's /player can schedule and await server work.  Running
+            // them directly from END_SERVER_TICK can deadlock the server watchdog; defer them
+            // to the normal server task queue instead.
+            server.execute(() -> {
+                ServerCommandSource source = server.getCommandSource().withSilent();
+                server.getCommandManager().executeWithPrefix(source, command);
+            });
         }
         JOBS.addLast(job);
     }

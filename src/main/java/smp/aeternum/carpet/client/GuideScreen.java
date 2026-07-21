@@ -20,7 +20,7 @@ public final class GuideScreen extends Screen {
     private static final Type TYPE = new TypeToken<List<GuideDocument>>() {}.getType();
     private List<GuideDocument> guides;
     private boolean canEdit, editing, helpOpen, dirty;
-    private int selected, scroll;
+    private int selected, scroll, readerScroll;
     private EditBoxWidget editor;
     private TextFieldWidget titleField;
     private ButtonWidget renameButton, refreshButton;
@@ -101,7 +101,7 @@ public final class GuideScreen extends Screen {
         for (int row = 0; row < visible && row + scroll < guides.size(); row++) {
             int i = row + scroll, y = t + 42 + row * 19;
             if (i == selected) c.fill(l + 9, y - 2, l + 112, y + 16, 0xFF30465A);
-            c.drawTextWithShadow(textRenderer, guides.get(i).title, l + 14, y + 1, i == selected ? 0xFFFFFFFF : 0xFFAAAAAA);
+            c.drawTextWithShadow(textRenderer, shortTitle(guides.get(i).title), l + 14, y + 1, i == selected ? 0xFFFFFFFF : 0xFFAAAAAA);
         }
         if (guides.isEmpty()) c.drawTextWithShadow(textRenderer, "No hay guias.", l + 14, t + 48, 0xFFAAAAAA);
         if (!editing && current() != null) renderGuideText(c, current().markdown, l + 126, t + 43, 348);
@@ -135,10 +135,13 @@ public final class GuideScreen extends Screen {
         else if (mx >= l + 400 && mx < l + 474 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Editar la guía seleccionada"), mx, my);
     }
 
+    private String shortTitle(String title) { String cut=textRenderer.trimToWidth(title,92); return cut.length()<title.length()?textRenderer.trimToWidth(cut,84)+"…":cut; }
     private void renderGuideText(DrawContext c, String content, int x, int y, int w) {
         int lineY = y;
+        int skipped = readerScroll;
         for (String raw : content.split("\\R")) {
             for (var wrapped : textRenderer.wrapLines(MotdMarkup.parse(raw), w)) {
+                if (skipped-- > 0) continue;
                 if (lineY > height / 2 + 145) return;
                 c.drawTextWithShadow(textRenderer, wrapped, x, lineY, 0xFFCCCCCC); lineY += 10;
             }
@@ -150,7 +153,7 @@ public final class GuideScreen extends Screen {
         int l = width / 2 - 260, t = height / 2 - 170;
         if (b == 0 && mx >= l + 500 && mx < l + 520 && my >= t && my < t + 32) { close(); return true; }
         if (b == 0 && mx >= l + 9 && mx < l + 112 && my >= t + 42 && my < t + 289) {
-            selected = Math.min(guides.size() - 1, scroll + (int) ((my - (t + 42)) / 19));
+            selected = Math.min(guides.size() - 1, scroll + (int) ((my - (t + 42)) / 19)); readerScroll = 0;
             if (editing) { dirty = false; helpOpen = false; build(); }
             return true;
         }
@@ -160,6 +163,7 @@ public final class GuideScreen extends Screen {
     @Override public boolean mouseScrolled(double mx, double my, double h, double v) {
         int l = width / 2 - 260, t = height / 2 - 170;
         if (mx >= l && mx < l + 117 && my >= t + 40 && my < t + 290) { scroll -= Math.signum(v); return true; }
+        if (!editing && mx >= l + 126 && mx < l + 474 && my >= t + 40 && my < t + 290 && current()!=null) { readerScroll=Math.max(0,readerScroll-(int)Math.signum(v)); return true; }
         return super.mouseScrolled(mx, my, h, v);
     }
     @Override public boolean shouldPause() { return false; }
