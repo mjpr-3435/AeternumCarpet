@@ -22,6 +22,7 @@ public final class AeternumCarpetConfig {
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("aeternum-carpet.json");
 
     private static List<AllowedGenerationArea> allowedGenerationAreas = List.of();
+    private static int mapMaxRequests = 2;
 
     private AeternumCarpetConfig() {
     }
@@ -29,7 +30,8 @@ public final class AeternumCarpetConfig {
     public static void load() {
         if (Files.notExists(CONFIG_PATH)) {
             allowedGenerationAreas = List.of();
-            writeConfig(new ConfigData(allowedGenerationAreas));
+            mapMaxRequests = 2;
+            writeConfig(new ConfigData(allowedGenerationAreas, mapMaxRequests));
             exportSelections();
             return;
         }
@@ -37,6 +39,7 @@ public final class AeternumCarpetConfig {
         try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
             ConfigData configData = GSON.fromJson(reader, ConfigData.class);
             allowedGenerationAreas = sanitize(configData == null ? null : configData.allowedGenerationAreas);
+            mapMaxRequests = clampMapMaxRequests(configData == null ? 2 : configData.mapMaxRequests);
             exportSelections();
         } catch (IOException | JsonParseException exception) {
             allowedGenerationAreas = List.of();
@@ -46,6 +49,13 @@ public final class AeternumCarpetConfig {
 
     public static List<AllowedGenerationArea> getAllowedGenerationAreas() {
         return List.copyOf(allowedGenerationAreas);
+    }
+
+    public static int getMapMaxRequests() { return mapMaxRequests; }
+
+    public static void setMapMaxRequests(int value) {
+        mapMaxRequests = clampMapMaxRequests(value);
+        save();
     }
 
     public static boolean addAllowedGenerationArea(AllowedGenerationArea area) {
@@ -127,7 +137,7 @@ public final class AeternumCarpetConfig {
     }
 
     public static void save() {
-        writeConfig(new ConfigData(allowedGenerationAreas));
+        writeConfig(new ConfigData(allowedGenerationAreas, mapMaxRequests));
         exportSelections();
     }
 
@@ -152,6 +162,8 @@ public final class AeternumCarpetConfig {
         }
         return List.copyOf(sanitizedAreas);
     }
+
+    private static int clampMapMaxRequests(int value) { return value < 1 || value > 64 ? 2 : value; }
 
     private static AllowedGenerationArea normalize(AllowedGenerationArea area) {
         return new AllowedGenerationArea(
@@ -191,9 +203,12 @@ public final class AeternumCarpetConfig {
     private static final class ConfigData {
         @SerializedName("allowedGenerationAreas")
         private final List<AllowedGenerationArea> allowedGenerationAreas;
+        @SerializedName("mapMaxRequests")
+        private final int mapMaxRequests;
 
-        private ConfigData(List<AllowedGenerationArea> allowedGenerationAreas) {
+        private ConfigData(List<AllowedGenerationArea> allowedGenerationAreas, int mapMaxRequests) {
             this.allowedGenerationAreas = allowedGenerationAreas == null ? List.of() : List.copyOf(allowedGenerationAreas);
+            this.mapMaxRequests = clampMapMaxRequests(mapMaxRequests);
         }
     }
 }

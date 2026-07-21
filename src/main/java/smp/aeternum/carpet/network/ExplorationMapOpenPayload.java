@@ -11,7 +11,7 @@ public record ExplorationMapOpenPayload(String dimension, int centerChunkX, int 
     public static final Id<ExplorationMapOpenPayload> ID = new Id<>(AeternumCarpet.id("exploration_map_open"));
     public static final PacketCodec<RegistryByteBuf, ExplorationMapOpenPayload> CODEC = PacketCodec.of(
         (payload, buffer) -> { buffer.writeString(payload.dimension, 96); buffer.writeInt(payload.centerChunkX); buffer.writeInt(payload.centerChunkZ); buffer.writeVarInt(payload.maxRequests); buffer.writeVarInt(payload.areas.size()); for (Area area : payload.areas) area.write(buffer); },
-        buffer -> { String dimension=buffer.readString(96); int x=buffer.readInt(),z=buffer.readInt(),maxRequests=Math.clamp(buffer.readVarInt(),1,16),count=buffer.readVarInt(); java.util.ArrayList<Area> areas=new java.util.ArrayList<>(); for(int i=0;i<count&&i<512;i++) areas.add(Area.read(buffer)); return new ExplorationMapOpenPayload(dimension,x,z,maxRequests,List.copyOf(areas)); });
+        buffer -> { String dimension=buffer.readString(96); int x=buffer.readInt(),z=buffer.readInt(),maxRequests=Math.clamp(buffer.readVarInt(),1,64),count=buffer.readVarInt(); java.util.ArrayList<Area> areas=new java.util.ArrayList<>(); for(int i=0;i<count&&i<512;i++) areas.add(Area.read(buffer)); return new ExplorationMapOpenPayload(dimension,x,z,maxRequests,List.copyOf(areas)); });
     @Override public Id<? extends CustomPayload> getId() { return ID; }
     public record Area(String name, String dimension, int minChunkX, int minChunkZ, int maxChunkX, int maxChunkZ) {
         void write(RegistryByteBuf b){b.writeString(name,80);b.writeString(dimension,96);b.writeInt(minChunkX);b.writeInt(minChunkZ);b.writeInt(maxChunkX);b.writeInt(maxChunkZ);}
