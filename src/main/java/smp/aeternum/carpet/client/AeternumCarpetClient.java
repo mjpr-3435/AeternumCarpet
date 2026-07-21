@@ -7,6 +7,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import smp.aeternum.carpet.network.BlockerDataPayload;
 import smp.aeternum.carpet.network.CommandPacksDataPayload;
 import smp.aeternum.carpet.network.GuideDataPayload;
+import smp.aeternum.carpet.network.ExplorationMapOpenPayload;
+import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
@@ -34,6 +36,8 @@ public final class AeternumCarpetClient implements ClientModInitializer {
             if (context.client().currentScreen instanceof GuideScreen screen) screen.replaceData(payload.json(), payload.canEdit());
             else if (payload.open()) context.client().setScreen(new GuideScreen(payload.json(), payload.canEdit()));
         }));
+        ClientPlayNetworking.registerGlobalReceiver(ExplorationMapOpenPayload.ID, (payload, context) -> context.client().execute(() -> context.client().setScreen(new ExplorationMapScreen(payload))));
+        ClientPlayNetworking.registerGlobalReceiver(ExplorationMapTilePayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.accept(payload); }));
     }
 
     private static void clearBlockerSession() {

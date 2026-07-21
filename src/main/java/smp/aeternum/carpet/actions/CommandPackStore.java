@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,7 +33,7 @@ public final class CommandPackStore {
         try {
             if (Files.exists(file)) {
                 List<CommandPack> decoded = GSON.fromJson(Files.readString(file), TYPE);
-                packs = normalize(decoded);
+                packs = normalize(decoded, true);
             }
         } catch (Exception exception) { AeternumCarpet.LOGGER.error("Could not load command packs", exception); }
     }
@@ -44,7 +45,7 @@ public final class CommandPackStore {
     public static boolean replace(String json) {
         try {
             List<CommandPack> decoded = GSON.fromJson(json, TYPE);
-            packs = normalize(decoded);
+            packs = normalize(decoded, false);
             save();
             return true;
         } catch (Exception exception) { return false; }
@@ -55,13 +56,14 @@ public final class CommandPackStore {
         return null;
     }
     public static CommandPack getByExactName(String name) {
-        for (CommandPack pack : packs) if (pack.name.equals(name)) return pack;
+        String key = name == null ? "" : name.strip().toLowerCase(Locale.ROOT);
+        for (CommandPack pack : packs) if (pack.name.toLowerCase(Locale.ROOT).equals(key)) return pack;
         return null;
     }
 
-    private static List<CommandPack> normalize(List<CommandPack> input) {
+    private static List<CommandPack> normalize(List<CommandPack> input, boolean repairLegacyDuplicateNames) {
         if (input == null || input.size() > MAX_PACKS) throw new IllegalArgumentException("Invalid pack count");
-        List<CommandPack> result = new ArrayList<>(); Set<String> packIds = new HashSet<>();
+        List<CommandPack> result = new ArrayList<>(); Set<String> packIds = new HashSet<>(), names = new HashSet<>();
         for (CommandPack pack : input) {
             if (pack == null) throw new IllegalArgumentException("Invalid pack");
             if (pack.commands == null) pack.commands = new ArrayList<>();
@@ -70,6 +72,12 @@ public final class CommandPackStore {
                 if (legacy != null && legacy.steps != null) pack.commands.addAll(legacy.steps);
             if (pack.commands.size() > MAX_STEPS) throw new IllegalArgumentException("Invalid command count");
             pack.id = uniqueId(pack.id, packIds); pack.name = text(pack.name, MAX_TEXT); pack.description = text(pack.description, 240);
+            if (pack.name.isBlank()) throw new IllegalArgumentException("Empty package name");
+            String nameKey = pack.name.toLowerCase(Locale.ROOT);
+            if (!names.add(nameKey)) {
+                if (!repairLegacyDuplicateNames) throw new IllegalArgumentException("Duplicate package name");
+                pack.name = repairedName(pack.name, names);
+            }
             for (CommandStep step : pack.commands) normalizeStep(step);
             // Do not persist the retired nesting after the migration has completed.
             pack.actions = new ArrayList<>();
@@ -93,6 +101,14 @@ public final class CommandPackStore {
             result.add(pack);
         }
         return result;
+    }
+    private static String repairedName(String base, Set<String> names) {
+        for (int index = 2; index < 10_000; index++) {
+            String suffix = " (" + index + ")";
+            String candidate = base.substring(0, Math.min(base.length(), MAX_TEXT - suffix.length())) + suffix;
+            if (names.add(candidate.toLowerCase(Locale.ROOT))) return candidate;
+        }
+        throw new IllegalArgumentException("Too many duplicate package names");
     }
     private static void normalizeStep(CommandStep step) {
         if (step == null || step.type == null) throw new IllegalArgumentException("Invalid step");

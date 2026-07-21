@@ -16,6 +16,7 @@ import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.config.AllowedGenerationArea;
 import smp.aeternum.carpet.exploration.ExplorationPregenerator;
+import smp.aeternum.carpet.network.ExplorationMapNetworking;
 
 import java.io.IOException;
 import java.io.Writer;
@@ -45,6 +46,7 @@ public final class ExplorationCommand {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("exploration")
             .requires(source -> smp.aeternum.carpet.AeternumCarpetSettings.explorationManager)
+            .then(literal("map").executes(context -> { try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); return 1; } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { context.getSource().sendError(Text.literal("Este comando solo puede abrirse dentro del juego.")); return 0; } }))
             .then(literal("region")
                 .then(literal("add")
                     .requires(source -> source.hasPermissionLevel(2))
