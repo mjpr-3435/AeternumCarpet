@@ -41,6 +41,7 @@ public final class ProtectCommand {
             ? (add ? "Bloque protegido: " : "Protección retirada: ") + pos.toShortString()
             : (add ? "Ese bloque ya estaba protegido." : "Ese bloque no estaba protegido.");
         context.getSource().sendFeedback(() -> Text.empty().append(Text.literal("[Protect] ").formatted(Formatting.DARK_GRAY)).append(Text.literal(message).formatted(changed ? Formatting.AQUA : Formatting.GRAY)), false);
+        if (changed) list(context);
         return changed ? 1 : 0;
     }
 

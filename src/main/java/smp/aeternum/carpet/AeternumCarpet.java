@@ -43,6 +43,7 @@ import smp.aeternum.carpet.command.ActionsCommand;
 import smp.aeternum.carpet.network.CommandPacksNetworking;
 import smp.aeternum.carpet.command.MotdCommand;
 import smp.aeternum.carpet.motd.JoinMotd;
+import smp.aeternum.carpet.motd.MotdTaskStore;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -63,6 +64,7 @@ public class AeternumCarpet implements ModInitializer {
 			FinderItemNames.load(server);
 			ProtectedBlockStore.load(server);
 			CommandPackStore.load(server);
+			MotdTaskStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);

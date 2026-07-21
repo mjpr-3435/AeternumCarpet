@@ -73,6 +73,7 @@ public final class BlockersCommand {
         context.getSource().sendFeedback(() -> Text.empty()
             .append(Text.literal("[Blockers] ").formatted(Formatting.DARK_GRAY))
             .append(Text.literal(text).formatted(changed ? Formatting.AQUA : Formatting.GRAY)), false);
+        if (changed) listBlocks(context);
         return changed ? 1 : 0;
     }
 

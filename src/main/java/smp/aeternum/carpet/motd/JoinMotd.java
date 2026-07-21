@@ -26,6 +26,14 @@ public final class JoinMotd {
         player.sendMessage(Text.literal(activeTime()).formatted(Formatting.GRAY), false);
         player.sendMessage(Text.literal("--------------------------").formatted(Formatting.DARK_GRAY), false);
         player.sendMessage(Text.literal("MCDIS: !!mdhelp       MCDR: !!help").formatted(Formatting.GRAY), false);
+        sendTasks(player);
+    }
+
+    public static void sendTasks(ServerPlayerEntity player) {
+        var tasks=MotdTaskStore.all();
+        if(tasks.isEmpty()) return;
+        player.sendMessage(Text.literal("--------------------------").formatted(Formatting.DARK_GRAY), false);
+        for(int i=0;i<tasks.size();i++) player.sendMessage(Text.literal("["+(i+1)+"] ").formatted(Formatting.DARK_GRAY).append(Text.literal(tasks.get(i)).formatted(Formatting.WHITE)), false);
     }
 
     private static Text serverButton(String name) {
