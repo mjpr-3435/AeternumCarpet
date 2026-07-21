@@ -48,7 +48,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandActions.name", "Command Actions"),
             Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation."),
             Map.entry("carpet.rule.joinMotd.name", "Join MOTD"),
-            Map.entry("carpet.rule.joinMotd.desc", "Shows Aeternum's welcome banner when a player joins. Enabled by default.")
+            Map.entry("carpet.rule.joinMotd.desc", "Shows Aeternum's welcome banner when a player joins. Enabled by default."),
+            Map.entry("carpet.rule.commandGuide.name", "Command Guide"),
+            Map.entry("carpet.rule.commandGuide.desc", "Enables the server-side markdown guide library through /guide.")
         );
     }
 }

@@ -44,6 +44,9 @@ import smp.aeternum.carpet.network.CommandPacksNetworking;
 import smp.aeternum.carpet.command.MotdCommand;
 import smp.aeternum.carpet.motd.JoinMotd;
 import smp.aeternum.carpet.motd.MotdTaskStore;
+import smp.aeternum.carpet.guides.GuideStore;
+import smp.aeternum.carpet.network.GuideNetworking;
+import smp.aeternum.carpet.command.GuideCommand;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -53,6 +56,7 @@ public class AeternumCarpet implements ModInitializer {
 	public void onInitialize() {
 		BlockerNetworking.registerPayloads();
 		CommandPacksNetworking.registerPayloads();
+		GuideNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -65,6 +69,7 @@ public class AeternumCarpet implements ModInitializer {
 			ProtectedBlockStore.load(server);
 			CommandPackStore.load(server);
 			MotdTaskStore.load(server);
+			GuideStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
@@ -102,6 +107,7 @@ public class AeternumCarpet implements ModInitializer {
 			ProtectCommand.register(dispatcher);
 			ActionsCommand.register(dispatcher);
 			MotdCommand.register(dispatcher);
+			GuideCommand.register(dispatcher);
 		});
 		LOGGER.info("Hello Fabric world!");
 	}

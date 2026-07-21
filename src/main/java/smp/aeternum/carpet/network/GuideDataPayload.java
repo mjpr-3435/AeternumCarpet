@@ -1,0 +1,3 @@
+package smp.aeternum.carpet.network;
+import net.minecraft.network.RegistryByteBuf;import net.minecraft.network.codec.PacketCodec;import net.minecraft.network.packet.CustomPayload;import smp.aeternum.carpet.AeternumCarpet;
+public record GuideDataPayload(String json,boolean open,boolean canEdit) implements CustomPayload{public static final Id<GuideDataPayload>ID=new Id<>(AeternumCarpet.id("guide_data"));public static final PacketCodec<RegistryByteBuf,GuideDataPayload>CODEC=PacketCodec.of((p,b)->{b.writeString(p.json,1_000_000);b.writeBoolean(p.open);b.writeBoolean(p.canEdit);},b->new GuideDataPayload(b.readString(1_000_000),b.readBoolean(),b.readBoolean()));@Override public Id<? extends CustomPayload>getId(){return ID;}}

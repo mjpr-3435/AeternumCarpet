@@ -33,7 +33,7 @@ public final class JoinMotd {
         var tasks=MotdTaskStore.all();
         if(tasks.isEmpty()) return;
         player.sendMessage(Text.literal("--------------------------").formatted(Formatting.DARK_GRAY), false);
-        for(int i=0;i<tasks.size();i++) player.sendMessage(Text.literal("["+(i+1)+"] ").formatted(Formatting.DARK_GRAY).append(Text.literal(tasks.get(i)).formatted(Formatting.WHITE)), false);
+        for(int i=0;i<tasks.size();i++) player.sendMessage(Text.literal("["+(i+1)+"] ").formatted(Formatting.DARK_GRAY).append(MotdMarkup.parse(tasks.get(i))), false);
     }
 
     private static Text serverButton(String name) {
