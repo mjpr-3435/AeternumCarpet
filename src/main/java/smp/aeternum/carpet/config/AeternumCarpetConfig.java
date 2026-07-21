@@ -6,6 +6,7 @@ import com.google.gson.JsonParseException;
 import com.google.gson.annotations.SerializedName;
 import net.fabricmc.loader.api.FabricLoader;
 import smp.aeternum.carpet.AeternumCarpet;
+import smp.aeternum.carpet.exploration.ExplorationSelectionExporter;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -29,12 +30,14 @@ public final class AeternumCarpetConfig {
         if (Files.notExists(CONFIG_PATH)) {
             allowedGenerationAreas = List.of();
             writeConfig(new ConfigData(allowedGenerationAreas));
+            exportSelections();
             return;
         }
 
         try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
             ConfigData configData = GSON.fromJson(reader, ConfigData.class);
             allowedGenerationAreas = sanitize(configData == null ? null : configData.allowedGenerationAreas);
+            exportSelections();
         } catch (IOException | JsonParseException exception) {
             allowedGenerationAreas = List.of();
             AeternumCarpet.LOGGER.error("Failed to read config from {}", CONFIG_PATH, exception);
@@ -102,6 +105,15 @@ public final class AeternumCarpetConfig {
 
     public static void save() {
         writeConfig(new ConfigData(allowedGenerationAreas));
+        exportSelections();
+    }
+
+    private static void exportSelections() {
+        try {
+            ExplorationSelectionExporter.exportAll();
+        } catch (IOException exception) {
+            AeternumCarpet.LOGGER.error("Failed to export exploration selections", exception);
+        }
     }
 
     private static List<AllowedGenerationArea> sanitize(List<AllowedGenerationArea> areas) {

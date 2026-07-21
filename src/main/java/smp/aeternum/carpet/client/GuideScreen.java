@@ -71,7 +71,7 @@ public final class GuideScreen extends Screen {
                 editing = false; helpOpen = false; build();
             }).dimensions(l + 400, t + 302, 74, 20).build());
         } else if (canEdit) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> GuideRequest.send("reload", "", ""))
+            addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.setFocused(false); GuideRequest.send("reload", "", ""); })
                 .dimensions(l + 320, t + 302, 74, 20).build());
             addDrawableChild(ButtonWidget.builder(Text.literal("Editar"), b -> { editing = true; build(); })
                 .dimensions(l + 400, t + 302, 74, 20).build());

@@ -4,6 +4,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.text.Text;
 import smp.aeternum.carpet.actions.CommandPack;
 import smp.aeternum.carpet.actions.CommandStep;
@@ -24,9 +25,9 @@ final class CommandPackEditorScreen extends Screen {
         name=field(l+14,t+46,452,pack.name,80,"Nombre del paquete");description=field(l+14,t+94,452,pack.description,240,"Descripción opcional");
         commandScroll=Math.max(0,Math.min(commandScroll,maxCommandScroll()));
         for(int i=0;i<6&&i+commandScroll<pack.commands.size();i++){int index=i+commandScroll,y=t+164+i*22;CommandStep step=pack.commands.get(index);
-            ButtonWidget type=ButtonWidget.builder(Text.literal(step.type==CommandStep.Type.COMMAND?"CMD":"ESPERA"),b->{commit();CommandStep current=pack.commands.get(index);current.type=current.type==CommandStep.Type.COMMAND?CommandStep.Type.WAIT:CommandStep.Type.COMMAND;current.value=current.type==CommandStep.Type.WAIT?"1":"say ";dirty=true;clearAndInit();}).dimensions(l+14,y,68,18).build();type.active=canEdit;addDrawableChild(type);
+            ButtonWidget type=ButtonWidget.builder(Text.literal(step.type==CommandStep.Type.COMMAND?"CMD":"ESPERA"),b->{commit();CommandStep current=pack.commands.get(index);current.type=current.type==CommandStep.Type.COMMAND?CommandStep.Type.WAIT:CommandStep.Type.COMMAND;current.value=current.type==CommandStep.Type.WAIT?"1":"say ";dirty=true;clearAndInit();}).dimensions(l+14,y,68,18).build();type.setTooltip(Tooltip.of(Text.literal("Alternar entre comando y espera")));type.active=canEdit;addDrawableChild(type);
             stepFields.add(field(l+88,y,330,step.value,step.type==CommandStep.Type.COMMAND?2048:8,step.type==CommandStep.Type.COMMAND?"Comando de servidor":"Segundos"));
-            ButtonWidget remove=ButtonWidget.builder(Text.literal("X"),b->{commit();if(index<pack.commands.size()){pack.commands.remove(index);dirty=true;}clearAndInit();}).dimensions(l+424,y,42,18).build();remove.active=canEdit;addDrawableChild(remove);}
+            ButtonWidget remove=ButtonWidget.builder(Text.literal("X"),b->{commit();if(index<pack.commands.size()){pack.commands.remove(index);dirty=true;}clearAndInit();}).dimensions(l+424,y,42,18).build();remove.setTooltip(Tooltip.of(Text.literal("Eliminar esta línea")));remove.active=canEdit;addDrawableChild(remove);}
         ButtonWidget newLine=ButtonWidget.builder(Text.literal("+ Nueva línea"),b->{commit();pack.commands.add(new CommandStep(CommandStep.Type.COMMAND,"say "));dirty=true;commandScroll=maxCommandScroll();clearAndInit();}).dimensions(l+14,t+326,112,20).build();newLine.active=canEdit;addDrawableChild(newLine);
         addDrawableChild(ButtonWidget.builder(Text.literal("Ejecutar"),b->{commit();CommandPacksRequest.run(pack);runFeedback="Ejecutando paquete…";}).dimensions(l+278,t+326,88,20).build());
         saveButton=ButtonWidget.builder(Text.literal("Guardar"),b->{commit();sortAndSave();dirty=false;}).dimensions(l+372,t+326,94,20).build();saveButton.active=false;addDrawableChild(saveButton);
