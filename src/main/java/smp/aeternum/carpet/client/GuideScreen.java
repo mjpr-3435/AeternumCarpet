@@ -23,8 +23,8 @@ public final class GuideScreen extends Screen {
     private int selected, scroll;
     private EditBoxWidget editor;
     private TextFieldWidget titleField;
-    private ButtonWidget renameButton;
-    private long saveAt;
+    private ButtonWidget renameButton, refreshButton;
+    private long saveAt, refreshEnableAt;
 
     public GuideScreen(String json, boolean canEdit) {
         super(Text.literal("Guias"));
@@ -42,7 +42,7 @@ public final class GuideScreen extends Screen {
     @Override protected void init() { build(); }
 
     private void build() {
-        clearChildren(); editor = null; titleField = null; renameButton = null;
+        clearChildren(); editor = null; titleField = null; renameButton = null; refreshButton = null;
         int l = width / 2 - 260, t = height / 2 - 170;
         if (editing && canEdit) {
             if (current() != null) {
@@ -71,8 +71,11 @@ public final class GuideScreen extends Screen {
                 editing = false; helpOpen = false; build();
             }).dimensions(l + 400, t + 302, 74, 20).build());
         } else if (canEdit) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.setFocused(false); GuideRequest.send("reload", "", ""); })
-                .dimensions(l + 320, t + 302, 74, 20).build());
+            refreshButton = ButtonWidget.builder(Text.literal("Refrescar"), b -> {
+                b.active = false; b.setFocused(false); refreshEnableAt = System.currentTimeMillis() + 150;
+                GuideRequest.send("reload", "", "");
+            }).dimensions(l + 320, t + 302, 74, 20).build();
+            addDrawableChild(refreshButton);
             addDrawableChild(ButtonWidget.builder(Text.literal("Editar"), b -> { editing = true; build(); })
                 .dimensions(l + 400, t + 302, 74, 20).build());
         }
@@ -81,6 +84,7 @@ public final class GuideScreen extends Screen {
     private GuideDocument current() { return guides.isEmpty() ? null : guides.get(Math.max(0, Math.min(selected, guides.size() - 1))); }
 
     @Override public void tick() {
+        if (refreshButton != null && !refreshButton.active && System.currentTimeMillis() >= refreshEnableAt) refreshButton.active = true;
         if (dirty && editor != null && System.currentTimeMillis() >= saveAt && current() != null) {
             GuideRequest.send("save", current().title, editor.getText()); dirty = false;
         }
