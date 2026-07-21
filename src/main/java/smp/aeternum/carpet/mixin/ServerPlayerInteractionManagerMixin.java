@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import smp.aeternum.carpet.mining.MiningRuleHandler;
+import smp.aeternum.carpet.pistonaxe.PistonAxeHandler;
 
 @Mixin(ServerPlayerInteractionManager.class)
 public class ServerPlayerInteractionManagerMixin {
@@ -56,6 +57,11 @@ public class ServerPlayerInteractionManagerMixin {
 
     @Inject(method = "processBlockBreakingAction", at = @At("HEAD"), cancellable = true)
     private void aeternum$handlePortalFrameMining(BlockPos pos, PlayerActionC2SPacket.Action action, net.minecraft.util.math.Direction direction, int worldHeight, int sequence, CallbackInfo ci) {
+        // The action packet is only the player's intent. The whitelist and removal live entirely on the server.
+        if (action == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK && PistonAxeHandler.tryStart((ServerPlayerInteractionManager) (Object) this, player, world, pos)) {
+            ci.cancel();
+            return;
+        }
         BlockState state = world.getBlockState(pos);
         boolean isCustomPortalFrameMining = MiningRuleHandler.canBreakEndPortalFrame(player, state, player.getMainHandStack());
         if (!isCustomPortalFrameMining && aeternum$portalFrameMiningPos == null) {

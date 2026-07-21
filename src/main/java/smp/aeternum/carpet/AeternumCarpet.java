@@ -24,6 +24,14 @@ import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
 import smp.aeternum.carpet.quickaccess.QuickAccessSubscriptionStore;
 import smp.aeternum.carpet.todo.TodoListStore;
+import smp.aeternum.carpet.finder.FinderScanner;
+import smp.aeternum.carpet.finder.FinderStore;
+import smp.aeternum.carpet.finder.FinderHints;
+import smp.aeternum.carpet.finder.FinderItemNames;
+import smp.aeternum.carpet.command.FinderCommand;
+import smp.aeternum.carpet.command.PistonAxeCommand;
+import smp.aeternum.carpet.pistonaxe.PistonAxeStore;
+import smp.aeternum.carpet.pistonaxe.PistonAxeRunner;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -38,11 +46,17 @@ public class AeternumCarpet implements ModInitializer {
 			TodoListStore.load(server);
 			QuickAccessSubscriptionStore.load(server);
 			BlockerScanStore.load(server);
+			FinderStore.load(server);
+			FinderItemNames.load(server);
+			PistonAxeStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
 		ServerTickEvents.END_SERVER_TICK.register(BlockerScanner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
+		ServerTickEvents.END_SERVER_TICK.register(PistonAxeRunner::tick);
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});
@@ -51,6 +65,8 @@ public class AeternumCarpet implements ModInitializer {
 			QuickAccessCommand.register(dispatcher);
 			TodoCommand.register(dispatcher);
 			BlockersCommand.register(dispatcher);
+			FinderCommand.register(dispatcher);
+			PistonAxeCommand.register(dispatcher);
 		});
 		LOGGER.info("Hello Fabric world!");
 	}

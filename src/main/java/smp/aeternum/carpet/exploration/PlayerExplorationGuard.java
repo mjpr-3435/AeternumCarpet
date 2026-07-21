@@ -39,6 +39,12 @@ public final class PlayerExplorationGuard {
 
     private static void handlePlayer(ServerPlayerEntity player) {
         String dimension = player.getWorld().getRegistryKey().getValue().toString();
+        // A safe position only authorizes movement inside the dimension where it was earned.
+        // Crossing a portal must never pull a player back using an old world's coordinates.
+        LastValidPosition remembered = lastValidPositionByPlayer.get(player.getUuid());
+        if (remembered != null && !remembered.dimension().equals(dimension)) {
+            lastValidPositionByPlayer.remove(player.getUuid());
+        }
         if (AeternumCarpetConfig.findAreasByDimension(dimension).isEmpty()) {
             if (missingDimensionsWarningLogged.add(dimension)) {
                 AeternumCarpet.LOGGER.warn("allowPlayerExploration is false but no allowedGenerationAreas are configured for dimension {}. Exploration guard is disabled in that dimension until at least one area exists.", dimension);

@@ -11,6 +11,8 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastQuickShulkerEnabled;
     private static boolean lastQuickEnderChestEnabled;
     private static boolean lastBlockersEnabled;
+    private static boolean lastFinderEnabled;
+    private static boolean lastPistonAxeEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -22,6 +24,8 @@ public final class CommandAvailabilityRefresher {
         lastQuickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         lastQuickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
         lastBlockersEnabled = AeternumCarpetSettings.commandBlockers;
+        lastFinderEnabled = AeternumCarpetSettings.commandFinder;
+        lastPistonAxeEnabled = AeternumCarpetSettings.pistonAxe;
     }
 
     public static void tick(MinecraftServer server) {
@@ -31,12 +35,14 @@ public final class CommandAvailabilityRefresher {
         boolean quickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         boolean quickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
         boolean blockersEnabled = AeternumCarpetSettings.commandBlockers;
+        boolean finderEnabled = AeternumCarpetSettings.commandFinder;
+        boolean pistonAxeEnabled = AeternumCarpetSettings.pistonAxe;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && pistonAxeEnabled == lastPistonAxeEnabled) {
             return;
         }
 
@@ -46,6 +52,8 @@ public final class CommandAvailabilityRefresher {
         lastQuickShulkerEnabled = quickShulkerEnabled;
         lastQuickEnderChestEnabled = quickEnderChestEnabled;
         lastBlockersEnabled = blockersEnabled;
+        lastFinderEnabled = finderEnabled;
+        lastPistonAxeEnabled = pistonAxeEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }

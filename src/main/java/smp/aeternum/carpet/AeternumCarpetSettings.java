@@ -42,4 +42,10 @@ public class AeternumCarpetSettings {
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandBlockers = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandFinder = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean pistonAxe = false;
 }
