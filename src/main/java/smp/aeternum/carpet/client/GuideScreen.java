@@ -149,8 +149,8 @@ public final class GuideScreen extends Screen {
             if (rendered) lineY += 2;
         }
     }
-    private int maxReaderScroll(){if(current()==null)return 0;int lines=0;for(String raw:current().markdown.split("\\R")){lines+=textRenderer.wrapLines(MotdMarkup.parse(raw),338).size();lines++;}return Math.max(0,lines-24);}
-    private void renderReaderScrollbar(DrawContext c,int l,int t){int max=maxReaderScroll();readerScroll=Math.max(0,Math.min(readerScroll,max));if(max==0)return;int top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*24/(max+24)),y=top+(track-bar)*readerScroll/max;c.fill(l+466,top,l+472,bottom,0xFF333333);c.fill(l+466,y,l+472,y+bar,0xFFAAAAAA);}
+    private int maxReaderScroll(){if(current()==null)return 0;int lines=0;for(String raw:current().markdown.split("\\R"))lines+=textRenderer.wrapLines(MotdMarkup.parse(raw),338).size();return Math.max(0,lines-20);}
+    private void renderReaderScrollbar(DrawContext c,int l,int t){int max=maxReaderScroll();readerScroll=Math.max(0,Math.min(readerScroll,max));if(max==0)return;int top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*20/(max+20)),y=top+(track-bar)*readerScroll/max;c.fill(l+466,top,l+472,bottom,0xFF333333);c.fill(l+466,y,l+472,y+bar,0xFFAAAAAA);}
 
     @Override public boolean mouseClicked(double mx, double my, int b) {
         int l = width / 2 - 260, t = height / 2 - 170;
@@ -172,7 +172,7 @@ public final class GuideScreen extends Screen {
     }
     @Override public boolean mouseDragged(double mx,double my,int button,double dx,double dy){if(draggingReaderScrollbar&&button==0){updateReaderScroll(my);return true;}return super.mouseDragged(mx,my,button,dx,dy);}
     @Override public boolean mouseReleased(double mx,double my,int button){if(button==0&&draggingReaderScrollbar){draggingReaderScrollbar=false;return true;}return super.mouseReleased(mx,my,button);}
-    private void updateReaderScroll(double my){int max=maxReaderScroll();if(max==0)return;int t=height/2-170,top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*24/(max+24));double f=(my-top-bar/2.0)/Math.max(1,track-bar);readerScroll=(int)Math.round(Math.max(0,Math.min(1,f))*max);}
+    private void updateReaderScroll(double my){int max=maxReaderScroll();if(max==0)return;int t=height/2-170,top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*20/(max+20));double f=(my-top-bar/2.0)/Math.max(1,track-bar);readerScroll=(int)Math.round(Math.max(0,Math.min(1,f))*max);}
     @Override public boolean shouldPause() { return false; }
     @Override public void close() {
         if (editing) { editing = false; helpOpen = false; build(); }
