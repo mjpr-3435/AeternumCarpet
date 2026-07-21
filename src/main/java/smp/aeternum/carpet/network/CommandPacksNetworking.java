@@ -20,14 +20,13 @@ public final class CommandPacksNetworking {
             broadcast(context.server());
         });
         ServerPlayNetworking.registerGlobalReceiver(CommandActionRunPayload.ID, (payload, context) -> {
-            if (!context.player().hasPermissionLevel(2)) return;
             if (!CommandRunner.start(context.server(), context.player(), payload.packId()))
                 context.player().sendMessage(Text.literal("[Actions] Ese paquete no existe o ya se está ejecutando."), false);
         });
     }
     public static void sendSnapshot(ServerPlayerEntity player, boolean open) {
         if (ServerPlayNetworking.canSend(player, CommandPacksDataPayload.ID))
-            ServerPlayNetworking.send(player, new CommandPacksDataPayload(CommandPackStore.snapshot(), open));
+            ServerPlayNetworking.send(player, new CommandPacksDataPayload(CommandPackStore.snapshot(), open, player.hasPermissionLevel(2)));
     }
     public static void broadcast(MinecraftServer server) { for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) sendSnapshot(player, false); }
 }

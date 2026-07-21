@@ -25,8 +25,8 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         );
         ClientPlayNetworking.registerGlobalReceiver(CommandPacksDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
-                if (context.client().currentScreen instanceof CommandPacksScreen screen) screen.replaceData(payload.json());
-                else if (payload.openScreen()) context.client().setScreen(new CommandPacksScreen(payload.json()));
+                if (context.client().currentScreen instanceof CommandPacksScreen screen) screen.replaceData(payload.json(), payload.canEdit());
+                else if (payload.openScreen()) context.client().setScreen(new CommandPacksScreen(payload.json(), payload.canEdit()));
             })
         );
     }
