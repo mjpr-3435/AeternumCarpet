@@ -28,6 +28,7 @@ import smp.aeternum.carpet.command.QuickAccessCommand;
 import smp.aeternum.carpet.command.TodoCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
+import smp.aeternum.carpet.exploration.ExplorationPregenerator;
 import smp.aeternum.carpet.quickaccess.QuickAccessSubscriptionStore;
 import smp.aeternum.carpet.todo.TodoListStore;
 import smp.aeternum.carpet.finder.FinderScanner;
@@ -60,6 +61,7 @@ public class AeternumCarpet implements ModInitializer {
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
+			ExplorationPregenerator.load(server);
 			TodoListStore.load(server);
 			QuickAccessSubscriptionStore.load(server);
 			BlockerScanStore.load(server);
@@ -73,6 +75,7 @@ public class AeternumCarpet implements ModInitializer {
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
+		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
 		ServerTickEvents.END_SERVER_TICK.register(BlockerScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
