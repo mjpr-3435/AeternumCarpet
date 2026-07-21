@@ -13,6 +13,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastBlockersEnabled;
     private static boolean lastFinderEnabled;
     private static boolean lastProtectEnabled;
+    private static boolean lastActionsEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -26,6 +27,7 @@ public final class CommandAvailabilityRefresher {
         lastBlockersEnabled = AeternumCarpetSettings.commandBlockers;
         lastFinderEnabled = AeternumCarpetSettings.commandFinder;
         lastProtectEnabled = AeternumCarpetSettings.commandProtect;
+        lastActionsEnabled = AeternumCarpetSettings.commandActions;
     }
 
     public static void tick(MinecraftServer server) {
@@ -37,12 +39,13 @@ public final class CommandAvailabilityRefresher {
         boolean blockersEnabled = AeternumCarpetSettings.commandBlockers;
         boolean finderEnabled = AeternumCarpetSettings.commandFinder;
         boolean protectEnabled = AeternumCarpetSettings.commandProtect;
+        boolean actionsEnabled = AeternumCarpetSettings.commandActions;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled) {
             return;
         }
 
@@ -54,6 +57,7 @@ public final class CommandAvailabilityRefresher {
         lastBlockersEnabled = blockersEnabled;
         lastFinderEnabled = finderEnabled;
         lastProtectEnabled = protectEnabled;
+        lastActionsEnabled = actionsEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }

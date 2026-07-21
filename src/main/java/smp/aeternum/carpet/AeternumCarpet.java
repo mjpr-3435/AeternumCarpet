@@ -36,6 +36,10 @@ import smp.aeternum.carpet.finder.FinderItemNames;
 import smp.aeternum.carpet.command.FinderCommand;
 import smp.aeternum.carpet.command.ProtectCommand;
 import smp.aeternum.carpet.protect.ProtectedBlockStore;
+import smp.aeternum.carpet.actions.CommandPackStore;
+import smp.aeternum.carpet.actions.CommandRunner;
+import smp.aeternum.carpet.command.ActionsCommand;
+import smp.aeternum.carpet.network.CommandPacksNetworking;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -44,6 +48,7 @@ public class AeternumCarpet implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		BlockerNetworking.registerPayloads();
+		CommandPacksNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -54,6 +59,7 @@ public class AeternumCarpet implements ModInitializer {
 			FinderStore.load(server);
 			FinderItemNames.load(server);
 			ProtectedBlockStore.load(server);
+			CommandPackStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
@@ -61,6 +67,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(BlockerScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
+		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});
@@ -85,6 +92,7 @@ public class AeternumCarpet implements ModInitializer {
 			BlockersCommand.register(dispatcher);
 			FinderCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);
+			ActionsCommand.register(dispatcher);
 		});
 		LOGGER.info("Hello Fabric world!");
 	}

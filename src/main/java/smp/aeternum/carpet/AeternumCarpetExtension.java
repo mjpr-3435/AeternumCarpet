@@ -44,7 +44,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandFinder.name", "Command Finder"),
             Map.entry("carpet.rule.commandFinder.desc", "Enables the persistent /find and /count storage finder commands."),
             Map.entry("carpet.rule.commandProtect.name", "Command Protect"),
-            Map.entry("carpet.rule.commandProtect.desc", "Enables OP-managed persistent protection for selected blocks through /protect.")
+            Map.entry("carpet.rule.commandProtect.desc", "Enables OP-managed persistent protection for selected blocks through /protect."),
+            Map.entry("carpet.rule.commandActions.name", "Command Actions"),
+            Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation.")
         );
     }
 }

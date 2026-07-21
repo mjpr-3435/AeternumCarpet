@@ -49,4 +49,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandProtect = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandActions = false;
+
 }
