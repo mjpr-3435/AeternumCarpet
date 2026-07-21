@@ -79,6 +79,29 @@ public final class AeternumCarpetConfig {
         return null;
     }
 
+    /** Replaces one area in place, preserving its position (and therefore its map priority). */
+    public static boolean replaceAllowedGenerationArea(String existingName, AllowedGenerationArea replacement) {
+        if (existingName == null || existingName.isBlank() || replacement == null || !replacement.hasValidSize()) {
+            return false;
+        }
+
+        List<AllowedGenerationArea> updatedAreas = new ArrayList<>(allowedGenerationAreas);
+        for (int i = 0; i < updatedAreas.size(); i++) {
+            AllowedGenerationArea current = updatedAreas.get(i);
+            if (!current.name().equals(existingName)) {
+                continue;
+            }
+            if (!existingName.equals(replacement.name()) && findAreaByName(replacement.name()).isPresent()) {
+                return false;
+            }
+            updatedAreas.set(i, normalize(replacement));
+            allowedGenerationAreas = List.copyOf(updatedAreas);
+            save();
+            return true;
+        }
+        return false;
+    }
+
     public static List<AllowedGenerationArea> findAreasContainingChunk(String dimension, int chunkX, int chunkZ) {
         List<AllowedGenerationArea> matchingAreas = new ArrayList<>();
         for (AllowedGenerationArea area : allowedGenerationAreas) {
