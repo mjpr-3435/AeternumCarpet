@@ -119,7 +119,9 @@ final class ExplorationMapScreen extends Screen {
         for (int z = 0; z < TILE; z++) for (int x = 0; x < TILE; x++) image.setColorArgb(x, z, p.colors()[z * TILE + x]);
         NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "aeternum-map", image);
         texture.setFilter(false, false); texture.setClamp(true);
-        Identifier id = Identifier.of("aeternum-carpet", "map/" + Integer.toUnsignedString(key.hashCode()));
+        // A record hash is not an identifier: e.g. coordinates offset by 31 can collide.
+        // Use the actual tile address so streaming one tile can never replace another's GPU texture.
+        Identifier id = Identifier.of("aeternum-carpet", "map/" + key.dimension.replace(':', '_') + "/" + key.x + "_" + key.z);
         client.getTextureManager().registerTexture(id, texture); tiles.put(key, id); requested.remove(key);
     }
 
