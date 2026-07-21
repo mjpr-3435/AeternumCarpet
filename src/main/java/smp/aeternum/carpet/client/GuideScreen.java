@@ -20,7 +20,7 @@ public final class GuideScreen extends Screen {
     private static final Type TYPE = new TypeToken<List<GuideDocument>>() {}.getType();
     private List<GuideDocument> guides;
     private boolean canEdit, editing, helpOpen, dirty;
-    private int selected, scroll, readerScroll;
+    private int selected, scroll, readerScroll; private boolean draggingReaderScrollbar;
     private EditBoxWidget editor;
     private TextFieldWidget titleField;
     private ButtonWidget renameButton, refreshButton;
@@ -104,7 +104,7 @@ public final class GuideScreen extends Screen {
             c.drawTextWithShadow(textRenderer, shortTitle(guides.get(i).title), l + 14, y + 1, i == selected ? 0xFFFFFFFF : 0xFFAAAAAA);
         }
         if (guides.isEmpty()) c.drawTextWithShadow(textRenderer, "No hay guias.", l + 14, t + 48, 0xFFAAAAAA);
-        if (!editing && current() != null) renderGuideText(c, current().markdown, l + 126, t + 43, 348);
+        if (!editing && current() != null) { renderGuideText(c, current().markdown, l + 126, t + 43, 338); renderReaderScrollbar(c,l,t); }
         if (editing && canEdit) {
             if (renameButton != null && titleField != null && current() != null)
                 renameButton.active = !titleField.getText().trim().isEmpty() && !titleField.getText().trim().equals(current().title);
@@ -142,16 +142,19 @@ public final class GuideScreen extends Screen {
         for (String raw : content.split("\\R")) {
             for (var wrapped : textRenderer.wrapLines(MotdMarkup.parse(raw), w)) {
                 if (skipped-- > 0) continue;
-                if (lineY > height / 2 + 145) return;
+                if (lineY > height / 2 + 112) return;
                 c.drawTextWithShadow(textRenderer, wrapped, x, lineY, 0xFFCCCCCC); lineY += 10;
             }
             lineY += 2;
         }
     }
+    private int maxReaderScroll(){if(current()==null)return 0;int lines=0;for(String raw:current().markdown.split("\\R")){lines+=textRenderer.wrapLines(MotdMarkup.parse(raw),338).size();lines++;}return Math.max(0,lines-24);}
+    private void renderReaderScrollbar(DrawContext c,int l,int t){int max=maxReaderScroll();readerScroll=Math.max(0,Math.min(readerScroll,max));if(max==0)return;int top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*24/(max+24)),y=top+(track-bar)*readerScroll/max;c.fill(l+466,top,l+472,bottom,0xFF333333);c.fill(l+466,y,l+472,y+bar,0xFFAAAAAA);}
 
     @Override public boolean mouseClicked(double mx, double my, int b) {
         int l = width / 2 - 260, t = height / 2 - 170;
         if (b == 0 && mx >= l + 500 && mx < l + 520 && my >= t && my < t + 32) { close(); return true; }
+        if (!editing && b==0 && maxReaderScroll()>0 && mx>=l+462&&mx<=l+476&&my>=t+42&&my<=t+282){draggingReaderScrollbar=true;updateReaderScroll(my);return true;}
         if (b == 0 && mx >= l + 9 && mx < l + 112 && my >= t + 42 && my < t + 289) {
             selected = Math.min(guides.size() - 1, scroll + (int) ((my - (t + 42)) / 19)); readerScroll = 0;
             if (editing) { dirty = false; helpOpen = false; build(); }
@@ -163,9 +166,12 @@ public final class GuideScreen extends Screen {
     @Override public boolean mouseScrolled(double mx, double my, double h, double v) {
         int l = width / 2 - 260, t = height / 2 - 170;
         if (mx >= l && mx < l + 117 && my >= t + 40 && my < t + 290) { scroll -= Math.signum(v); return true; }
-        if (!editing && mx >= l + 126 && mx < l + 474 && my >= t + 40 && my < t + 290 && current()!=null) { readerScroll=Math.max(0,readerScroll-(int)Math.signum(v)); return true; }
+        if (!editing && mx >= l + 126 && mx < l + 474 && my >= t + 40 && my < t + 290 && current()!=null) { readerScroll=Math.max(0,Math.min(maxReaderScroll(),readerScroll-(int)Math.signum(v))); return true; }
         return super.mouseScrolled(mx, my, h, v);
     }
+    @Override public boolean mouseDragged(double mx,double my,int button,double dx,double dy){if(draggingReaderScrollbar&&button==0){updateReaderScroll(my);return true;}return super.mouseDragged(mx,my,button,dx,dy);}
+    @Override public boolean mouseReleased(double mx,double my,int button){if(button==0&&draggingReaderScrollbar){draggingReaderScrollbar=false;return true;}return super.mouseReleased(mx,my,button);}
+    private void updateReaderScroll(double my){int max=maxReaderScroll();if(max==0)return;int t=height/2-170,top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*24/(max+24));double f=(my-top-bar/2.0)/Math.max(1,track-bar);readerScroll=(int)Math.round(Math.max(0,Math.min(1,f))*max);}
     @Override public boolean shouldPause() { return false; }
     @Override public void close() {
         if (editing) { editing = false; helpOpen = false; build(); }

@@ -54,6 +54,10 @@ public final class CommandPackStore {
         for (CommandPack pack : packs) if (pack.id.equals(packId)) return pack;
         return null;
     }
+    public static CommandPack getByExactName(String name) {
+        for (CommandPack pack : packs) if (pack.name.equals(name)) return pack;
+        return null;
+    }
 
     private static List<CommandPack> normalize(List<CommandPack> input) {
         if (input == null || input.size() > MAX_PACKS) throw new IllegalArgumentException("Invalid pack count");
