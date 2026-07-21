@@ -35,10 +35,23 @@ public final class CommandRunner {
             // Commands such as Carpet's /player can schedule and await server work.  Running
             // them directly from END_SERVER_TICK can deadlock the server watchdog; defer them
             // to the normal server task queue instead.
-            server.execute(() -> {
-                ServerCommandSource source = server.getCommandSource().withSilent();
-                server.getCommandManager().executeWithPrefix(source, command);
-            });
+            server.execute(() -> runCommand(job, command));
+            return;
+        }
+        JOBS.addLast(job);
+    }
+    private static void runCommand(Job job, String command) {
+        boolean success;
+        try {
+            ServerCommandSource source = job.server.getCommandSource().withSilent();
+            success = job.server.getCommandManager().getDispatcher().execute(command, source) > 0;
+        } catch (Exception ignored) {
+            success = false;
+        }
+        if (job.requester != null && job.requester.networkHandler != null) {
+            Text marker = Text.literal(success ? "✓ " : "✕ ").formatted(success ? Formatting.GREEN : Formatting.RED);
+            job.requester.sendMessage(Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
+                .append(marker).append(Text.literal("/" + command).formatted(Formatting.DARK_GRAY)), false);
         }
         JOBS.addLast(job);
     }
