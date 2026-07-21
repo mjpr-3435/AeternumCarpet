@@ -140,12 +140,13 @@ public final class GuideScreen extends Screen {
         int lineY = y;
         int skipped = readerScroll;
         for (String raw : content.split("\\R")) {
+            boolean rendered = false;
             for (var wrapped : textRenderer.wrapLines(MotdMarkup.parse(raw), w)) {
                 if (skipped-- > 0) continue;
                 if (lineY > height / 2 + 112) return;
-                c.drawTextWithShadow(textRenderer, wrapped, x, lineY, 0xFFCCCCCC); lineY += 10;
+                c.drawTextWithShadow(textRenderer, wrapped, x, lineY, 0xFFCCCCCC); lineY += 10; rendered = true;
             }
-            lineY += 2;
+            if (rendered) lineY += 2;
         }
     }
     private int maxReaderScroll(){if(current()==null)return 0;int lines=0;for(String raw:current().markdown.split("\\R")){lines+=textRenderer.wrapLines(MotdMarkup.parse(raw),338).size();lines++;}return Math.max(0,lines-24);}
