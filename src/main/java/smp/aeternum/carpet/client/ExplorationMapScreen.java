@@ -187,7 +187,11 @@ final class ExplorationMapScreen extends Screen {
     private void gridLines(DrawContext c, int l, int t, int r, int b, int cx, int cy, int spacing, int color) { int minX = (int) Math.floor(centerX + (l - cx) / zoom), maxX = (int) Math.ceil(centerX + (r - cx) / zoom), minZ = (int) Math.floor(centerZ + (t - cy) / zoom), maxZ = (int) Math.ceil(centerZ + (b - cy) / zoom); for (int x = Math.floorDiv(minX, spacing) * spacing; x <= maxX; x += spacing) { int sx = (int) Math.floor(cx + (x - centerX) * zoom); if (sx >= l && sx < r) c.fill(sx, t, sx + 1, b, color); } for (int z = Math.floorDiv(minZ, spacing) * spacing; z <= maxZ; z += spacing) { int sy = (int) Math.floor(cy + (z - centerZ) * zoom); if (sy >= t && sy < b) c.fill(l, sy, r, sy + 1, color); } }
 
     @Override public boolean mouseClicked(double x, double y, int button) {
-        if (formOpen && super.mouseClicked(x, y, button)) return true;
+        // The region form is modal: no pointer event may fall through to the map.
+        if (formOpen) {
+            super.mouseClicked(x, y, button);
+            return true;
+        }
         if (button == 1 && x >= 10 && x < width - 10 && y >= 28 && y < height - 36 && client.player != null && client.player.hasPermissionLevel(2)) {
             int cx = width / 2, cy = (28 + height - 36) / 2; selectedChunkX = Math.floorDiv((int) Math.floor(centerX + (x - cx) / zoom), 16); selectedChunkZ = Math.floorDiv((int) Math.floor(centerZ + (y - cy) / zoom), 16);
             for (int i = areas.size() - 1; i >= 0; i--) { var area = areas.get(i); if (area.dimension().equals(dimension) && selectedChunkX >= area.minChunkX() && selectedChunkX <= area.maxChunkX() && selectedChunkZ >= area.minChunkZ() && selectedChunkZ <= area.maxChunkZ()) { openEdit(area); return true; } }
@@ -196,13 +200,17 @@ final class ExplorationMapScreen extends Screen {
         if (button == 0 && x >= 10 && x < width - 10 && y >= 28 && y < height - 36) { dragging = true; lastX = x; lastY = y; return true; }
         return super.mouseClicked(x, y, button);
     }
-    @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) { if (dragging && button == 0) { centerX -= (x - lastX) / zoom; centerZ -= (y - lastY) / zoom; lastX = x; lastY = y; return true; } return super.mouseDragged(x, y, button, dx, dy); }
-    @Override public boolean mouseReleased(double x, double y, int button) { if (button == 0 && dragging) { dragging = false; return true; } return super.mouseReleased(x, y, button); }
-    @Override public boolean mouseScrolled(double x, double y, double h, double v) { if (v == 0) return false; int cx = width / 2, cy = (28 + height - 36) / 2; double old = zoom; zoom = Math.max(.0625, Math.min(16, zoom * Math.pow(1.18, v))); centerX += (x - cx) * (1 / old - 1 / zoom); centerZ += (y - cy) * (1 / old - 1 / zoom); return true; }
+    @Override public boolean mouseDragged(double x, double y, int button, double dx, double dy) { if (formOpen) { super.mouseDragged(x, y, button, dx, dy); return true; } if (dragging && button == 0) { centerX -= (x - lastX) / zoom; centerZ -= (y - lastY) / zoom; lastX = x; lastY = y; return true; } return super.mouseDragged(x, y, button, dx, dy); }
+    @Override public boolean mouseReleased(double x, double y, int button) { if (formOpen) { super.mouseReleased(x, y, button); return true; } if (button == 0 && dragging) { dragging = false; return true; } return super.mouseReleased(x, y, button); }
+    @Override public boolean mouseScrolled(double x, double y, double h, double v) { if (formOpen) return true; if (v == 0) return false; int cx = width / 2, cy = (28 + height - 36) / 2; double old = zoom; zoom = Math.max(.0625, Math.min(16, zoom * Math.pow(1.18, v))); centerX += (x - cx) * (1 / old - 1 / zoom); centerZ += (y - cy) * (1 / old - 1 / zoom); return true; }
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
         if (formOpen) {
             if (key == 256) { toggleForm(false); return true; }
             if (key == 257 || key == 335) { submit(); return true; }
+            // Let the focused input edit itself, then consume every key so map
+            // shortcuts such as Space and F cannot run behind the dialog.
+            super.keyPressed(key, scan, modifiers);
+            return true;
         }
         if (key == 32) { centerX = centerZ = 0; zoom = 1; return true; }
         if (key == 70 && client.player != null) { centerX = client.player.getBlockX(); centerZ = client.player.getBlockZ(); return true; }
