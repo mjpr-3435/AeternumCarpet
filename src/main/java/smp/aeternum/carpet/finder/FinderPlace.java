@@ -13,8 +13,10 @@ public final class FinderPlace {
     public String name;
     public String dimension;
     public int minX, minY, minZ, maxX, maxY, maxZ;
-    public long createdAt, updatedAt;
-    public List<FinderContainer> containers = new ArrayList<>();
+    public long createdAt;
+    /** In-memory snapshot only; inventory contents must never become persistent source of truth. */
+    public transient long updatedAt;
+    public transient List<FinderContainer> containers = new ArrayList<>();
     public Set<String> excluded = new LinkedHashSet<>();
 
     public FinderPlace() { }

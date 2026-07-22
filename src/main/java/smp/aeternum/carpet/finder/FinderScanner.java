@@ -28,6 +28,33 @@ public final class FinderScanner {
         if (JOBS.stream().anyMatch(j -> j.place.name.equals(place.name))) return false;
         JOBS.add(new Job(world, place, requester)); return true;
     }
+    /** Fresh synchronous snapshot used only when a query's five-minute memory cache has expired. */
+    public static void refreshNow(ServerWorld world, FinderPlace place) {
+        place.containers.clear();
+        for (int cz=Math.floorDiv(place.minZ,16);cz<=Math.floorDiv(place.maxZ,16);cz++)
+            for (int cx=Math.floorDiv(place.minX,16);cx<=Math.floorDiv(place.maxX,16);cx++) scanChunk(world, place, cx, cz);
+        place.updatedAt=System.currentTimeMillis();
+    }
+    private static void scanChunk(ServerWorld world, FinderPlace place, int chunkX, int chunkZ) {
+        WorldChunk chunk=world.getChunkManager().getWorldChunk(chunkX,chunkZ,true); Set<BlockPos> seen=new HashSet<>();
+        for (BlockEntity be : chunk.getBlockEntities().values()) {
+            if (!seen.add(be.getPos()) || !(be instanceof Inventory inventory) || !place.contains(be.getPos()) || place.excluded.contains(place.key(be.getPos()))) continue;
+            String block=Registries.BLOCK.getId(be.getCachedState().getBlock()).toString(); if (!isStorage(block)) continue;
+            FinderContainer found=new FinderContainer(be.getPos().getX(),be.getPos().getY(),be.getPos().getZ(),block);
+            for (int slot=0;slot<inventory.size();slot++) snapshotStack(found,inventory.getStack(slot),1); place.containers.add(found);
+        }
+    }
+    /** Shulker contents live on the item as a data component, including nested shulkers. */
+    private static void snapshotStack(FinderContainer found, ItemStack stack, int copies) {
+        if (stack.isEmpty() || copies <= 0) return;
+        String id = Registries.ITEM.getId(stack.getItem()).toString();
+        found.items.merge(id, Math.multiplyExact(stack.getCount(), copies), Integer::sum);
+        found.stacks.merge(id, copies, Integer::sum);
+        ContainerComponent contents = stack.get(DataComponentTypes.CONTAINER);
+        if (contents == null) return;
+        int nestedCopies = Math.multiplyExact(copies, stack.getCount());
+        for (ItemStack nested : contents.iterateNonEmpty()) snapshotStack(found, nested, nestedCopies);
+    }
     public static void tick(MinecraftServer server) {
         Job job = JOBS.peek(); if (job == null) return;
         try { if (job.tick()) { FinderStore.save(); JOBS.remove(); job.message(server, "Escaneo terminado: " + job.place.containers.size() + " contenedores en " + job.place.name + ".", Formatting.GREEN); } else job.progress(server); }
@@ -44,35 +71,10 @@ public final class FinderScanner {
         }
         boolean tick() { // One full chunk per tick: bounded work and no permanent forceload.
             if (cz > maxCZ) { place.updatedAt=System.currentTimeMillis(); return true; }
-            WorldChunk chunk=world.getChunkManager().getWorldChunk(cx,cz,true);
-            Set<BlockPos> seen=new HashSet<>();
-            for (BlockEntity be : chunk.getBlockEntities().values()) {
-                if (!seen.add(be.getPos()) || !(be instanceof Inventory inventory) || !place.contains(be.getPos()) || place.excluded.contains(place.key(be.getPos()))) continue;
-                String block=Registries.BLOCK.getId(be.getCachedState().getBlock()).toString();
-                if (!isStorage(block)) continue;
-                FinderContainer found=new FinderContainer(be.getPos().getX(),be.getPos().getY(),be.getPos().getZ(),block);
-                for (int slot=0; slot<inventory.size(); slot++) snapshotStack(found, inventory.getStack(slot), 1);
-                place.containers.add(found);
-            }
+            scanChunk(world,place,cx,cz);
             done++; if (++cx>maxCX) { cx=minCX; cz++; } return false;
         }
 
-        /**
-         * Shulker contents live on the item as the CONTAINER data component, not in a world
-         * block entity. Fold them into their outer container so /find reports the chest's
-         * coordinates, including deliberately nested shulkers.
-         */
-        private void snapshotStack(FinderContainer found, ItemStack stack, int copies) {
-            if (stack.isEmpty() || copies <= 0) return;
-            String id = Registries.ITEM.getId(stack.getItem()).toString();
-            found.items.merge(id, Math.multiplyExact(stack.getCount(), copies), Integer::sum);
-            found.stacks.merge(id, copies, Integer::sum);
-            ContainerComponent contents = stack.get(DataComponentTypes.CONTAINER);
-            if (contents == null) return;
-            int nestedCopies = Math.multiplyExact(copies, stack.getCount());
-            for (ItemStack nested : contents.iterateNonEmpty()) snapshotStack(found, nested, nestedCopies);
-        }
-        
         void progress(MinecraftServer server) { if (System.currentTimeMillis()-lastProgress<2000) return; lastProgress=System.currentTimeMillis(); message(server,"Progreso " + done + "/" + total + " chunks (" + (done*100/total) + "%).",Formatting.GRAY); }
         void message(MinecraftServer server,String message,Formatting color) { ServerPlayerEntity p=server.getPlayerManager().getPlayer(requester); if(p!=null) p.sendMessage(Text.empty().append(Text.literal("[Finder] ").formatted(Formatting.DARK_GRAY)).append(Text.literal(message).formatted(color)),false); }
     }

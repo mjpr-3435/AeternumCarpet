@@ -28,7 +28,7 @@ public final class FinderStore {
         defaultFile = server.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_finder_default.txt");
         try { if (Files.exists(defaultFile)) defaultPlace = Files.readString(defaultFile, StandardCharsets.UTF_8).trim(); } catch (IOException ignored) { }
         if (!Files.exists(file)) return;
-        try { Map<String, FinderPlace> loaded = GSON.fromJson(Files.readString(file), TYPE); if (loaded != null) PLACES.putAll(loaded); }
+        try { Map<String, FinderPlace> loaded = GSON.fromJson(Files.readString(file), TYPE); if (loaded != null) { for (FinderPlace place : loaded.values()) { place.containers = new java.util.ArrayList<>(); place.updatedAt = 0; } PLACES.putAll(loaded); } }
         catch (IOException | RuntimeException e) { AeternumCarpet.LOGGER.error("Could not load Finder places", e); }
     }
     public static void save() { if (file == null) return; try { Files.createDirectories(file.getParent()); Files.writeString(file, GSON.toJson(PLACES), StandardCharsets.UTF_8); } catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save Finder places", e); } }
