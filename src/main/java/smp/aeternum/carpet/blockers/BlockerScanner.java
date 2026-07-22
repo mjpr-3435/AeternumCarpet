@@ -24,6 +24,8 @@ import java.util.UUID;
 /** Spreads expensive block checks across server ticks. */
 public final class BlockerScanner {
     private static final int BLOCKS_PER_TICK = 4096;
+    /** A result list larger than this is not useful to render and can exceed Minecraft's packet limit. */
+    public static final int MAX_ENTRIES_PER_SCAN = 5_000;
     private static final Queue<Job> JOBS = new ArrayDeque<>();
 
     private BlockerScanner() {
@@ -55,7 +57,7 @@ public final class BlockerScanner {
                         .append(Text.literal("Análisis terminado: ").formatted(Formatting.GRAY))
                         .append(Text.literal(job.scan.id).formatted(Formatting.AQUA))
                         .append(Text.literal(" → ").formatted(Formatting.DARK_GRAY))
-                        .append(Text.literal(job.scan.entries.size() + " bloqueadores").formatted(Formatting.YELLOW))
+                        .append(Text.literal(job.scan.matchedEntries + " bloqueadores").formatted(Formatting.YELLOW))
                         .append(Text.literal(". Usa ").formatted(Formatting.GRAY))
                         .append(Text.literal("/blockers").setStyle(Style.EMPTY.withColor(Formatting.WHITE)
                             .withClickEvent(new ClickEvent.RunCommand("/blockers"))
@@ -127,7 +129,12 @@ public final class BlockerScanner {
                 if (isBlocker(state, pos)) {
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
                     String reason = isWaterlogged(state) ? "waterlogged blocker" : "configured explosion blocker";
-                    scan.entries.add(new BlockerEntry(x, y, z, id, reason));
+                    scan.matchedEntries++;
+                    if (scan.entries.size() < MAX_ENTRIES_PER_SCAN) {
+                        scan.entries.add(new BlockerEntry(x, y, z, id, reason));
+                    } else {
+                        scan.entriesTruncated = true;
+                    }
                 }
                 advance();
             }

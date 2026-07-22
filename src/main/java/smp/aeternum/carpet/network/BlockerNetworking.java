@@ -10,9 +10,17 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.blockers.BlockerScanStore;
 import smp.aeternum.carpet.blockers.BlockerScanner;
+import smp.aeternum.carpet.blockers.BlockerScan;
+import smp.aeternum.carpet.blockers.BlockerEntry;
+
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class BlockerNetworking {
     private static final Gson GSON = new GsonBuilder().create();
+    /* Vanilla refuses custom payloads around 1 MiB. Leave margin for packet framing. */
+    private static final int MAX_SNAPSHOT_BYTES = 850_000;
 
     private BlockerNetworking() {
     }
@@ -47,6 +55,51 @@ public final class BlockerNetworking {
     }
 
     private static String snapshot() {
-        return GSON.toJson(BlockerScanStore.all());
+        List<BlockerScan> originals = new ArrayList<>(BlockerScanStore.all());
+        List<BlockerScan> visible = new ArrayList<>();
+        for (BlockerScan original : originals) visible.add(copyWithoutEntries(original));
+
+        int bytes = utf8Bytes(GSON.toJson(visible));
+        for (int scanIndex = 0; scanIndex < visible.size(); scanIndex++) {
+            BlockerScan original = originals.get(scanIndex);
+            BlockerScan copy = visible.get(scanIndex);
+            int totalMatches = original.matchedEntries > 0 ? original.matchedEntries : original.entries.size();
+            copy.matchedEntries = totalMatches;
+            for (BlockerEntry entry : original.entries) {
+                int entryBytes = utf8Bytes(GSON.toJson(entry)) + 1;
+                if (bytes + entryBytes > MAX_SNAPSHOT_BYTES) {
+                    copy.entriesTruncated = true;
+                    break;
+                }
+                copy.entries.add(entry);
+                bytes += entryBytes;
+            }
+            if (copy.entries.size() < original.entries.size() || totalMatches > copy.entries.size()) copy.entriesTruncated = true;
+        }
+        return GSON.toJson(visible);
+    }
+
+    private static int utf8Bytes(String value) {
+        return value.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    private static BlockerScan copyWithoutEntries(BlockerScan original) {
+        BlockerScan copy = new BlockerScan();
+        copy.id = original.id;
+        copy.dimension = original.dimension;
+        copy.minX = original.minX;
+        copy.minY = original.minY;
+        copy.minZ = original.minZ;
+        copy.maxX = original.maxX;
+        copy.maxY = original.maxY;
+        copy.maxZ = original.maxZ;
+        copy.scannedChunks = original.scannedChunks;
+        copy.totalChunks = original.totalChunks;
+        copy.complete = original.complete;
+        copy.createdAt = original.createdAt;
+        copy.requestedBy = original.requestedBy;
+        copy.matchedEntries = original.matchedEntries > 0 ? original.matchedEntries : original.entries.size();
+        copy.entriesTruncated = original.entriesTruncated;
+        return copy;
     }
 }

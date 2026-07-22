@@ -26,7 +26,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class BlockersCommand {
     private static final Pattern ID = Pattern.compile("[a-z0-9_-]{1,48}");
-    private static final long MAX_SCAN_VOLUME = 25_000_000L;
+    private static final long MAX_SCAN_VOLUME = 200_000_000L;
     private static final long MAX_PENDING_SCANS = 4;
 
     private BlockersCommand() {
@@ -91,7 +91,7 @@ public final class BlockersCommand {
             * ((long) Math.abs(second.getY() - first.getY()) + 1)
             * ((long) Math.abs(second.getZ() - first.getZ()) + 1);
         if (volume > MAX_SCAN_VOLUME) {
-            context.getSource().sendError(Text.literal("El área supera el límite de 25.000.000 bloques."));
+            context.getSource().sendError(Text.literal("El área supera el límite de 200.000.000 bloques."));
             return 0;
         }
         ServerWorld world = context.getSource().getWorld();

@@ -80,7 +80,9 @@ public final class BlockersScreen extends Screen {
             if (hover) context.fill(left + 8, rowY - 2, left + panelW - 8, rowY + 16, 0xFF30465A);
             String state = scan.complete ? "Terminado" : scan.scannedChunks + "/" + scan.totalChunks + " chunks";
             context.drawTextWithShadow(textRenderer, scan.id, left + 14, rowY + 1, 0xFFFFFFFF);
-            context.drawTextWithShadow(textRenderer, scan.entries.size() + " bloqueadores  ·  " + state, left + 170, rowY + 1, 0xFFB0B0B0);
+            int matches = scan.matchedEntries > 0 ? scan.matchedEntries : scan.entries.size();
+            String results = scan.entriesTruncated ? matches + "+ bloqueadores" : matches + " bloqueadores";
+            context.drawTextWithShadow(textRenderer, results + "  ·  " + state, left + 170, rowY + 1, 0xFFB0B0B0);
             ButtonWidget delete = deleteButtons.get(i);
             delete.setPosition(left + panelW - 54, rowY - 2);
             delete.active = canDelete && hasShiftDown();

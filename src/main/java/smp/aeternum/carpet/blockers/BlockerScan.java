@@ -20,6 +20,10 @@ public final class BlockerScan {
     public int scannedChunks;
     public int totalChunks;
     public boolean complete;
+    /** Number of matches found, including entries omitted from the client-facing list. */
+    public int matchedEntries;
+    /** True when the result list was capped to keep the scan and its network snapshot usable. */
+    public boolean entriesTruncated;
     public long createdAt;
     public String requestedBy;
     public List<BlockerEntry> entries = new ArrayList<>();
