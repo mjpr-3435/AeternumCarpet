@@ -11,6 +11,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.EditBoxWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
+import net.minecraft.text.OrderedText;
 import smp.aeternum.carpet.guides.GuideDocument;
 import smp.aeternum.carpet.motd.MotdMarkup;
 
@@ -18,12 +19,13 @@ import smp.aeternum.carpet.motd.MotdMarkup;
 public final class GuideScreen extends Screen {
     private static final Gson GSON = new Gson();
     private static final Type TYPE = new TypeToken<List<GuideDocument>>() {}.getType();
+    private static final int READER_VISIBLE_LINES = 24;
     private List<GuideDocument> guides;
     private boolean canEdit, editing, helpOpen, dirty;
     private int selected, scroll, readerScroll; private boolean draggingReaderScrollbar;
     private EditBoxWidget editor;
     private TextFieldWidget titleField;
-    private ButtonWidget renameButton, refreshButton;
+    private ButtonWidget renameButton, refreshButton, moveUpButton, moveDownButton;
     private long saveAt, refreshEnableAt;
 
     public GuideScreen(String json, boolean canEdit) {
@@ -34,15 +36,17 @@ public final class GuideScreen extends Screen {
 
     public void replaceData(String json, boolean canEdit) {
         if (editing && dirty) return;
+        String selectedTitle = current() == null ? null : current().title;
         guides = decode(json);
         this.canEdit = canEdit;
+        if (selectedTitle != null) for (int i = 0; i < guides.size(); i++) if (guides.get(i).title.equals(selectedTitle)) { selected = i; return; }
         selected = Math.min(selected, Math.max(0, guides.size() - 1));
     }
 
     @Override protected void init() { build(); }
 
     private void build() {
-        clearChildren(); editor = null; titleField = null; renameButton = null; refreshButton = null;
+        clearChildren(); editor = null; titleField = null; renameButton = null; refreshButton = null; moveUpButton = null; moveDownButton = null;
         int l = width / 2 - 260, t = height / 2 - 170;
         if (editing && canEdit) {
             if (current() != null) {
@@ -67,6 +71,11 @@ public final class GuideScreen extends Screen {
             }
             addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> GuideRequest.send("create", "Guia nueva", ""))
                 .dimensions(l + 12, t + 302, 20, 20).build());
+            moveUpButton = ButtonWidget.builder(Text.literal("▲"), b -> GuideRequest.send("move_up", current().title, ""))
+                .dimensions(l + 108, t + 302, 20, 20).build();
+            moveDownButton = ButtonWidget.builder(Text.literal("▼"), b -> GuideRequest.send("move_down", current().title, ""))
+                .dimensions(l + 132, t + 302, 20, 20).build();
+            addDrawableChild(moveUpButton); addDrawableChild(moveDownButton);
             addDrawableChild(ButtonWidget.builder(Text.literal("Guias"), b -> {
                 editing = false; helpOpen = false; build();
             }).dimensions(l + 400, t + 302, 74, 20).build());
@@ -108,6 +117,8 @@ public final class GuideScreen extends Screen {
         if (editing && canEdit) {
             if (renameButton != null && titleField != null && current() != null)
                 renameButton.active = !titleField.getText().trim().isEmpty() && !titleField.getText().trim().equals(current().title);
+            if (moveUpButton != null) moveUpButton.active = selected > 0;
+            if (moveDownButton != null) moveDownButton.active = selected < guides.size() - 1;
             for (var child : children()) if (child instanceof ButtonWidget button && button.getMessage().getString().equals("\u00D7") && button.getY() == t + 302)
                 button.active = hasShiftDown();
             c.drawTextWithShadow(textRenderer, dirty ? "Guardando..." : "Guardado", l + 126, t + 306, dirty ? 0xFFFFD080 : 0xFF55FF55);
@@ -130,6 +141,8 @@ public final class GuideScreen extends Screen {
             else if (mx >= l + 36 && mx < l + 56 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal(renameButton != null && renameButton.active ? "Confirmar nuevo nombre" : "Escribe un nombre distinto para renombrar"), mx, my);
             else if (mx >= l + 60 && mx < l + 80 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Ver sintaxis de formato"), mx, my);
             else if (mx >= l + 84 && mx < l + 104 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal(hasShiftDown() ? "Eliminar esta guía" : "Mantén Shift para eliminar"), mx, my);
+            else if (mx >= l + 108 && mx < l + 128 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Mover guía hacia arriba"), mx, my);
+            else if (mx >= l + 132 && mx < l + 152 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Mover guía hacia abajo"), mx, my);
             else if (mx >= l + 400 && mx < l + 474 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Volver al lector de guías"), mx, my);
         } else if (mx >= l + 320 && mx < l + 394 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Recargar archivos de guías desde el servidor"), mx, my);
         else if (mx >= l + 400 && mx < l + 474 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Editar la guía seleccionada"), mx, my);
@@ -137,20 +150,13 @@ public final class GuideScreen extends Screen {
 
     private String shortTitle(String title) { String cut=textRenderer.trimToWidth(title,92); return cut.length()<title.length()?textRenderer.trimToWidth(cut,84)+"…":cut; }
     private void renderGuideText(DrawContext c, String content, int x, int y, int w) {
-        int lineY = y;
-        int skipped = readerScroll;
-        for (String raw : content.split("\\R")) {
-            boolean rendered = false;
-            for (var wrapped : textRenderer.wrapLines(MotdMarkup.parse(raw), w)) {
-                if (skipped-- > 0) continue;
-                if (lineY > height / 2 + 112) return;
-                c.drawTextWithShadow(textRenderer, wrapped, x, lineY, 0xFFCCCCCC); lineY += 10; rendered = true;
-            }
-            if (rendered) lineY += 2;
-        }
+        List<OrderedText> lines = guideLines(content, w);
+        for (int i = readerScroll; i < lines.size() && i < readerScroll + READER_VISIBLE_LINES; i++)
+            c.drawTextWithShadow(textRenderer, lines.get(i), x, y + (i - readerScroll) * 10, 0xFFCCCCCC);
     }
-    private int maxReaderScroll(){if(current()==null)return 0;int lines=0;for(String raw:current().markdown.split("\\R"))lines+=textRenderer.wrapLines(MotdMarkup.parse(raw),338).size();return Math.max(0,lines-20);}
-    private void renderReaderScrollbar(DrawContext c,int l,int t){int max=maxReaderScroll();readerScroll=Math.max(0,Math.min(readerScroll,max));if(max==0)return;int top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*20/(max+20)),y=top+(track-bar)*readerScroll/max;c.fill(l+466,top,l+472,bottom,0xFF333333);c.fill(l+466,y,l+472,y+bar,0xFFAAAAAA);}
+    private List<OrderedText> guideLines(String content,int width){List<OrderedText> lines=new ArrayList<>();for(String raw:content.split("\\R",-1)){List<OrderedText> wrapped=textRenderer.wrapLines(MotdMarkup.parse(raw),width);if(wrapped.isEmpty())lines.add(OrderedText.EMPTY);else lines.addAll(wrapped);}return lines;}
+    private int maxReaderScroll(){return current()==null?0:Math.max(0,guideLines(current().markdown,338).size()-READER_VISIBLE_LINES);}
+    private void renderReaderScrollbar(DrawContext c,int l,int t){int max=maxReaderScroll();readerScroll=Math.max(0,Math.min(readerScroll,max));if(max==0)return;int top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*READER_VISIBLE_LINES/(max+READER_VISIBLE_LINES)),y=top+(track-bar)*readerScroll/max;c.fill(l+466,top,l+472,bottom,0xFF333333);c.fill(l+466,y,l+472,y+bar,0xFFAAAAAA);}
 
     @Override public boolean mouseClicked(double mx, double my, int b) {
         int l = width / 2 - 260, t = height / 2 - 170;
@@ -172,7 +178,7 @@ public final class GuideScreen extends Screen {
     }
     @Override public boolean mouseDragged(double mx,double my,int button,double dx,double dy){if(draggingReaderScrollbar&&button==0){updateReaderScroll(my);return true;}return super.mouseDragged(mx,my,button,dx,dy);}
     @Override public boolean mouseReleased(double mx,double my,int button){if(button==0&&draggingReaderScrollbar){draggingReaderScrollbar=false;return true;}return super.mouseReleased(mx,my,button);}
-    private void updateReaderScroll(double my){int max=maxReaderScroll();if(max==0)return;int t=height/2-170,top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*20/(max+20));double f=(my-top-bar/2.0)/Math.max(1,track-bar);readerScroll=(int)Math.round(Math.max(0,Math.min(1,f))*max);}
+    private void updateReaderScroll(double my){int max=maxReaderScroll();if(max==0)return;int t=height/2-170,top=t+42,bottom=t+282,track=bottom-top,bar=Math.max(20,track*READER_VISIBLE_LINES/(max+READER_VISIBLE_LINES));double f=(my-top-bar/2.0)/Math.max(1,track-bar);readerScroll=(int)Math.round(Math.max(0,Math.min(1,f))*max);}
     @Override public boolean shouldPause() { return false; }
     @Override public void close() {
         if (editing) { editing = false; helpOpen = false; build(); }
