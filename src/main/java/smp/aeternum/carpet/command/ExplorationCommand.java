@@ -62,15 +62,17 @@ public final class ExplorationCommand {
                     .then(argument("name", StringArgumentType.word())
                         .executes(ExplorationCommand::deleteRegion)))
                 .then(literal("list")
+                    .requires(source -> source.hasPermissionLevel(2))
                     .executes(ExplorationCommand::listRegions))
                 .then(literal("info")
+                    .requires(source -> source.hasPermissionLevel(2))
                     .executes(ExplorationCommand::regionInfo)))
             .then(literal("pregen")
                 .then(literal("start").requires(source -> source.hasPermissionLevel(2)).executes(context -> { ExplorationPregenerator.start(); context.getSource().sendFeedback(() -> Text.literal("Pregeneracion iniciada.").formatted(Formatting.GRAY), false); return 1; }))
                 .then(literal("pause").requires(source -> source.hasPermissionLevel(2)).executes(context -> { ExplorationPregenerator.pause(); context.getSource().sendFeedback(() -> Text.literal("Pregeneracion pausada.").formatted(Formatting.GRAY), false); return 1; }))
                 .then(literal("stop").requires(source -> source.hasPermissionLevel(2)).executes(context -> { ExplorationPregenerator.stop(); context.getSource().sendFeedback(() -> Text.literal("Pregeneracion detenida y progreso descartado.").formatted(Formatting.GRAY), false); return 1; }))
                 .then(literal("speed").requires(source -> source.hasPermissionLevel(2)).then(argument("chunks_per_minute", IntegerArgumentType.integer(1, 1200)).executes(context -> { int speed=IntegerArgumentType.getInteger(context,"chunks_per_minute"); ExplorationPregenerator.setSpeed(speed); context.getSource().sendFeedback(() -> Text.literal("Maximo de pregeneracion: " + speed + " chunks/minuto.").formatted(Formatting.GRAY), false); return 1; })))
-                .then(literal("status").executes(context -> { for (String line : ExplorationPregenerator.statusLines()) context.getSource().sendFeedback(() -> Text.literal(line).formatted(Formatting.GRAY), false); return 1; }))));
+                .then(literal("status").requires(source -> source.hasPermissionLevel(2)).executes(context -> { for (String line : ExplorationPregenerator.statusLines()) context.getSource().sendFeedback(() -> Text.literal(line).formatted(Formatting.GRAY), false); return 1; }))));
     }
 
     private static int addRegion(CommandContext<ServerCommandSource> context) throws com.mojang.brigadier.exceptions.CommandSyntaxException {

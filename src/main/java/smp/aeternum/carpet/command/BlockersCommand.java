@@ -26,13 +26,15 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class BlockersCommand {
     private static final Pattern ID = Pattern.compile("[a-z0-9_-]{1,48}");
+    private static final long MAX_SCAN_VOLUME = 25_000_000L;
+    private static final long MAX_PENDING_SCANS = 4;
 
     private BlockersCommand() {
     }
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("blockers")
-            .requires(source -> AeternumCarpetSettings.commandBlockers && source.hasPermissionLevel(2))
+            .requires(source -> AeternumCarpetSettings.commandBlockers)
             .executes(context -> {
                 if (context.getSource().getEntity() instanceof net.minecraft.server.network.ServerPlayerEntity player) {
                     BlockerNetworking.sendSnapshot(player, true);
@@ -43,8 +45,8 @@ public final class BlockersCommand {
             })
             .then(literal("list")
                 .executes(BlockersCommand::listBlocks)
-                .then(literal("add").then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, true))))
-                .then(literal("remove").then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, false)))))
+                .then(literal("add").requires(source -> source.hasPermissionLevel(2)).then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, true))))
+                .then(literal("remove").requires(source -> source.hasPermissionLevel(2)).then(argument("block", StringArgumentType.word()).executes(context -> changeBlock(context, false)))))
             .then(argument("coord1", BlockPosArgumentType.blockPos())
                 .then(argument("coord2", BlockPosArgumentType.blockPos())
                     .then(argument("nombre", StringArgumentType.word())
@@ -88,8 +90,8 @@ public final class BlockersCommand {
         long volume = ((long) Math.abs(second.getX() - first.getX()) + 1)
             * ((long) Math.abs(second.getY() - first.getY()) + 1)
             * ((long) Math.abs(second.getZ() - first.getZ()) + 1);
-        if (volume > 32_000_000L) {
-            context.getSource().sendError(Text.literal("El área supera el límite de 32.000.000 bloques."));
+        if (volume > MAX_SCAN_VOLUME) {
+            context.getSource().sendError(Text.literal("El área supera el límite de 25.000.000 bloques."));
             return 0;
         }
         ServerWorld world = context.getSource().getWorld();
@@ -97,10 +99,22 @@ public final class BlockersCommand {
             context.getSource().sendError(Text.literal("Ya existe el análisis '" + id + "'. Bórralo desde /blockers antes de reutilizar ese id."));
             return 0;
         }
-        BlockerScan scan = new BlockerScan(id, world.getRegistryKey(), first, second);
         if (context.getSource().getEntity() instanceof net.minecraft.server.network.ServerPlayerEntity player) {
-            scan.requestedBy = player.getUuidAsString();
+            String requester = player.getUuidAsString();
+            boolean alreadyPending = BlockerScanStore.all().stream()
+                .anyMatch(existing -> !existing.complete && requester.equals(existing.requestedBy));
+            if (alreadyPending) {
+                context.getSource().sendError(Text.literal("Ya tienes un análisis pendiente. Espera a que termine o pide a un OP que lo borre."));
+                return 0;
+            }
         }
+        long pendingScans = BlockerScanStore.all().stream().filter(existing -> !existing.complete).count();
+        if (pendingScans >= MAX_PENDING_SCANS) {
+            context.getSource().sendError(Text.literal("Ya hay 4 análisis pendientes. Espera a que termine alguno antes de añadir otro."));
+            return 0;
+        }
+        BlockerScan scan = new BlockerScan(id, world.getRegistryKey(), first, second);
+        if (context.getSource().getEntity() instanceof net.minecraft.server.network.ServerPlayerEntity player) scan.requestedBy = player.getUuidAsString();
         BlockerScanStore.put(scan);
         if (!BlockerScanner.start(world, scan)) {
             context.getSource().sendError(Text.literal("Ya hay un análisis activo con ese id."));
