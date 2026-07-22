@@ -5,7 +5,7 @@ import carpet.api.settings.RuleCategory;
 
 public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
-    public static boolean explorationManager = true;
+    public static boolean explorationManager = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean allowPlayerExploration = true;

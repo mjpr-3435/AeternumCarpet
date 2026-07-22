@@ -19,8 +19,8 @@ public final class CommandRunner {
         CommandPack pack = CommandPackStore.get(packId);
         if (pack == null || !RUNNING.add(packId)) return false;
         JOBS.add(new Job(server, requester, packId, pack));
-        requester.sendMessage(Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
-            .append(Text.literal("Ejecutando: " + pack.name).formatted(Formatting.AQUA)), false);
+        announce(server, Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
+            .append(Text.literal("Ejecutando: " + pack.name).formatted(Formatting.AQUA)));
         return true;
     }
     public static void tick(MinecraftServer server) {
@@ -48,18 +48,18 @@ public final class CommandRunner {
         } catch (Exception ignored) {
             success = false;
         }
-        if (job.requester != null && job.requester.networkHandler != null) {
-            Text marker = Text.literal(success ? "✓ " : "✕ ").formatted(success ? Formatting.GREEN : Formatting.RED);
-            job.requester.sendMessage(Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
-                .append(marker).append(Text.literal("/" + command).formatted(Formatting.DARK_GRAY)), false);
-        }
+        Text marker = Text.literal(success ? "✓ " : "✕ ").formatted(success ? Formatting.GREEN : Formatting.RED);
+        announce(job.server, Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
+            .append(marker).append(Text.literal("/" + command).formatted(Formatting.DARK_GRAY)));
         JOBS.addLast(job);
     }
     private static void finish(Job job, boolean success) {
         RUNNING.remove(job.key);
-        if (job.requester != null && job.requester.networkHandler != null)
-            job.requester.sendMessage(Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
-                .append(Text.literal(success ? "Acción terminada." : "Acción cancelada.").formatted(success ? Formatting.GREEN : Formatting.RED)), false);
+        announce(job.server, Text.literal("[Actions] ").formatted(Formatting.DARK_GRAY)
+            .append(Text.literal(success ? "Acción terminada." : "Acción cancelada.").formatted(success ? Formatting.GREEN : Formatting.RED)));
+    }
+    private static void announce(MinecraftServer server, Text message) {
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) player.sendMessage(message, false);
     }
     private static final class Job {
         final MinecraftServer server; final ServerPlayerEntity requester; final String key; final CommandPack pack; int index, waitTicks;
