@@ -14,8 +14,6 @@ public final class FinderPlace {
     public String dimension;
     public int minX, minY, minZ, maxX, maxY, maxZ;
     public long createdAt;
-    /** In-memory snapshot only; inventory contents must never become persistent source of truth. */
-    public transient long updatedAt;
     public transient List<FinderContainer> containers = new ArrayList<>();
     public Set<String> excluded = new LinkedHashSet<>();
 
@@ -25,7 +23,7 @@ public final class FinderPlace {
         this.dimension = world.getValue().toString();
         minX = Math.min(a.getX(), b.getX()); minY = Math.min(a.getY(), b.getY()); minZ = Math.min(a.getZ(), b.getZ());
         maxX = Math.max(a.getX(), b.getX()); maxY = Math.max(a.getY(), b.getY()); maxZ = Math.max(a.getZ(), b.getZ());
-        createdAt = updatedAt = System.currentTimeMillis();
+        createdAt = System.currentTimeMillis();
     }
     public boolean belongsTo(RegistryKey<World> world) { return dimension.equals(world.getValue().toString()); }
     public boolean contains(BlockPos p) { return p.getX() >= minX && p.getX() <= maxX && p.getY() >= minY && p.getY() <= maxY && p.getZ() >= minZ && p.getZ() <= maxZ; }

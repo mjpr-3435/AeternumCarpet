@@ -28,12 +28,11 @@ public final class FinderScanner {
         if (JOBS.stream().anyMatch(j -> j.place.name.equals(place.name))) return false;
         JOBS.add(new Job(world, place, requester)); return true;
     }
-    /** Fresh synchronous snapshot used only when a query's five-minute memory cache has expired. */
+    /** Fresh synchronous snapshot used for every /find and /count query. */
     public static void refreshNow(ServerWorld world, FinderPlace place) {
         place.containers.clear();
         for (int cz=Math.floorDiv(place.minZ,16);cz<=Math.floorDiv(place.maxZ,16);cz++)
             for (int cx=Math.floorDiv(place.minX,16);cx<=Math.floorDiv(place.maxX,16);cx++) scanChunk(world, place, cx, cz);
-        place.updatedAt=System.currentTimeMillis();
     }
     private static void scanChunk(ServerWorld world, FinderPlace place, int chunkX, int chunkZ) {
         WorldChunk chunk=world.getChunkManager().getWorldChunk(chunkX,chunkZ,true); Set<BlockPos> seen=new HashSet<>();
@@ -70,7 +69,7 @@ public final class FinderScanner {
             cx=minCX; cz=minCZ; total=(maxCX-minCX+1)*(maxCZ-minCZ+1); place.containers.clear();
         }
         boolean tick() { // One full chunk per tick: bounded work and no permanent forceload.
-            if (cz > maxCZ) { place.updatedAt=System.currentTimeMillis(); return true; }
+            if (cz > maxCZ) return true;
             scanChunk(world,place,cx,cz);
             done++; if (++cx>maxCX) { cx=minCX; cz++; } return false;
         }
