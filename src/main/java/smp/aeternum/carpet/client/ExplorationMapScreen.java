@@ -25,6 +25,8 @@ final class ExplorationMapScreen extends Screen {
     private boolean dragging, showChunkGrid, showRegionGrid, formOpen;
     private double lastX, lastY;
     private ButtonWidget chunkGridButton, regionGridButton, submitButton, cancelButton, deleteButton;
+    private ButtonWidget maxReqButton, clearAllButton, clearVisibleButton;
+    private int blinkMaxReq, blinkClearAll, blinkClearVisible;
     private TextFieldWidget nameField, sizeField;
     private int selectedChunkX, selectedChunkZ;
     private ExplorationMapOpenPayload.Area editingArea;
@@ -39,16 +41,40 @@ final class ExplorationMapScreen extends Screen {
     }
 
     /** A server save sends a fresh area list; keep the map viewport and loaded textures intact. */
-    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); maxRequests = data.maxRequests(); }
+    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); maxRequests = data.maxRequests(); if (maxReqButton != null) maxReqButton.setMessage(Text.literal("Req: " + maxRequests)); }
 
     @Override protected void init() {
         int y = height - 28;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Overworld"), b -> dimension("minecraft:overworld")).dimensions(12, y, 92, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Nether"), b -> dimension("minecraft:the_nether")).dimensions(108, y, 72, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("End"), b -> dimension("minecraft:the_end")).dimensions(184, y, 56, 20).build());
-        chunkGridButton = ButtonWidget.builder(Text.literal("Chunks: no"), b -> { showChunkGrid = !showChunkGrid; updateGridButtons(); }).dimensions(244, y, 88, 20).build();
-        regionGridButton = ButtonWidget.builder(Text.literal("Regiones: no"), b -> { showRegionGrid = !showRegionGrid; updateGridButtons(); }).dimensions(336, y, 96, 20).build();
+        addDrawableChild(ButtonWidget.builder(Text.literal("Dim: " + shortDim()), b -> {
+            String[] dims = {"minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"};
+            for (int i = 0; i < dims.length; i++) if (dims[i].equals(dimension)) { dimension(dims[(i + 1) % dims.length]); break; }
+            b.setMessage(Text.literal("Dim: " + shortDim()));
+        }).dimensions(12, y, 80, 20).build());
+        chunkGridButton = ButtonWidget.builder(Text.literal("Chunks: no"), b -> { showChunkGrid = !showChunkGrid; updateGridButtons(); }).dimensions(96, y, 88, 20).build();
+        regionGridButton = ButtonWidget.builder(Text.literal("Regiones: no"), b -> { showRegionGrid = !showRegionGrid; updateGridButtons(); }).dimensions(188, y, 96, 20).build();
         addDrawableChild(chunkGridButton); addDrawableChild(regionGridButton);
+
+        maxReqButton = ButtonWidget.builder(Text.literal("Req: " + maxRequests), b -> {
+            int[] vals = {4, 8, 16, 32, 48, 64}; int next = 4;
+            for (int v : vals) if (v > maxRequests) { next = v; break; }
+            maxRequests = next; b.setMessage(Text.literal("Req: " + maxRequests));
+            blinkMaxReq = 10; b.active = false;
+            ClientPlayNetworking.send(new ExplorationMapMaxRequestsPayload(maxRequests));
+        }).dimensions(288, y, 60, 20).build();
+        clearAllButton = ButtonWidget.builder(Text.literal("Limpiar todo"), b -> {
+            blinkClearAll = 10; b.active = false;
+            if (client != null) for (Identifier id : tiles.values()) client.getTextureManager().destroyTexture(id);
+            tiles.clear(); requested.clear();
+            ClientPlayNetworking.send(new ExplorationMapClearCachePayload(dimension, false, List.of()));
+        }).dimensions(352, y, 72, 20).build();
+        clearVisibleButton = ButtonWidget.builder(Text.literal("Limpiar pantalla"), b -> {
+            blinkClearVisible = 10; b.active = false;
+            List<ExplorationMapClearCachePayload.TileCoord> coords = new ArrayList<>();
+            if (client != null) for (var e : tiles.entrySet()) { coords.add(new ExplorationMapClearCachePayload.TileCoord(e.getKey().x, e.getKey().z)); client.getTextureManager().destroyTexture(e.getValue()); }
+            tiles.clear();
+            ClientPlayNetworking.send(new ExplorationMapClearCachePayload(dimension, true, coords));
+        }).dimensions(428, y, 82, 20).build();
+        addDrawableChild(maxReqButton); addDrawableChild(clearAllButton); addDrawableChild(clearVisibleButton);
         addDrawableChild(ButtonWidget.builder(Text.literal("Cerrar"), b -> close()).dimensions(width - 82, y, 70, 20).build());
 
         nameField = new TextFieldWidget(textRenderer, width / 2 - 100, height / 2 - 34, 176, 18, Text.literal("Nombre"));
@@ -66,6 +92,9 @@ final class ExplorationMapScreen extends Screen {
         if (nameField != null) {
             nameField.visible = open; sizeField.visible = open; submitButton.visible = open; cancelButton.visible = open;
             deleteButton.visible = open && editingArea != null;
+            if (maxReqButton != null) maxReqButton.visible = !open;
+            if (clearAllButton != null) clearAllButton.visible = !open;
+            if (clearVisibleButton != null) clearVisibleButton.visible = !open;
         }
     }
 
@@ -112,6 +141,8 @@ final class ExplorationMapScreen extends Screen {
         clear(); dimension = next; centerX = centerZ = 0; zoom = 1;
     }
 
+    private String shortDim() { return switch (dimension) { case "minecraft:the_nether" -> "Nether"; case "minecraft:the_end" -> "End"; default -> "Overworld"; }; }
+
     void accept(ExplorationMapTilePayload p) {
         if (!p.dimension().equals(dimension) || p.colors().length != TILE * TILE) return;
         Key key = new Key(p.dimension(), p.regionX(), p.regionZ());
@@ -130,6 +161,9 @@ final class ExplorationMapScreen extends Screen {
     @Override public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) { }
 
     @Override public void render(DrawContext c, int mx, int my, float d) {
+        if (blinkMaxReq > 0 && --blinkMaxReq == 0 && maxReqButton != null) maxReqButton.active = true;
+        if (blinkClearAll > 0 && --blinkClearAll == 0 && clearAllButton != null) clearAllButton.active = true;
+        if (blinkClearVisible > 0 && --blinkClearVisible == 0 && clearVisibleButton != null) clearVisibleButton.active = true;
         c.fill(0, 0, width, height, 0xE0101010);
         int l = 10, t = 28, r = width - 10, b = height - 36, cx = (l + r) / 2, cy = (t + b) / 2;
         c.fill(l, t, r, b, 0xFF20242A); c.enableScissor(l, t, r, b); request(l, t, r, b, cx, cy);

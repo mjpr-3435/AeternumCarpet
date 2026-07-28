@@ -40,6 +40,12 @@ public final class ExplorationMapService {
     private static final Map<TileKey,Boolean> IN_FLIGHT=new ConcurrentHashMap<>();
     private ExplorationMapService() {}
     /** Clears only one dimension's map cache, both RAM and the world's persistent cache directory. */
+    public static void clearTile(MinecraftServer server, String dimension, int rx, int rz) {
+        String dim = normalizeDimension(dimension); if (dim == null) return;
+        CACHE.remove(new TileKey(dim, rx, rz));
+        Path file = server.getSavePath(WorldSavePath.ROOT).resolve("data/aeternum_map_cache").resolve(dim.replace(':', '_')).resolve(rx + "_" + rz + ".bin");
+        try { Files.deleteIfExists(file); } catch (IOException ignored) {}
+    }
     public static int clearCache(MinecraftServer server,String requestedDimension){
         String dimension=normalizeDimension(requestedDimension);if(dimension==null)return -1;
         CACHE.keySet().removeIf(key->key.dimension.equals(dimension));

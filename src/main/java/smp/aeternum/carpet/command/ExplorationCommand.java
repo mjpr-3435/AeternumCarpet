@@ -16,7 +16,6 @@ import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.config.AllowedGenerationArea;
 import smp.aeternum.carpet.exploration.ExplorationPregenerator;
-import smp.aeternum.carpet.exploration.ExplorationMapService;
 import smp.aeternum.carpet.network.ExplorationMapNetworking;
 
 import java.io.IOException;
@@ -48,9 +47,7 @@ public final class ExplorationCommand {
         dispatcher.register(literal("exploration")
             .requires(source -> smp.aeternum.carpet.AeternumCarpetSettings.explorationManager)
             .then(literal("map")
-                .executes(context -> { try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); return 1; } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { context.getSource().sendError(Text.literal("Este comando solo puede abrirse dentro del juego.")); return 0; } })
-                .then(literal("maxrequest").requires(source -> source.hasPermissionLevel(2)).then(argument("cantidad", IntegerArgumentType.integer(1, 64)).executes(context -> { int amount = IntegerArgumentType.getInteger(context, "cantidad"); ExplorationMapNetworking.setMaxRequests(amount); context.getSource().sendFeedback(() -> Text.literal("Mapa: máximo " + amount + " solicitudes de tiles pendientes por cliente.").formatted(Formatting.GRAY), false); return 1;})))
-                .then(literal("cache").requires(source -> source.hasPermissionLevel(2)).then(literal("clear").then(argument("dimension", StringArgumentType.word()).executes(context -> {String dimension=StringArgumentType.getString(context,"dimension");int deleted=ExplorationMapService.clearCache(context.getSource().getServer(),dimension);if(deleted<0){context.getSource().sendError(Text.literal("Dimensión inválida o no se pudo borrar su caché. Usa overworld, nether o end."));return 0;}context.getSource().sendFeedback(()->Text.literal("Mapa: caché de "+dimension+" eliminada ("+deleted+" archivos). Se reconstruirá al pedir tiles.").formatted(Formatting.GRAY),false);return 1;})))))
+                .executes(context -> { try { ExplorationMapNetworking.open(context.getSource().getPlayerOrThrow()); return 1; } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { context.getSource().sendError(Text.literal("Este comando solo puede abrirse dentro del juego.")); return 0; } }))
             .then(literal("region")
                 .then(literal("add")
                     .requires(source -> source.hasPermissionLevel(2))
