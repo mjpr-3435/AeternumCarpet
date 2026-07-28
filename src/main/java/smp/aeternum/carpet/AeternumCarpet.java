@@ -49,7 +49,10 @@ import smp.aeternum.carpet.motd.MotdTaskStore;
 import smp.aeternum.carpet.guides.GuideStore;
 import smp.aeternum.carpet.network.GuideNetworking;
 import smp.aeternum.carpet.network.ExplorationMapNetworking;
+import smp.aeternum.carpet.network.MaterialsNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
+import smp.aeternum.carpet.command.MaterialsCommand;
+import smp.aeternum.carpet.materials.MaterialsStore;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -61,6 +64,7 @@ public class AeternumCarpet implements ModInitializer {
 		CommandPacksNetworking.registerPayloads();
 		GuideNetworking.registerPayloads();
 		ExplorationMapNetworking.registerPayloads();
+		MaterialsNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -75,6 +79,7 @@ public class AeternumCarpet implements ModInitializer {
 			CommandPackStore.load(server);
 			MotdTaskStore.load(server);
 			GuideStore.load(server);
+			MaterialsStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
@@ -115,6 +120,7 @@ public class AeternumCarpet implements ModInitializer {
 			ActionsCommand.register(dispatcher);
 			MotdCommand.register(dispatcher);
 			GuideCommand.register(dispatcher);
+			MaterialsCommand.register(dispatcher);
 		});
 	}
 

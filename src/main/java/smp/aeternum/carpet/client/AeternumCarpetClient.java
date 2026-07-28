@@ -9,6 +9,7 @@ import smp.aeternum.carpet.network.CommandPacksDataPayload;
 import smp.aeternum.carpet.network.GuideDataPayload;
 import smp.aeternum.carpet.network.ExplorationMapOpenPayload;
 import smp.aeternum.carpet.network.ExplorationMapTilePayload;
+import smp.aeternum.carpet.network.MaterialsDataPayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
@@ -41,6 +42,11 @@ public final class AeternumCarpetClient implements ClientModInitializer {
             else context.client().setScreen(new ExplorationMapScreen(payload));
         }));
         ClientPlayNetworking.registerGlobalReceiver(ExplorationMapTilePayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.accept(payload); }));
+        ClientPlayNetworking.registerGlobalReceiver(MaterialsDataPayload.ID, (payload, context) -> context.client().execute(() -> {
+            if (context.client().currentScreen instanceof MaterialsDetailScreen screen) screen.replaceFromJson(payload.json());
+            else if (context.client().currentScreen instanceof MaterialsScreen screen) screen.replaceData(payload.json());
+            else context.client().setScreen(new MaterialsScreen(payload.json()));
+        }));
     }
 
     private static void clearBlockerSession() {
