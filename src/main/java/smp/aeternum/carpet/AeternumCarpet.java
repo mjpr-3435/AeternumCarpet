@@ -116,7 +116,6 @@ public class AeternumCarpet implements ModInitializer {
 			MotdCommand.register(dispatcher);
 			GuideCommand.register(dispatcher);
 		});
-		LOGGER.info("Hello Fabric world!");
 	}
 
 	public static Identifier id(String path) {

@@ -64,7 +64,6 @@ public final class BlockerScanner {
                             .withHoverEvent(new HoverEvent.ShowText(Text.literal("Abrir la lista de scans")))))
                         .append(Text.literal(" para verlo.").formatted(Formatting.GRAY)), false);
                 }
-                AeternumCarpet.LOGGER.info("Blocker scan '{}' completed with {} entries", job.scan.id, job.scan.entries.size());
             } else {
                 job.sendProgress(server);
             }

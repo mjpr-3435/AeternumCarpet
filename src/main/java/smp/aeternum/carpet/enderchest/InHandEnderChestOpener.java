@@ -16,18 +16,18 @@ public final class InHandEnderChestOpener {
     }
 
     public static Hand tryOpen(ServerPlayerEntity player, Hand packetHand) {
-        ItemStack mainHandStack = player.getMainHandStack();
-        if (packetHand == Hand.MAIN_HAND && isEnderChest(mainHandStack)) {
-            open(player, mainHandStack);
-            return Hand.MAIN_HAND;
-        }
-
-        ItemStack offHandStack = player.getOffHandStack();
-        if (!isEnderChest(mainHandStack) && packetHand == Hand.OFF_HAND && isEnderChest(offHandStack)) {
-            open(player, offHandStack);
-            return Hand.OFF_HAND;
-        }
-
+        Hand opened = tryOpenMain(player); if (opened != null) return opened;
+        if (packetHand == Hand.OFF_HAND) return tryOpenOff(player);
+        return null;
+    }
+    public static Hand tryOpenMain(ServerPlayerEntity player) {
+        ItemStack stack = player.getMainHandStack();
+        if (isEnderChest(stack)) { open(player, stack); return Hand.MAIN_HAND; }
+        return null;
+    }
+    public static Hand tryOpenOff(ServerPlayerEntity player) {
+        ItemStack stack = player.getOffHandStack();
+        if (isEnderChest(stack)) { open(player, stack); return Hand.OFF_HAND; }
         return null;
     }
 

@@ -14,18 +14,18 @@ public final class InHandShulkerOpener {
     }
 
     public static Hand tryOpen(ServerPlayerEntity player, Hand packetHand) {
-        ItemStack mainHandStack = player.getMainHandStack();
-        if (packetHand == Hand.MAIN_HAND && canOpenInHand(mainHandStack)) {
-            open(player, new HandSlotSource(Hand.MAIN_HAND, player.getInventory().getSelectedSlot()), mainHandStack);
-            return Hand.MAIN_HAND;
-        }
-
-        ItemStack offHandStack = player.getOffHandStack();
-        if (!isShulkerBox(mainHandStack) && packetHand == Hand.OFF_HAND && canOpenInHand(offHandStack)) {
-            open(player, new HandSlotSource(Hand.OFF_HAND, -1), offHandStack);
-            return Hand.OFF_HAND;
-        }
-
+        Hand opened = tryOpenMain(player); if (opened != null) return opened;
+        if (packetHand == Hand.OFF_HAND) return tryOpenOff(player);
+        return null;
+    }
+    public static Hand tryOpenMain(ServerPlayerEntity player) {
+        ItemStack stack = player.getMainHandStack();
+        if (canOpenInHand(stack)) { open(player, new HandSlotSource(Hand.MAIN_HAND, player.getInventory().getSelectedSlot()), stack); return Hand.MAIN_HAND; }
+        return null;
+    }
+    public static Hand tryOpenOff(ServerPlayerEntity player) {
+        ItemStack stack = player.getOffHandStack();
+        if (canOpenInHand(stack)) { open(player, new HandSlotSource(Hand.OFF_HAND, -1), stack); return Hand.OFF_HAND; }
         return null;
     }
 

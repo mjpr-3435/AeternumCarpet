@@ -51,7 +51,7 @@ public final class ExplorationMapService {
         if(!validDimension(dimension)||Math.abs(rx)>1_000_000||Math.abs(rz)>1_000_000)return;
         TileKey key=new TileKey(dimension,rx,rz);int[] cached=CACHE.get(key);if(cached!=null){send(player,key,cached);return;}
         if(IN_FLIGHT.putIfAbsent(key,Boolean.TRUE)!=null)return;
-        CompletableFuture.supplyAsync(()->readTile(server,key),WORKER).whenComplete((colors,error)->server.execute(()->{IN_FLIGHT.remove(key);if(error!=null){AeternumCarpet.LOGGER.debug("Could not render exploration map tile {} {} {}",dimension,rx,rz,error);return;}CACHE.put(key,colors);send(player,key,colors);}));
+        CompletableFuture.supplyAsync(()->readTile(server,key),WORKER).whenComplete((colors,error)->server.execute(()->{IN_FLIGHT.remove(key);if(error!=null)return;CACHE.put(key,colors);send(player,key,colors);}));
     }
     private static void send(ServerPlayerEntity player,TileKey key,int[] colors){if(player.networkHandler!=null&&ServerPlayNetworking.canSend(player,ExplorationMapTilePayload.ID))ServerPlayNetworking.send(player,new ExplorationMapTilePayload(key.dimension,key.x,key.z,colors));}
     private static boolean validDimension(String d){return "minecraft:overworld".equals(d)||"minecraft:the_nether".equals(d)||"minecraft:the_end".equals(d);}

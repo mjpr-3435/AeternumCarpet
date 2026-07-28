@@ -64,7 +64,7 @@ public final class FinderCommand {
         if(old!=null){place.createdAt=old.createdAt;place.excluded.addAll(old.excluded);}
         if(place.chunks()>256){error(c,"Región demasiado grande: "+place.chunks()+" chunks. Límite: 256 (16x16).");return 0;}
         UUID requester=player(c)==null?null:player(c).getUuid();if(requester==null){error(c,"El escaneo debe iniciarlo un jugador.");return 0;}
-        FinderStore.put(place); FinderHints.preview(player(c),place);
+        FinderStore.put(place);
         if(!FinderScanner.start(world,place,requester)){error(c,"Ya hay un scan activo para "+name+".");return 0;}
         feedback(c,"Scan iniciado: "+place.name+" §8| §f"+volume+" bloques §8| §f"+place.chunks()+" chunks.",Formatting.GRAY);return 1;
     }

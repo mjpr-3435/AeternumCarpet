@@ -36,20 +36,16 @@ public class ServerPlayNetworkHandlerMixin {
         cancellable = true
     )
     private void aeternum$openInHandContainers(PlayerInteractItemC2SPacket packet, CallbackInfo ci) {
+        boolean shulker = AeternumCarpetSettings.openShulkerInHand && QuickAccessSubscriptionStore.isQuickShulkerEnabled(player.getUuid());
+        boolean ender   = AeternumCarpetSettings.openEnderChestInHand && QuickAccessSubscriptionStore.isQuickEnderChestEnabled(player.getUuid());
         Hand openedHand = null;
-        if (AeternumCarpetSettings.openShulkerInHand && QuickAccessSubscriptionStore.isQuickShulkerEnabled(player.getUuid())) {
-            openedHand = InHandShulkerOpener.tryOpen(player, packet.getHand());
-        }
 
-        if (openedHand == null
-            && AeternumCarpetSettings.openEnderChestInHand
-            && QuickAccessSubscriptionStore.isQuickEnderChestEnabled(player.getUuid())) {
-            openedHand = InHandEnderChestOpener.tryOpen(player, packet.getHand());
-        }
+        if (shulker) { openedHand = InHandShulkerOpener.tryOpenMain(player); }
+        if (openedHand == null && ender) { openedHand = InHandEnderChestOpener.tryOpenMain(player); }
+        if (openedHand == null && shulker) { openedHand = InHandShulkerOpener.tryOpenOff(player); }
+        if (openedHand == null && ender)   { openedHand = InHandEnderChestOpener.tryOpenOff(player); }
 
-        if (openedHand == null) {
-            return;
-        }
+        if (openedHand == null) return;
         player.swingHand(openedHand, true);
         ci.cancel();
     }
