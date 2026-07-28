@@ -63,6 +63,16 @@ public final class GuideStore {
 		try { s.writeOrder(changed); s.reload(); return true; } catch (Exception e) { return false; }
 	}
 
+	public static boolean moveTo(String lang, String title, int targetIndex) {
+		LangStore s = stores.get(lang); if (s == null) return false;
+		int index = s.order.indexOf(title);
+		if (index < 0 || targetIndex < 0 || targetIndex >= s.order.size() || index == targetIndex) return false;
+		List<String> changed = new ArrayList<>(s.order);
+		changed.remove(index);
+		changed.add(targetIndex, title);
+		try { s.writeOrder(changed); s.reload(); return true; } catch (Exception e) { return false; }
+	}
+
 	private static boolean valid(String title) { return title != null && TITLE.matcher(title).matches() && !title.equals(".") && !title.equals(".."); }
 
 	private static final class LangStore {

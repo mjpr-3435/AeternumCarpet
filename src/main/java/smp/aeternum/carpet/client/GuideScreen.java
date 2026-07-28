@@ -25,7 +25,7 @@ public final class GuideScreen extends Screen {
     private int selected, scroll, readerScroll; private boolean draggingReaderScrollbar;
     private EditBoxWidget editor;
     private TextFieldWidget titleField;
-    private ButtonWidget renameButton, refreshButton, moveUpButton, moveDownButton;
+    private ButtonWidget renameButton, refreshButton;
     private long saveAt, refreshEnableAt;
     private String currentLang = "es";
 
@@ -49,7 +49,7 @@ public final class GuideScreen extends Screen {
     @Override protected void init() { build(); }
 
     private void build() {
-        clearChildren(); editor = null; titleField = null; renameButton = null; refreshButton = null; moveUpButton = null; moveDownButton = null;
+        clearChildren(); editor = null; titleField = null; renameButton = null; refreshButton = null;
         int l = width / 2 - 260, t = height / 2 - 170;
         if (editing && canEdit) {
             if (current() != null) {
@@ -74,11 +74,6 @@ public final class GuideScreen extends Screen {
             }
             addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> GuideRequest.send("create", "Guia nueva", "", currentLang))
                 .dimensions(l + 12, t + 302, 20, 20).build());
-            moveUpButton = ButtonWidget.builder(Text.literal("▲"), b -> GuideRequest.send("move_up", current().title, "", currentLang))
-                .dimensions(l + 108, t + 302, 20, 20).build();
-            moveDownButton = ButtonWidget.builder(Text.literal("▼"), b -> GuideRequest.send("move_down", current().title, "", currentLang))
-                .dimensions(l + 132, t + 302, 20, 20).build();
-            addDrawableChild(moveUpButton); addDrawableChild(moveDownButton);
             addDrawableChild(ButtonWidget.builder(Text.literal("Guias"), b -> {
                 editing = false; helpOpen = false; build();
             }).dimensions(l + 400, t + 302, 74, 20).build());
@@ -116,14 +111,16 @@ public final class GuideScreen extends Screen {
             int i = row + scroll, y = t + 42 + row * 19;
             if (i == selected) c.fill(l + 9, y - 2, l + 112, y + 16, 0xFF30465A);
             c.drawTextWithShadow(textRenderer, shortTitle(guides.get(i).title), l + 14, y + 1, i == selected ? 0xFFFFFFFF : 0xFFAAAAAA);
+            if (canEdit && editing) {
+                c.drawTextWithShadow(textRenderer, "\u25B2", l + 94, y + 1, i > 0 ? 0xFFAAAAAA : 0xFF444444);
+                c.drawTextWithShadow(textRenderer, "\u25BC", l + 104, y + 1, i < guides.size() - 1 ? 0xFFAAAAAA : 0xFF444444);
+            }
         }
         if (guides.isEmpty()) c.drawTextWithShadow(textRenderer, "No hay guias.", l + 14, t + 48, 0xFFAAAAAA);
         if (!editing && current() != null) { renderGuideText(c, current().markdown, l + 126, t + 43, 338); renderReaderScrollbar(c,l,t); }
         if (editing && canEdit) {
             if (renameButton != null && titleField != null && current() != null)
                 renameButton.active = !titleField.getText().trim().isEmpty() && !titleField.getText().trim().equals(current().title);
-            if (moveUpButton != null) moveUpButton.active = selected > 0;
-            if (moveDownButton != null) moveDownButton.active = selected < guides.size() - 1;
             for (var child : children()) if (child instanceof ButtonWidget button && button.getMessage().getString().equals("\u00D7") && button.getY() == t + 302)
                 button.active = hasShiftDown();
             c.drawTextWithShadow(textRenderer, dirty ? "Guardando..." : "Guardado", l + 126, t + 306, dirty ? 0xFFFFD080 : 0xFF55FF55);
@@ -150,8 +147,6 @@ public final class GuideScreen extends Screen {
             else if (mx >= l + 36 && mx < l + 56 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal(renameButton != null && renameButton.active ? "Confirmar nuevo nombre" : "Escribe un nombre distinto para renombrar"), mx, my);
             else if (mx >= l + 60 && mx < l + 80 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Ver sintaxis de formato"), mx, my);
             else if (mx >= l + 84 && mx < l + 104 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal(hasShiftDown() ? "Eliminar esta guía" : "Mantén Shift para eliminar"), mx, my);
-            else if (mx >= l + 108 && mx < l + 128 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Mover guía hacia arriba"), mx, my);
-            else if (mx >= l + 132 && mx < l + 152 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Mover guía hacia abajo"), mx, my);
             else if (mx >= l + 400 && mx < l + 474 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Volver al lector de guías"), mx, my);
         } else if (mx >= l + 320 && mx < l + 394 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Recargar archivos de guías desde el servidor"), mx, my);
         else if (mx >= l + 400 && mx < l + 474 && my >= t + 302 && my < t + 322) c.drawTooltip(textRenderer, Text.literal("Editar la guía seleccionada"), mx, my);
@@ -172,8 +167,13 @@ public final class GuideScreen extends Screen {
         if (b == 0 && mx >= l + 500 && mx < l + 520 && my >= t && my < t + 32) { close(); return true; }
         if (!editing && b==0 && maxReaderScroll()>0 && mx>=l+462&&mx<=l+476&&my>=t+42&&my<=t+282){draggingReaderScrollbar=true;updateReaderScroll(my);return true;}
         if (b == 0 && mx >= l + 9 && mx < l + 112 && my >= t + 42 && my < t + 289) {
-            selected = Math.min(guides.size() - 1, scroll + (int) ((my - (t + 42)) / 19)); readerScroll = 0;
-            if (editing) { dirty = false; helpOpen = false; build(); }
+            int row = (int) ((my - (t + 42)) / 19), i = scroll + row;
+            if (row >= 0 && row < Math.min(13, guides.size() - scroll)) {
+                if (canEdit && editing && mx >= l + 94 && mx < l + 103) { if (i > 0) GuideRequest.send("move_up", guides.get(i).title, "", currentLang); return true; }
+                if (canEdit && editing && mx >= l + 103 && mx < l + 113) { if (i < guides.size() - 1) GuideRequest.send("move_down", guides.get(i).title, "", currentLang); return true; }
+                selected = i; readerScroll = 0;
+                if (editing) { dirty = false; helpOpen = false; build(); }
+            }
             return true;
         }
         return super.mouseClicked(mx, my, b);
