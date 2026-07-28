@@ -81,9 +81,15 @@ public final class MaterialsScreen extends Screen {
 			}
 
 			renderScrollbar(c, l, t, listAreaTop, listAreaBottom, mx, my);
+
+		if (mx >= l + 470 && mx < l + 508 && my >= listAreaTop && my < listAreaBottom)
+			c.drawTooltip(textRenderer, Text.literal(hasShiftDown() ? "Eliminar esta lista" : "Mantén Shift para eliminar"), mx, my);
 		}
 
 		if (refreshButton != null) { refreshButton.setPosition(l + 430, t + 312); refreshButton.render(c, mx, my, d); }
+
+		if (mx >= l + 430 && mx < l + 502 && my >= t + 312 && my < t + 332)
+			c.drawTooltip(textRenderer, Text.literal("Recargar listas desde los archivos CSV"), mx, my);
 
 		super.render(c, mx, my, d);
 	}
