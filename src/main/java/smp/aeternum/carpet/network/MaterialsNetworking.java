@@ -16,6 +16,7 @@ public final class MaterialsNetworking {
 		PayloadTypeRegistry.playC2S().register(MaterialsActionPayload.ID, MaterialsActionPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsRefreshPayload.ID, MaterialsRefreshPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsDeletePayload.ID, MaterialsDeletePayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(MaterialsScanPayload.ID, MaterialsScanPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(MaterialsActionPayload.ID, (p, c) -> {
 			if (p.claim()) MaterialsStore.claim(p.listName(), p.itemId(), p.player());
 			else MaterialsStore.unclaim(p.listName(), p.itemId());
@@ -30,14 +31,23 @@ public final class MaterialsNetworking {
 			MaterialsStore.delete(p.listName());
 			broadcast(c.server());
 		});
+		ServerPlayNetworking.registerGlobalReceiver(MaterialsScanPayload.ID, (p, c) -> {
+			MaterialsStore.forceScan();
+			broadcast(c.server());
+		});
 	}
 
 	public static void send(ServerPlayerEntity player) {
 		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
-			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all())));
+			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), true));
+	}
+
+	private static void send(ServerPlayerEntity player, boolean open) {
+		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
+			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), open));
 	}
 
 	public static void broadcast(MinecraftServer server) {
-		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) send(p);
+		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) send(p, false);
 	}
 }

@@ -43,9 +43,10 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         }));
         ClientPlayNetworking.registerGlobalReceiver(ExplorationMapTilePayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.accept(payload); }));
         ClientPlayNetworking.registerGlobalReceiver(MaterialsDataPayload.ID, (payload, context) -> context.client().execute(() -> {
+            MaterialsHudOverlay.update(context.client().player != null ? context.client().player.getName().getString() : "", payload.json());
             if (context.client().currentScreen instanceof MaterialsDetailScreen screen) screen.replaceFromJson(payload.json());
             else if (context.client().currentScreen instanceof MaterialsScreen screen) screen.replaceData(payload.json());
-            else context.client().setScreen(new MaterialsScreen(payload.json()));
+            else if (payload.open()) context.client().setScreen(new MaterialsScreen(payload.json()));
         }));
     }
 

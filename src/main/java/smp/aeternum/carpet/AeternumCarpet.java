@@ -53,6 +53,7 @@ import smp.aeternum.carpet.network.MaterialsNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.materials.MaterialsStore;
+import smp.aeternum.carpet.materials.MaterialItemResolver;
 
 public class AeternumCarpet implements ModInitializer {
 	public static final String MOD_ID = "aeternum-carpet";
@@ -79,6 +80,7 @@ public class AeternumCarpet implements ModInitializer {
 			CommandPackStore.load(server);
 			MotdTaskStore.load(server);
 			GuideStore.load(server);
+			MaterialItemResolver.load(server);
 			MaterialsStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
@@ -89,6 +91,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			if (AeternumCarpetSettings.joinMotd) JoinMotd.send(handler.player);

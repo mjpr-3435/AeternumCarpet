@@ -14,6 +14,7 @@ import net.minecraft.util.Identifier;
 import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 import smp.aeternum.carpet.network.MaterialsActionPayload;
+import smp.aeternum.carpet.network.MaterialsScanPayload;
 import smp.aeternum.carpet.network.MaterialsRefreshPayload;
 
 public final class MaterialsDetailScreen extends Screen {
@@ -40,6 +41,8 @@ public final class MaterialsDetailScreen extends Screen {
 					if (se.itemId.equals(entry.itemId)) { entry.claimedBy = se.claimedBy; entry.available = se.available; break; }
 				}
 			}
+			this.list.nextScanAt = serverList.nextScanAt;
+			this.list.scannedAvailable = serverList.scannedAvailable;
 			return;
 		}
 	}
@@ -57,6 +60,14 @@ public final class MaterialsDetailScreen extends Screen {
 
 		c.drawTextWithShadow(textRenderer, "\u2190 " + list.name, l + 14, t + 14, 0xFFFFFFFF);
 		c.drawTextWithShadow(textRenderer, "\u00D7", l + 502, t + 14, 0xFFFFFFFF);
+
+		if (list.nextScanAt > 0) {
+			int secs = Math.max(0, (int) ((list.nextScanAt - System.currentTimeMillis()) / 1000));
+			c.drawTextWithShadow(textRenderer, "Escaneo en " + secs + "s", l + 320, t + 14, 0xFFAAAAAA);
+		}
+
+		addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.active = false; ClientPlayNetworking.send(new MaterialsScanPayload(list.name)); })
+			.dimensions(l + 400, t + 10, 64, 18).build());
 
 		List<MaterialEntry> entries = list.entries;
 		if (entries.isEmpty()) {
