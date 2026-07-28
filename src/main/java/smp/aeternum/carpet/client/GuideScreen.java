@@ -27,15 +27,18 @@ public final class GuideScreen extends Screen {
     private TextFieldWidget titleField;
     private ButtonWidget renameButton, refreshButton, moveUpButton, moveDownButton;
     private long saveAt, refreshEnableAt;
+    private String currentLang = "es";
 
-    public GuideScreen(String json, boolean canEdit) {
+    public GuideScreen(String json, boolean canEdit, String lang) {
         super(Text.literal("Guias"));
         guides = decode(json);
         this.canEdit = canEdit;
+        this.currentLang = lang;
     }
 
-    public void replaceData(String json, boolean canEdit) {
+    public void replaceData(String json, boolean canEdit, String lang) {
         if (editing && dirty) return;
+        if (!lang.equals(currentLang)) return;
         String selectedTitle = current() == null ? null : current().title;
         guides = decode(json);
         this.canEdit = canEdit;
@@ -59,21 +62,21 @@ public final class GuideScreen extends Screen {
                 addDrawableChild(editor);
                 renameButton = ButtonWidget.builder(Text.literal("\u2713"), b -> {
                     if (!titleField.getText().trim().equals(current().title))
-                        GuideRequest.send("rename", current().title, titleField.getText().trim());
+                        GuideRequest.send("rename", current().title, titleField.getText().trim(), currentLang);
                 }).dimensions(l + 36, t + 302, 20, 20).build();
                 renameButton.active = false; addDrawableChild(renameButton);
                 addDrawableChild(ButtonWidget.builder(Text.literal("?"), b -> helpOpen = !helpOpen)
                     .dimensions(l + 60, t + 302, 20, 20).build());
                 ButtonWidget delete = ButtonWidget.builder(Text.literal("\u00D7"), b -> {
-                    if (hasShiftDown()) GuideRequest.send("delete", current().title, "");
+                    if (hasShiftDown()) GuideRequest.send("delete", current().title, "", currentLang);
                 }).dimensions(l + 84, t + 302, 20, 20).build();
                 delete.active = false; addDrawableChild(delete);
             }
-            addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> GuideRequest.send("create", "Guia nueva", ""))
+            addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> GuideRequest.send("create", "Guia nueva", "", currentLang))
                 .dimensions(l + 12, t + 302, 20, 20).build());
-            moveUpButton = ButtonWidget.builder(Text.literal("▲"), b -> GuideRequest.send("move_up", current().title, ""))
+            moveUpButton = ButtonWidget.builder(Text.literal("▲"), b -> GuideRequest.send("move_up", current().title, "", currentLang))
                 .dimensions(l + 108, t + 302, 20, 20).build();
-            moveDownButton = ButtonWidget.builder(Text.literal("▼"), b -> GuideRequest.send("move_down", current().title, ""))
+            moveDownButton = ButtonWidget.builder(Text.literal("▼"), b -> GuideRequest.send("move_down", current().title, "", currentLang))
                 .dimensions(l + 132, t + 302, 20, 20).build();
             addDrawableChild(moveUpButton); addDrawableChild(moveDownButton);
             addDrawableChild(ButtonWidget.builder(Text.literal("Guias"), b -> {
@@ -82,12 +85,14 @@ public final class GuideScreen extends Screen {
         } else if (canEdit) {
             refreshButton = ButtonWidget.builder(Text.literal("Refrescar"), b -> {
                 b.active = false; b.setFocused(false); refreshEnableAt = System.currentTimeMillis() + 150;
-                GuideRequest.send("reload", "", "");
+                GuideRequest.send("reload", "", "", currentLang);
             }).dimensions(l + 320, t + 302, 74, 20).build();
             addDrawableChild(refreshButton);
             addDrawableChild(ButtonWidget.builder(Text.literal("Editar"), b -> { editing = true; build(); })
                 .dimensions(l + 400, t + 302, 74, 20).build());
         }
+        addDrawableChild(ButtonWidget.builder(Text.literal("[ES]"), b -> { if (!currentLang.equals("es")) { currentLang = "es"; GuideRequest.send("reload", "", "", currentLang); build(); } }).dimensions(l + 120, t + 10, 28, 18).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("[EN]"), b -> { if (!currentLang.equals("en")) { currentLang = "en"; GuideRequest.send("reload", "", "", currentLang); build(); } }).dimensions(l + 152, t + 10, 28, 18).build());
     }
 
     private GuideDocument current() { return guides.isEmpty() ? null : guides.get(Math.max(0, Math.min(selected, guides.size() - 1))); }
@@ -95,7 +100,7 @@ public final class GuideScreen extends Screen {
     @Override public void tick() {
         if (refreshButton != null && !refreshButton.active && System.currentTimeMillis() >= refreshEnableAt) refreshButton.active = true;
         if (dirty && editor != null && System.currentTimeMillis() >= saveAt && current() != null) {
-            GuideRequest.send("save", current().title, editor.getText()); dirty = false;
+            GuideRequest.send("save", current().title, editor.getText(), currentLang); dirty = false;
         }
     }
 
@@ -104,7 +109,7 @@ public final class GuideScreen extends Screen {
     @Override public void render(DrawContext c, int mx, int my, float d) {
         int l = width / 2 - 260, t = height / 2 - 170;
         c.fill(0, 0, width, height, 0x90000000); c.fill(l, t, l + 520, t + 340, 0xE0101010); c.drawBorder(l, t, 520, 340, 0xFF909090);
-        c.drawTextWithShadow(textRenderer, editing ? "EDITOR DE GUIAS" : "GUIAS", l + 14, t + 14, 0xFFFFFFFF);
+        c.drawTextWithShadow(textRenderer, currentLang.equals("en") ? "GUIDES" : "GUIAS", l + 14, t + 14, 0xFFFFFFFF);
         c.drawTextWithShadow(textRenderer, "\u00D7", l + 502, t + 14, 0xFFFFFFFF);
         int visible = 13; scroll = Math.max(0, Math.min(scroll, Math.max(0, guides.size() - visible)));
         for (int row = 0; row < visible && row + scroll < guides.size(); row++) {
@@ -126,6 +131,10 @@ public final class GuideScreen extends Screen {
         super.render(c, mx, my, d);
         if (editing && canEdit && helpOpen) renderHelp(c, l, t);
         renderButtonTooltips(c, mx, my, l, t);
+        if (mx >= l + 120 && mx < l + 148 && my >= t + 10 && my < t + 28)
+            c.drawTooltip(textRenderer, Text.literal("Cambiar idioma"), mx, my);
+        else if (mx >= l + 152 && mx < l + 180 && my >= t + 10 && my < t + 28)
+            c.drawTooltip(textRenderer, Text.literal("Switch language"), mx, my);
     }
 
     private void renderHelp(DrawContext c, int l, int t) {
