@@ -27,6 +27,8 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.openEnderChestInHand.desc", "Allows opening an ender chest directly from the hand when using it in the air."),
             Map.entry("carpet.rule.instamineDeepslate.name", "Instamine Deepslate"),
             Map.entry("carpet.rule.instamineDeepslate.desc", "Allows instant mining of deepslate with a netherite pickaxe with Efficiency V and Haste II or higher."),
+            Map.entry("carpet.rule.fastObsidian.name", "Fast Obsidian"),
+            Map.entry("carpet.rule.fastObsidian.desc", "Obsidian and crying obsidian break at stone speed with a netherite pickaxe with Efficiency V."),
             Map.entry("carpet.rule.breakEndPortalFrames.name", "Break End Portal Frames"),
             Map.entry("carpet.rule.breakEndPortalFrames.desc", "Allows breaking end portal frames with a mace with Breach IV, Haste II, and Strength II after sustained mining."),
             Map.entry("carpet.rule.breakEndPortalsWithWindCharge.name", "Break End Portals With Wind Charge"),

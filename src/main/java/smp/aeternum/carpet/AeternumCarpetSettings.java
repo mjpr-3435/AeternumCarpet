@@ -23,6 +23,9 @@ public class AeternumCarpetSettings {
     public static boolean instamineDeepslate = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean fastObsidian = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean breakEndPortalFrames = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})

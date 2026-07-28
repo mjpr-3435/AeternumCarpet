@@ -29,6 +29,9 @@ public final class MiningRuleHandler {
         if (canInstamineDeepslate(player, state, stack)) {
             return Math.max(originalSpeed, INSTANT_MINE_SPEED);
         }
+        if (canBreakObsidianLikeStone(player, state, stack)) {
+            return originalSpeed * 50.0f / 1.5f;
+        }
         return originalSpeed;
     }
 
@@ -80,6 +83,19 @@ public final class MiningRuleHandler {
 
         StatusEffectInstance haste = player.getStatusEffect(StatusEffects.HASTE);
         return haste != null && haste.getAmplifier() >= 1;
+    }
+
+    public static boolean canBreakObsidianLikeStone(PlayerEntity player, BlockState state, ItemStack stack) {
+        if (!AeternumCarpetSettings.fastObsidian) {
+            return false;
+        }
+        if (!state.isOf(Blocks.OBSIDIAN) && !state.isOf(Blocks.CRYING_OBSIDIAN)) {
+            return false;
+        }
+        if (!stack.isOf(Items.NETHERITE_PICKAXE)) {
+            return false;
+        }
+        return getEnchantmentLevel(stack, Enchantments.EFFICIENCY) >= 5;
     }
 
     public static boolean canBreakEndPortalFrame(PlayerEntity player, BlockState state, ItemStack stack) {
