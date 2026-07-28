@@ -63,11 +63,11 @@ public final class MaterialsDetailScreen extends Screen {
 
 		if (list.nextScanAt > 0) {
 			int secs = Math.max(0, (int) ((list.nextScanAt - System.currentTimeMillis()) / 1000));
-			c.drawTextWithShadow(textRenderer, "Escaneo en " + secs + "s", l + 320, t + 14, 0xFFAAAAAA);
+			c.drawTextWithShadow(textRenderer, "Escaneo en " + secs + "s", l + 326, t + 14, 0xFFAAAAAA);
 		}
 
 		addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.active = false; ClientPlayNetworking.send(new MaterialsScanPayload(list.name)); })
-			.dimensions(l + 400, t + 10, 64, 18).build());
+			.dimensions(l + 406, t + 10, 64, 18).build());
 
 		List<MaterialEntry> entries = list.entries;
 		if (entries.isEmpty()) {
