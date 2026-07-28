@@ -81,13 +81,14 @@ public final class ExplorationPregenerator {
             if (candidate.getRegistryKey().getValue().toString().equals(area.normalizedDimension())) { world = candidate; break; }
         }
         if (world == null) { advanceRegion(areas, area); return false; }
-        int radius = area.maxRadius() + PADDING_CHUNKS;
-        if (state.chunkX < area.centerChunkX() - radius || state.chunkX > area.centerChunkX() + radius || state.chunkZ < area.centerChunkZ() - radius || state.chunkZ > area.centerChunkZ() + radius) state.resetCursor(area, radius);
+        int minCX = area.minChunkX() - PADDING_CHUNKS, maxCX = area.maxChunkX() + PADDING_CHUNKS;
+        int minCZ = area.minChunkZ() - PADDING_CHUNKS, maxCZ = area.maxChunkZ() + PADDING_CHUNKS;
+        if (state.chunkX < minCX || state.chunkX > maxCX || state.chunkZ < minCZ || state.chunkZ > maxCZ) state.resetCursor(area, minCX, minCZ);
         if (nearPlayer(server, world, state.chunkX, state.chunkZ)) return false;
         // FULL shares Minecraft's normal chunk task if a player has already requested this chunk.
         world.getChunk(state.chunkX, state.chunkZ, ChunkStatus.FULL, true);
         state.completedChunks++;
-        advanceChunk(areas, area, radius);
+        advanceChunk(area, minCX, maxCX, minCZ, maxCZ);
         return true;
     }
 
@@ -97,12 +98,11 @@ public final class ExplorationPregenerator {
         state.areaIndex = 0; state.regionKey = ""; return areas.getFirst();
     }
 
-    private static void advanceChunk(List<AllowedGenerationArea> areas, AllowedGenerationArea area, int radius) {
-        int maxX = area.centerChunkX() + radius, maxZ = area.centerChunkZ() + radius;
-        if (++state.chunkZ <= maxZ) return;
-        state.chunkZ = area.centerChunkZ() - radius;
-        if (++state.chunkX <= maxX) return;
-        advanceRegion(areas, area);
+    private static void advanceChunk(AllowedGenerationArea area, int minCX, int maxCX, int minCZ, int maxCZ) {
+        if (++state.chunkZ <= maxCZ) return;
+        state.chunkZ = minCZ;
+        if (++state.chunkX <= maxCX) return;
+        advanceRegion(AeternumCarpetConfig.getAllowedGenerationAreas(), area);
     }
 
     private static void advanceRegion(List<AllowedGenerationArea> areas, AllowedGenerationArea area) {
@@ -158,7 +158,7 @@ public final class ExplorationPregenerator {
         boolean active, paused; int maxChunksPerMinute = 60, areaIndex, chunkX, chunkZ; long completedChunks; String regionKey = "";
         State() {} State(int speed) { maxChunksPerMinute = speed; }
         void resetCursor() { regionKey = ""; chunkX = chunkZ = 0; }
-        void resetCursor(AllowedGenerationArea area, int radius) { regionKey = key(area); chunkX = area.centerChunkX() - radius; chunkZ = area.centerChunkZ() - radius; }
+        void resetCursor(AllowedGenerationArea area, int minCX, int minCZ) { regionKey = key(area); chunkX = minCX; chunkZ = minCZ; }
         void read(JsonObject json) { active=get(json,"active",false); paused=get(json,"paused",false); maxChunksPerMinute=get(json,"speed",60); areaIndex=get(json,"area",0); chunkX=get(json,"x",0); chunkZ=get(json,"z",0); completedChunks=get(json,"completed",0L); regionKey=get(json,"region",""); }
         JsonObject write() { JsonObject json=new JsonObject(); json.addProperty("active",active);json.addProperty("paused",paused);json.addProperty("speed",maxChunksPerMinute);json.addProperty("area",areaIndex);json.addProperty("x",chunkX);json.addProperty("z",chunkZ);json.addProperty("completed",completedChunks);json.addProperty("region",regionKey);return json; }
         private static boolean get(JsonObject j,String k,boolean d){return j.has(k)?j.get(k).getAsBoolean():d;} private static int get(JsonObject j,String k,int d){return j.has(k)?j.get(k).getAsInt():d;} private static long get(JsonObject j,String k,long d){return j.has(k)?j.get(k).getAsLong():d;} private static String get(JsonObject j,String k,String d){return j.has(k)?j.get(k).getAsString():d;}
