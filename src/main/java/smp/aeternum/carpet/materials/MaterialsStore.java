@@ -178,6 +178,15 @@ public final class MaterialsStore {
 		saveRegions();
 	}
 
+	public static void removeStorageRegion(String listName, int index) {
+		List<StorageRegion> listRegions = regions.get(listName);
+		if (listRegions != null && index >= 0 && index < listRegions.size()) {
+			listRegions.remove(index);
+			if (listRegions.isEmpty()) regions.remove(listName);
+			saveRegions();
+		}
+	}
+
 	public static List<StorageRegion> getRegions(String listName) { return regions.getOrDefault(listName, List.of()); }
 
 	public static String getClaim(String listName, String itemId) {

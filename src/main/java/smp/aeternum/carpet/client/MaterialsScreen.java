@@ -71,8 +71,8 @@ public final class MaterialsScreen extends Screen {
 				boolean hover = mx >= l + 9 && mx < l + 510 && my >= rowY && my < rowY + 18;
 				if (idx % 2 == 0) c.fill(l + 9, rowY, l + 510, rowY + 18, 0x40202020);
 				if (hover) c.fill(l + 8, rowY, l + 510, rowY + 18, 0xFF30465A);
-				c.drawTextWithShadow(textRenderer, list.name, l + 14, rowY + 2, 0xFFFFFFFF);
-				c.drawTextWithShadow(textRenderer, list.entries.size() + " items", l + 260, rowY + 2, 0xFFB0B0B0);
+			c.drawTextWithShadow(textRenderer, list.name, l + 14, rowY + 2, 0xFFFFFFFF);
+			c.drawTextWithShadow(textRenderer, list.entries.size() + " items", l + 260, rowY + 2, 0xFFB0B0B0);
 
 				ButtonWidget del = deleteButtons.get(i);
 				del.setPosition(l + 470, rowY);
