@@ -81,7 +81,7 @@ public final class ExplorationPregenerator {
             if (candidate.getRegistryKey().getValue().toString().equals(area.normalizedDimension())) { world = candidate; break; }
         }
         if (world == null) { advanceRegion(areas, area); return false; }
-        int radius = area.size() + PADDING_CHUNKS;
+        int radius = area.maxRadius() + PADDING_CHUNKS;
         if (state.chunkX < area.centerChunkX() - radius || state.chunkX > area.centerChunkX() + radius || state.chunkZ < area.centerChunkZ() - radius || state.chunkZ > area.centerChunkZ() + radius) state.resetCursor(area, radius);
         if (nearPlayer(server, world, state.chunkX, state.chunkZ)) return false;
         // FULL shares Minecraft's normal chunk task if a player has already requested this chunk.
@@ -152,7 +152,7 @@ public final class ExplorationPregenerator {
         catch (IOException exception) { AeternumCarpet.LOGGER.error("Failed to save exploration pregeneration state", exception); }
     }
 
-    private static String key(AllowedGenerationArea area) { return area.name() + "|" + area.normalizedDimension() + "|" + area.centerX() + "|" + area.centerZ() + "|" + area.size(); }
+    private static String key(AllowedGenerationArea area) { return area.name() + "|" + area.normalizedDimension() + "|" + area.minChunkX() + "|" + area.minChunkZ() + "|" + area.maxChunkX() + "|" + area.maxChunkZ(); }
 
     private static final class State {
         boolean active, paused; int maxChunksPerMinute = 60, areaIndex, chunkX, chunkZ; long completedChunks; String regionKey = "";

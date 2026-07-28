@@ -2,6 +2,8 @@ package smp.aeternum.carpet.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.annotations.SerializedName;
 import net.fabricmc.loader.api.FabricLoader;
@@ -9,7 +11,6 @@ import smp.aeternum.carpet.AeternumCarpet;
 import smp.aeternum.carpet.exploration.ExplorationSelectionExporter;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,7 +19,20 @@ import java.util.List;
 import java.util.Optional;
 
 public final class AeternumCarpetConfig {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting()
+        .registerTypeAdapter(AllowedGenerationArea.class, (JsonDeserializer<AllowedGenerationArea>)(json, type, context) -> {
+            JsonObject obj = json.getAsJsonObject();
+            String name = obj.get("name").getAsString();
+            String dim = obj.has("dimension") ? obj.get("dimension").getAsString() : "minecraft:overworld";
+            if (obj.has("minChunkX")) {
+                return new AllowedGenerationArea(name, dim,
+                    obj.get("minChunkX").getAsInt(), obj.get("minChunkZ").getAsInt(),
+                    obj.get("maxChunkX").getAsInt(), obj.get("maxChunkZ").getAsInt());
+            }
+            int cx = obj.get("centerX").getAsInt(), cz = obj.get("centerZ").getAsInt(), s = obj.has("size") ? obj.get("size").getAsInt() : 0;
+            return AllowedGenerationArea.fromCenter(name, dim, cx, cz, s);
+        })
+        .create();
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("aeternum-carpet.json");
 
     private static List<AllowedGenerationArea> allowedGenerationAreas = List.of();
@@ -36,11 +50,14 @@ public final class AeternumCarpetConfig {
             return;
         }
 
-        try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
-            ConfigData configData = GSON.fromJson(reader, ConfigData.class);
+        try {
+            String raw = Files.readString(CONFIG_PATH);
+            boolean migrated = raw.contains("\"centerX\"");
+            ConfigData configData = GSON.fromJson(raw, ConfigData.class);
             allowedGenerationAreas = sanitize(configData == null ? null : configData.allowedGenerationAreas);
             mapMaxRequests = clampMapMaxRequests(configData == null ? 2 : configData.mapMaxRequests);
             exportSelections();
+            if (migrated && !allowedGenerationAreas.isEmpty()) { save(); AeternumCarpet.LOGGER.info("Configuración de áreas migrada al nuevo formato (minChunk/maxChunk)."); }
         } catch (IOException | JsonParseException exception) {
             allowedGenerationAreas = List.of();
             AeternumCarpet.LOGGER.error("Failed to read config from {}", CONFIG_PATH, exception);
@@ -166,13 +183,7 @@ public final class AeternumCarpetConfig {
     private static int clampMapMaxRequests(int value) { return value < 1 || value > 64 ? 2 : value; }
 
     private static AllowedGenerationArea normalize(AllowedGenerationArea area) {
-        return new AllowedGenerationArea(
-            area.name(),
-            area.normalizedDimension(),
-            area.centerX(),
-            area.centerZ(),
-            area.size()
-        );
+        return new AllowedGenerationArea(area.name(), area.normalizedDimension(), area.minChunkX(), area.minChunkZ(), area.maxChunkX(), area.maxChunkZ());
     }
 
     private static Optional<AllowedGenerationArea> findAreaByName(String name) {
