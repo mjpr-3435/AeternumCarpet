@@ -1,5 +1,7 @@
 package smp.aeternum.carpet.client;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
@@ -69,7 +71,10 @@ public final class MaterialsDetailScreen extends Screen {
 		addDrawableChild(ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.active = false; ClientPlayNetworking.send(new MaterialsScanPayload(list.name)); })
 			.dimensions(l + 406, t + 10, 64, 18).build());
 
-		List<MaterialEntry> entries = list.entries;
+		List<MaterialEntry> entries = new ArrayList<>(list.entries);
+		entries.sort(Comparator
+			.comparingInt((MaterialEntry e) -> e.total - e.available > 0 ? 0 : 1)
+			.thenComparing(e -> e.total, Comparator.reverseOrder()));
 		if (entries.isEmpty()) {
 			c.drawCenteredTextWithShadow(textRenderer, "Lista vacía.", width / 2, t + 160, 0xFFAAAAAA);
 			super.render(c, mx, my, d);
