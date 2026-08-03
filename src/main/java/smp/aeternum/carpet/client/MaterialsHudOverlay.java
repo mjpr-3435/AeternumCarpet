@@ -28,7 +28,7 @@ public final class MaterialsHudOverlay {
 			for (MaterialEntry entry : list.entries)
 				if (player.equals(entry.claimedBy) && entry.available < entry.total)
 					claimedEntries.add(entry);
-		claimedEntries.sort((a, b) -> Integer.compare(b.total - b.available, a.total - a.available));
+		claimedEntries.sort((a, b) -> Integer.compare(b.total, a.total));
 	}
 
 	public static void render(DrawContext context) {
