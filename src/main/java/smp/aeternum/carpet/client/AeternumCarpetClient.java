@@ -10,6 +10,7 @@ import smp.aeternum.carpet.network.GuideDataPayload;
 import smp.aeternum.carpet.network.ExplorationMapOpenPayload;
 import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 import smp.aeternum.carpet.network.MaterialsDataPayload;
+import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
@@ -43,11 +44,13 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         }));
         ClientPlayNetworking.registerGlobalReceiver(ExplorationMapTilePayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.accept(payload); }));
         ClientPlayNetworking.registerGlobalReceiver(MaterialsDataPayload.ID, (payload, context) -> context.client().execute(() -> {
-            MaterialsHudOverlay.update(context.client().player != null ? context.client().player.getName().getString() : "", payload.json());
             if (context.client().currentScreen instanceof MaterialsDetailScreen screen) screen.replaceFromJson(payload.json());
             else if (context.client().currentScreen instanceof MaterialsScreen screen) screen.replaceData(payload.json());
             else if (payload.open()) context.client().setScreen(new MaterialsScreen(payload.json()));
         }));
+        ClientPlayNetworking.registerGlobalReceiver(MaterialsOverlayPayload.ID, (payload, context) -> context.client().execute(() ->
+            MaterialsHudOverlay.update(context.client().player != null ? context.client().player.getName().getString() : "", payload.json())
+        ));
     }
 
     private static void clearBlockerSession() {

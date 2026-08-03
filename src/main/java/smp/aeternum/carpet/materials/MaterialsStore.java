@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
@@ -132,6 +133,25 @@ public final class MaterialsStore {
 
 	public static MaterialList get(String name) { return lists.get(name); }
 	public static Collection<MaterialList> all() { mergeClaims(); long nextAt = System.currentTimeMillis() + millisUntilNextScan(); for (var l : lists.values()) l.nextScanAt = nextAt; return lists.values(); }
+
+	public static String overlayJsonFor(ServerPlayerEntity player) {
+		Map<String, Integer> carried = new HashMap<>();
+		net.minecraft.inventory.Inventory inv = player.getInventory();
+		for (int s = 0; s < inv.size(); s++) countStack(inv.getStack(s), carried);
+		List<MaterialList> result = new ArrayList<>();
+		for (MaterialList list : all()) {
+			MaterialList copy = new MaterialList(list.name, new ArrayList<>());
+			copy.nextScanAt = list.nextScanAt;
+			for (MaterialEntry e : list.entries) {
+				if (e.claimedBy == null || !e.claimedBy.equals(player.getName().getString())) continue;
+				MaterialEntry ce = new MaterialEntry(e.itemName, e.itemId, e.total, e.available + carried.getOrDefault(e.itemId, 0));
+				ce.claimedBy = e.claimedBy;
+				copy.entries.add(ce);
+			}
+			if (!copy.entries.isEmpty()) result.add(copy);
+		}
+		return GSON.toJson(result);
+	}
 
 	private static void mergeClaims() {
 		for (var list : lists.values()) {

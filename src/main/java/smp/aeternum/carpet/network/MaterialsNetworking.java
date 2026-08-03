@@ -13,6 +13,7 @@ public final class MaterialsNetworking {
 
 	public static void registerPayloads() {
 		PayloadTypeRegistry.playS2C().register(MaterialsDataPayload.ID, MaterialsDataPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(MaterialsOverlayPayload.ID, MaterialsOverlayPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsActionPayload.ID, MaterialsActionPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsRefreshPayload.ID, MaterialsRefreshPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsDeletePayload.ID, MaterialsDeletePayload.CODEC);
@@ -40,11 +41,18 @@ public final class MaterialsNetworking {
 	public static void send(ServerPlayerEntity player) {
 		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
 			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), true));
+		sendOverlay(player);
 	}
 
 	private static void send(ServerPlayerEntity player, boolean open) {
 		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
 			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), open));
+		sendOverlay(player);
+	}
+
+	private static void sendOverlay(ServerPlayerEntity player) {
+		if (ServerPlayNetworking.canSend(player, MaterialsOverlayPayload.ID))
+			ServerPlayNetworking.send(player, new MaterialsOverlayPayload(MaterialsStore.overlayJsonFor(player)));
 	}
 
 	public static void broadcast(MinecraftServer server) {
