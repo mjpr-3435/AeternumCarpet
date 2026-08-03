@@ -41,6 +41,10 @@ public final class MaterialsCommand {
 			c.getSource().sendError(Text.literal("No existe una lista con el nombre '" + name + "'."));
 			return 0;
 		}
+		if (!MaterialsStore.getRegions(name).isEmpty()) {
+			c.getSource().sendError(Text.literal("La lista '" + name + "' ya tiene un almacén asignado. Elimínalo antes de asignar otro."));
+			return 0;
+		}
 		BlockPos p1 = BlockPosArgumentType.getBlockPos(c, "pos1");
 		BlockPos p2 = BlockPosArgumentType.getBlockPos(c, "pos2");
 		String dim = c.getSource().getWorld().getRegistryKey().getValue().toString();
