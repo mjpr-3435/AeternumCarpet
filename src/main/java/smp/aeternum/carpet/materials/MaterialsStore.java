@@ -27,7 +27,7 @@ public final class MaterialsStore {
 	private static Map<String, Map<String, String>> claims = new LinkedHashMap<>();
 	private static Map<String, List<StorageRegion>> regions = new LinkedHashMap<>();
 	private static long lastTickTime;
-	private static final long SCAN_INTERVAL_MS = 5_000;
+	private static final long SCAN_INTERVAL_MS = 1_000;
 	private static MinecraftServer server;
 
 	private MaterialsStore() {}
