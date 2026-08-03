@@ -17,9 +17,9 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     public void onInitializeClient() {
         BlockerGuide.register();
         // Guides and list selections belong to this connection only, never to the next /server target.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearBlockerSession());
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearBlockerSession());
-        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearBlockerSession());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession());
+        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearClientSession());
         ClientPlayNetworking.registerGlobalReceiver(BlockerDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
                 BlockerGuide.reconcile(payload.json());
@@ -53,8 +53,9 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ));
     }
 
-    private static void clearBlockerSession() {
+    private static void clearClientSession() {
         BlockerGuide.clear();
         BlockerSelectionStore.clearAll();
+        MaterialsHudOverlay.clear();
     }
 }

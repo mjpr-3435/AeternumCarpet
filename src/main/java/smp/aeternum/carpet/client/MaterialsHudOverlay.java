@@ -19,6 +19,11 @@ public final class MaterialsHudOverlay {
 
 	private MaterialsHudOverlay() {}
 
+	public static void clear() {
+		claimedEntries.clear();
+		currentPlayer = null;
+	}
+
 	public static void update(String player, String json) {
 		currentPlayer = player;
 		claimedEntries.clear();
