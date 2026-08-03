@@ -174,6 +174,7 @@ public final class MaterialsDetailScreen extends Screen {
 	@Override public void close() { client.setScreen(parent); }
 
 	private static String formatStack(int n) {
+		if (n >= 93312) return String.format(java.util.Locale.ROOT, "SDC %.2f", n / 93312.0);
 		if (n >= 1728) return String.format(java.util.Locale.ROOT, "SB %.2f", n / 1728.0);
 		int stacks = n / 64, singles = n % 64;
 		if (stacks > 0) return singles == 0 ? "64 x " + stacks : "64 x " + stacks + " + " + singles;
