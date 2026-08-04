@@ -37,6 +37,8 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.allowUnlimitedPlayerSpeed.desc", "Disables the vanilla server movement speed check that causes moved too quickly rubberbanding."),
             Map.entry("carpet.rule.naturalIceFormation.name", "Natural Ice Formation"),
             Map.entry("carpet.rule.naturalIceFormation.desc", "Controls whether water freezes into ice naturally."),
+            Map.entry("carpet.rule.protectedPots.name", "Protected Pots"),
+            Map.entry("carpet.rule.protectedPots.desc", "Prevents decorated pots from being broken by anything except explicit player mining."),
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
             Map.entry("carpet.rule.commandTodoList.name", "Command Todo List"),

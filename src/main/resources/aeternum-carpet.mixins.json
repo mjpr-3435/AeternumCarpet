@@ -10,10 +10,11 @@
 		"ServerWorldMixin",
 		"ServerPlayNetworkHandlerMixin",
 		"ServerPlayerInteractionManagerMixin",
-		"ServerPlayerEntityMixin"
-		,"ExplosionImplMixin"
-		,"PistonHandlerMixin"
-		,"HopperBlockEntityMixin"
+		"ServerPlayerEntityMixin",
+		"ExplosionImplMixin",
+		"PistonHandlerMixin",
+		"HopperBlockEntityMixin",
+		"DecoratedPotBlockMixin"
 	],
 	"client": [
 		"client.InGameHudMixin"
