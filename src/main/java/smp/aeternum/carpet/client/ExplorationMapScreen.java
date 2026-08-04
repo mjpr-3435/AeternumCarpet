@@ -22,6 +22,8 @@ final class ExplorationMapScreen extends Screen {
     private String dimension;
     private double centerX, centerZ, zoom = 1;
     private int maxRequests;
+    private float mspt;
+    private long lastStatusRequest;
     private boolean dragging, showChunkGrid, showRegionGrid, formOpen, selecting;
     private double lastX, lastY;
     private int selStartChunkX, selStartChunkZ, selEndChunkX, selEndChunkZ;
@@ -37,11 +39,14 @@ final class ExplorationMapScreen extends Screen {
         centerX = data.centerChunkX() * 16.0;
         centerZ = data.centerChunkZ() * 16.0;
         maxRequests = data.maxRequests();
+        mspt = data.mspt();
         areas = data.areas();
     }
 
     /** A server save sends a fresh area list; keep the map viewport and loaded textures intact. */
-    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); maxRequests = data.maxRequests(); if (maxReqButton != null) maxReqButton.setMessage(Text.literal("Req: " + maxRequests)); }
+    void replaceData(ExplorationMapOpenPayload data) { areas = data.areas(); maxRequests = data.maxRequests(); mspt = data.mspt(); if (maxReqButton != null) maxReqButton.setMessage(Text.literal("Req: " + maxRequests)); }
+
+    void acceptMspt(float value) { mspt = value; }
 
     @Override protected void init() {
         int y = height - 28;
@@ -163,6 +168,8 @@ final class ExplorationMapScreen extends Screen {
         if (blinkMaxReq > 0 && --blinkMaxReq == 0 && maxReqButton != null) maxReqButton.active = true;
         if (blinkClearAll > 0 && --blinkClearAll == 0 && clearAllButton != null) clearAllButton.active = true;
         if (blinkClearVisible > 0 && --blinkClearVisible == 0 && clearVisibleButton != null) clearVisibleButton.active = true;
+        long now = System.currentTimeMillis();
+        if (now - lastStatusRequest >= 1000) { lastStatusRequest = now; ClientPlayNetworking.send(new ExplorationMapStatusRequestPayload()); }
         c.fill(0, 0, width, height, 0xE0101010);
         int l = 10, t = 28, r = width - 10, b = height - 36, cx = (l + r) / 2, cy = (t + b) / 2;
         c.fill(l, t, r, b, 0xFF20242A); c.enableScissor(l, t, r, b); request(l, t, r, b, cx, cy);
@@ -175,8 +182,8 @@ final class ExplorationMapScreen extends Screen {
         grid(c, l, t, r, b, cx, cy); areas(c, l, t, r, b, cx, cy); c.disableScissor();
         c.drawBorder(l, t, r - l, b - t, 0xFF909090);
         int wx = (int) Math.floor(centerX + (mx - cx) / zoom), wz = (int) Math.floor(centerZ + (my - cy) / zoom), chunkX = Math.floorDiv(wx, 16), chunkZ = Math.floorDiv(wz, 16);
-        c.drawTextWithShadow(textRenderer, "MAPA DE EXPLORACIÓN · " + dimension.substring(dimension.indexOf(':') + 1).toUpperCase(), 16, 10, 0xFFFFFFFF);
-        c.drawTextWithShadow(textRenderer, "Bloque " + wx + ", " + wz + " · Chunk " + chunkX + ", " + chunkZ + " · Región " + Math.floorDiv(chunkX, 32) + ", " + Math.floorDiv(chunkZ, 32) + " | " + String.format(Locale.ROOT, "%.3fx", zoom), width - 430, 10, 0xFFAAAAAA);
+        c.drawTextWithShadow(textRenderer, "MAPA DE EXPLORACIÓN · " + dimension.substring(dimension.indexOf(':') + 1).toUpperCase() + " · " + String.format(Locale.ROOT, "%.1f", mspt) + " mspt", 16, 10, 0xFFFFFFFF);
+        c.drawTextWithShadow(textRenderer, "Bloque " + wx + ", " + wz + " · Chunk " + chunkX + ", " + chunkZ + " · Región " + Math.floorDiv(chunkX, 32) + ", " + Math.floorDiv(chunkZ, 32) + " | " + String.format(Locale.ROOT, "%.3fx", zoom), width - 380, 10, 0xFFAAAAAA);
         c.drawTextWithShadow(textRenderer, "Arrastra: pan · Click der + arrastrar: seleccionar · Espacio: 0,0 · F: tu posición", 16, height - 51, 0xFFAAAAAA);
         super.render(c, mx, my, d);
     }

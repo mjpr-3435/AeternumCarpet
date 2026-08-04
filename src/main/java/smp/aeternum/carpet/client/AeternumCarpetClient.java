@@ -8,6 +8,7 @@ import smp.aeternum.carpet.network.BlockerDataPayload;
 import smp.aeternum.carpet.network.CommandPacksDataPayload;
 import smp.aeternum.carpet.network.GuideDataPayload;
 import smp.aeternum.carpet.network.ExplorationMapOpenPayload;
+import smp.aeternum.carpet.network.ExplorationMapStatusPayload;
 import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
@@ -43,6 +44,7 @@ public final class AeternumCarpetClient implements ClientModInitializer {
             else context.client().setScreen(new ExplorationMapScreen(payload));
         }));
         ClientPlayNetworking.registerGlobalReceiver(ExplorationMapTilePayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.accept(payload); }));
+        ClientPlayNetworking.registerGlobalReceiver(ExplorationMapStatusPayload.ID, (payload, context) -> context.client().execute(() -> { if (context.client().currentScreen instanceof ExplorationMapScreen screen) screen.acceptMspt(payload.mspt()); }));
         ClientPlayNetworking.registerGlobalReceiver(MaterialsDataPayload.ID, (payload, context) -> context.client().execute(() -> {
             if (context.client().currentScreen instanceof MaterialsDetailScreen screen) screen.replaceFromJson(payload.json());
             else if (context.client().currentScreen instanceof MaterialsScreen screen) screen.replaceData(payload.json());
