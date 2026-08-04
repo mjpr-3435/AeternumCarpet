@@ -50,6 +50,7 @@ import smp.aeternum.carpet.guides.GuideStore;
 import smp.aeternum.carpet.network.GuideNetworking;
 import smp.aeternum.carpet.network.ExplorationMapNetworking;
 import smp.aeternum.carpet.network.MaterialsNetworking;
+import smp.aeternum.carpet.network.ScreenOpenNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.materials.MaterialsStore;
@@ -66,6 +67,7 @@ public class AeternumCarpet implements ModInitializer {
 		GuideNetworking.registerPayloads();
 		ExplorationMapNetworking.registerPayloads();
 		MaterialsNetworking.registerPayloads();
+		ScreenOpenNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();

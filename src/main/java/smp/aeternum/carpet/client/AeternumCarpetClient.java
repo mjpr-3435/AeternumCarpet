@@ -17,6 +17,7 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         BlockerGuide.register();
+        ScreenKeybinds.register();
         // Guides and list selections belong to this connection only, never to the next /server target.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession());
