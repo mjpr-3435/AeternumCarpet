@@ -24,10 +24,13 @@ public class ServerPlayerEntityMixin {
         }
 
         World world = player.getWorld();
-        BlockPos blockPos = player.getBlockPos();
-        BlockState blockState = world.getBlockState(blockPos);
-        if (blockState.getBlock() instanceof NetherPortalBlock || blockState.getBlock() instanceof EndPortalBlock || blockState.getBlock() instanceof EndGatewayBlock) {
-            blockState.onEntityCollision(world, blockPos, player, EntityCollisionHandler.DUMMY);
+        BlockPos[] candidates = { BlockPos.ofFloored(player.getEyePos()), player.getBlockPos() };
+        for (BlockPos pos : candidates) {
+            BlockState blockState = world.getBlockState(pos);
+            if (blockState.getBlock() instanceof NetherPortalBlock || blockState.getBlock() instanceof EndPortalBlock || blockState.getBlock() instanceof EndGatewayBlock) {
+                blockState.onEntityCollision(world, pos, player, EntityCollisionHandler.DUMMY);
+                break;
+            }
         }
     }
 }
