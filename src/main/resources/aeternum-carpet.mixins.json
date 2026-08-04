@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"PhantomSpawnerMixin",
+		"SpawnHelperInfoAccessor",
 		"PlayerEntityMixin",
 		"ProjectileEntityMixin",
 		"ServerWorldMixin",
