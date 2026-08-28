@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Low-impact, resumable pregeneration of exploration regions. */
@@ -51,24 +52,43 @@ public final class ExplorationPregenerator {
         if (!AeternumCarpetSettings.explorationManager) return;
         if (!state.active) return;
         if (!isHealthy()) return;
-        double factor = speedFactor();
+        double factor = speedInfo().factor();
         workCredits = Math.min(1.0, workCredits + state.maxChunksPerMinute * factor / 1200.0);
         if (workCredits < 1.0) return;
         if (generateOne(server)) workCredits -= 1.0;
         if (++saveCooldown >= 200) save();
     }
 
-    public static void start() { state.active = true; state.paused = false; save(); }
+    public static void start() { state.active = true; state.paused = false; state.completed = false; save(); }
     public static void pause() { state.active = false; state.paused = true; save(); }
     public static void stop() { state = new State(state.maxChunksPerMinute); workCredits = 0; save(); }
     public static void setSpeed(int chunksPerMinute) { state.maxChunksPerMinute = chunksPerMinute; save(); }
 
     public static List<String> statusLines() {
-        String health = MSPT_SAMPLES.size() < REQUIRED_SAMPLES ? "analizando rendimiento " + MSPT_SAMPLES.size() + "/" + REQUIRED_SAMPLES
-            : isHealthy() ? "estable" : "pausado por MSPT";
-        String mode = state.active ? "Activo" : state.paused ? "Pausado" : "Detenido";
+        String idle = idleReason();
+        boolean sampled = MSPT_SAMPLES.size() >= REQUIRED_SAMPLES;
+        boolean healthy = sampled && isHealthy();
+        String salud = !sampled ? "analizando rendimiento " + MSPT_SAMPLES.size() + "/" + REQUIRED_SAMPLES
+            : !healthy ? "pausado por MSPT"
+            : idle != null ? "nada que generar" : "estable";
+        String mode = !state.active ? (state.paused ? "Pausado" : "Detenido") : (idle != null ? "Pausado" : "Activo");
         String region = state.regionKey.isEmpty() ? "sin región actual" : state.regionKey;
-        return List.of("Estado: " + mode, "Región: " + region, "Velocidad máxima: " + state.maxChunksPerMinute + " chunks/minuto", "Rendimiento: " + health, "MSPT: " + msptSummary());
+        List<String> lines = new ArrayList<>(List.of(
+            "Estado: " + mode,
+            "Región: " + region,
+            "Velocidad máxima: " + state.maxChunksPerMinute + " chunks/minuto",
+            "Rendimiento: " + salud,
+            "MSPT: " + msptSummary()));
+        if (MSPT_SAMPLES.size() < REQUIRED_SAMPLES) {
+            lines.add("Velocidad actual: analizando rendimiento");
+        } else {
+            SpeedInfo info = speedInfo();
+            double realRate = state.maxChunksPerMinute * info.factor();
+            lines.add("Velocidad actual: " + String.format(java.util.Locale.ROOT, "%.0f", realRate) + " chunks/minuto (x" + info.factor() + ", " + info.band() + ")");
+        }
+        if (sampled && !healthy) lines.add("Motivo de pausa: " + healthReason());
+        else if (idle != null) lines.add("Motivo: " + idle);
+        return lines;
     }
 
     private static boolean generateOne(MinecraftServer server) {
@@ -107,7 +127,7 @@ public final class ExplorationPregenerator {
 
     private static void advanceRegion(List<AllowedGenerationArea> areas, AllowedGenerationArea area) {
         int index = areas.indexOf(area);
-        if (index + 1 >= areas.size()) { state.active = false; state.paused = true; save(); return; }
+        if (index + 1 >= areas.size()) { state.active = false; state.paused = true; state.completed = true; save(); return; }
         state.areaIndex = index + 1; state.resetCursor();
     }
 
@@ -128,22 +148,40 @@ public final class ExplorationPregenerator {
     private static boolean isHealthy() {
         if (MSPT_SAMPLES.size() < REQUIRED_SAMPLES) return false;
         double mean = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).average().orElse(50);
-        double min = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).min().orElse(50);
         double max = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).max().orElse(50);
-        return mean < 20 && max < 25 && max - min <= 6;
+        return mean < 20 && max < 25;
     }
 
-    private static double speedFactor() {
+    private record SpeedInfo(double factor, String band) {}
+
+    private static SpeedInfo speedInfo() {
         double mean = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).average().orElse(50);
-        if (mean < 12) return 1.0;
-        if (mean < 16) return 0.5;
-        return 0.25;
+        if (mean < 12) return new SpeedInfo(1.0, "umbral <12 mspt");
+        if (mean < 16) return new SpeedInfo(0.5, "umbral 12–16 mspt");
+        return new SpeedInfo(0.25, "umbral ≥16 mspt");
     }
 
     private static String msptSummary() {
         if (MSPT_SAMPLES.isEmpty()) return "sin muestras";
         double mean = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-        return String.format(java.util.Locale.ROOT, "MSPT %.1f", mean);
+        double min = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+        double max = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        return String.format(java.util.Locale.ROOT, "media %.1f (min %.1f / max %.1f)", mean, min, max);
+    }
+
+    private static String healthReason() {
+        double mean = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).average().orElse(50);
+        double max = MSPT_SAMPLES.stream().mapToDouble(Double::doubleValue).max().orElse(50);
+        List<String> reasons = new ArrayList<>();
+        if (mean >= 20) reasons.add(String.format(java.util.Locale.ROOT, "media %.1f >= 20", mean));
+        if (max >= 25) reasons.add(String.format(java.util.Locale.ROOT, "max %.1f >= 25", max));
+        return reasons.isEmpty() ? "desconocido" : String.join(", ", reasons);
+    }
+
+    private static String idleReason() {
+        if (AeternumCarpetConfig.getAllowedGenerationAreas().isEmpty()) return "sin áreas de generación configuradas";
+        if (state.completed) return "generación completada";
+        return null;
     }
 
     private static void save() {
@@ -155,12 +193,12 @@ public final class ExplorationPregenerator {
     private static String key(AllowedGenerationArea area) { return area.name() + "|" + area.normalizedDimension() + "|" + area.minChunkX() + "|" + area.minChunkZ() + "|" + area.maxChunkX() + "|" + area.maxChunkZ(); }
 
     private static final class State {
-        boolean active, paused; int maxChunksPerMinute = 60, areaIndex, chunkX, chunkZ; long completedChunks; String regionKey = "";
+        boolean active, paused, completed; int maxChunksPerMinute = 60, areaIndex, chunkX, chunkZ; long completedChunks; String regionKey = "";
         State() {} State(int speed) { maxChunksPerMinute = speed; }
         void resetCursor() { regionKey = ""; chunkX = chunkZ = 0; }
         void resetCursor(AllowedGenerationArea area, int minCX, int minCZ) { regionKey = key(area); chunkX = minCX; chunkZ = minCZ; }
-        void read(JsonObject json) { active=get(json,"active",false); paused=get(json,"paused",false); maxChunksPerMinute=get(json,"speed",60); areaIndex=get(json,"area",0); chunkX=get(json,"x",0); chunkZ=get(json,"z",0); completedChunks=get(json,"completed",0L); regionKey=get(json,"region",""); }
-        JsonObject write() { JsonObject json=new JsonObject(); json.addProperty("active",active);json.addProperty("paused",paused);json.addProperty("speed",maxChunksPerMinute);json.addProperty("area",areaIndex);json.addProperty("x",chunkX);json.addProperty("z",chunkZ);json.addProperty("completed",completedChunks);json.addProperty("region",regionKey);return json; }
+        void read(JsonObject json) { active=get(json,"active",false); paused=get(json,"paused",false); completed=get(json,"done",false); maxChunksPerMinute=get(json,"speed",60); areaIndex=get(json,"area",0); chunkX=get(json,"x",0); chunkZ=get(json,"z",0); completedChunks=get(json,"completed",0L); regionKey=get(json,"region",""); }
+        JsonObject write() { JsonObject json=new JsonObject(); json.addProperty("active",active);json.addProperty("paused",paused);json.addProperty("done",completed);json.addProperty("speed",maxChunksPerMinute);json.addProperty("area",areaIndex);json.addProperty("x",chunkX);json.addProperty("z",chunkZ);json.addProperty("completed",completedChunks);json.addProperty("region",regionKey);return json; }
         private static boolean get(JsonObject j,String k,boolean d){return j.has(k)?j.get(k).getAsBoolean():d;} private static int get(JsonObject j,String k,int d){return j.has(k)?j.get(k).getAsInt():d;} private static long get(JsonObject j,String k,long d){return j.has(k)?j.get(k).getAsLong():d;} private static String get(JsonObject j,String k,String d){return j.has(k)?j.get(k).getAsString():d;}
     }
 }

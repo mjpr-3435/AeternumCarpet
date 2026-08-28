@@ -179,12 +179,12 @@ final class ExplorationMapScreen extends Screen {
             int x2 = (int) Math.ceil(x + TILE * zoom), y2 = (int) Math.ceil(y + TILE * zoom);
             if (x2 > l && x < r && y2 > t && y < b) c.drawTexture(RenderPipelines.GUI_TEXTURED, entry.getValue(), x, y, 0, 0, x2 - x, y2 - y, TILE, TILE, TILE, TILE);
         }
-        grid(c, l, t, r, b, cx, cy); areas(c, l, t, r, b, cx, cy); c.disableScissor();
+        grid(c, l, t, r, b, cx, cy); areas(c, l, t, r, b, cx, cy); playerCursor(c, cx, cy); c.disableScissor();
         c.drawBorder(l, t, r - l, b - t, 0xFF909090);
         int wx = (int) Math.floor(centerX + (mx - cx) / zoom), wz = (int) Math.floor(centerZ + (my - cy) / zoom), chunkX = Math.floorDiv(wx, 16), chunkZ = Math.floorDiv(wz, 16);
         c.drawTextWithShadow(textRenderer, "MAPA DE EXPLORACIÓN · " + dimension.substring(dimension.indexOf(':') + 1).toUpperCase() + " · " + String.format(Locale.ROOT, "%.1f", mspt) + " mspt", 16, 10, 0xFFFFFFFF);
         c.drawTextWithShadow(textRenderer, "Bloque " + wx + ", " + wz + " · Chunk " + chunkX + ", " + chunkZ + " · Región " + Math.floorDiv(chunkX, 32) + ", " + Math.floorDiv(chunkZ, 32) + " | " + String.format(Locale.ROOT, "%.3fx", zoom), width - 380, 10, 0xFFAAAAAA);
-        c.drawTextWithShadow(textRenderer, "Arrastra: pan · Click der + arrastrar: seleccionar · Espacio: 0,0 · F: tu posición", 16, height - 51, 0xFFAAAAAA);
+        c.drawTextWithShadow(textRenderer, "Arrastra: pan · Click der + arrastrar: seleccionar · Espacio: tu posición · F: 0,0", 16, height - 51, 0xFFAAAAAA);
         super.render(c, mx, my, d);
     }
 
@@ -230,6 +230,14 @@ final class ExplorationMapScreen extends Screen {
     }
 
     private void grid(DrawContext c, int l, int t, int r, int b, int cx, int cy) { if (showChunkGrid && 16 * zoom >= 4) gridLines(c, l, t, r, b, cx, cy, 16, 0x30303030); if (showRegionGrid && 512 * zoom >= 4) gridLines(c, l, t, r, b, cx, cy, 512, 0xA0E0E0E0); }
+    private void playerCursor(DrawContext c, int cx, int cy) {
+        if (client.player == null) return;
+        if (!client.player.getWorld().getRegistryKey().getValue().toString().equals(dimension)) return;
+        double px = cx + (client.player.getX() - centerX) * zoom;
+        double py = cy + (client.player.getZ() - centerZ) * zoom;
+        c.fill((int) Math.floor(px) - 4, (int) Math.floor(py) - 4, (int) Math.floor(px) + 4, (int) Math.floor(py) + 4, 0xFFFF5555);
+        c.fill((int) Math.floor(px) - 2, (int) Math.floor(py) - 2, (int) Math.floor(px) + 2, (int) Math.floor(py) + 2, 0xFFFFFFFF);
+    }
     private void gridLines(DrawContext c, int l, int t, int r, int b, int cx, int cy, int spacing, int color) { int minX = (int) Math.floor(centerX + (l - cx) / zoom), maxX = (int) Math.ceil(centerX + (r - cx) / zoom), minZ = (int) Math.floor(centerZ + (t - cy) / zoom), maxZ = (int) Math.ceil(centerZ + (b - cy) / zoom); for (int x = Math.floorDiv(minX, spacing) * spacing; x <= maxX; x += spacing) { int sx = (int) Math.floor(cx + (x - centerX) * zoom); if (sx >= l && sx < r) c.fill(sx, t, sx + 1, b, color); } for (int z = Math.floorDiv(minZ, spacing) * spacing; z <= maxZ; z += spacing) { int sy = (int) Math.floor(cy + (z - centerZ) * zoom); if (sy >= t && sy < b) c.fill(l, sy, r, sy + 1, color); } }
 
     @Override public boolean mouseClicked(double x, double y, int button) {
@@ -287,8 +295,8 @@ final class ExplorationMapScreen extends Screen {
             super.keyPressed(key, scan, modifiers);
             return true;
         }
-        if (key == 32) { centerX = centerZ = 0; zoom = 1; return true; }
-        if (key == 70 && client.player != null) { centerX = client.player.getBlockX(); centerZ = client.player.getBlockZ(); return true; }
+        if (key == 32 && client.player != null) { centerX = client.player.getBlockX(); centerZ = client.player.getBlockZ(); return true; }
+        if (key == 70) { centerX = centerZ = 0; zoom = 1; return true; }
         return super.keyPressed(key, scan, modifiers);
     }
     @Override public boolean shouldPause() { return false; }

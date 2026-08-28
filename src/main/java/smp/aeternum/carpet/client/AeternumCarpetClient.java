@@ -16,6 +16,7 @@ import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        MaterialsHudOverlay.load();
         BlockerGuide.register();
         ScreenKeybinds.register();
         // Guides and list selections belong to this connection only, never to the next /server target.

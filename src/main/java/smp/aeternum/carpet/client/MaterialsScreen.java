@@ -18,6 +18,7 @@ public final class MaterialsScreen extends Screen {
 	private List<MaterialList> lists;
 	private final List<ButtonWidget> deleteButtons = new ArrayList<>();
 	private ButtonWidget refreshButton;
+	private ButtonWidget hudToggleButton, hudPosButton;
 	private long refreshEnableAt;
 	private int scroll;
 	private boolean draggingScrollbar;
@@ -38,6 +39,8 @@ public final class MaterialsScreen extends Screen {
 
 	private void createButtons() {
 		refreshButton = ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.active = false; b.setFocused(false); refreshEnableAt = System.currentTimeMillis() + 300; ClientPlayNetworking.send(new MaterialsRefreshPayload()); }).dimensions(0, 0, 72, 20).build();
+		hudToggleButton = ButtonWidget.builder(Text.literal(MaterialsHudOverlay.hudEnabled ? "ON" : "OFF"), b -> { MaterialsHudOverlay.toggle(); b.setMessage(Text.literal(MaterialsHudOverlay.hudEnabled ? "ON" : "OFF")); }).dimensions(0, 0, 56, 20).build();
+		hudPosButton = ButtonWidget.builder(Text.literal(MaterialsHudOverlay.hudPosition.name()), b -> { MaterialsHudOverlay.cyclePosition(); b.setMessage(Text.literal(MaterialsHudOverlay.hudPosition.name())); }).dimensions(0, 0, 56, 20).build();
 		int count = Math.min(VISIBLE + 4, lists.size());
 		for (int i = 0; i < count; i++) {
 			final int idx = i;
@@ -88,6 +91,10 @@ public final class MaterialsScreen extends Screen {
 
 		if (refreshButton != null) { refreshButton.setPosition(l + 430, t + 312); refreshButton.render(c, mx, my, d); }
 
+		c.drawTextWithShadow(textRenderer, "HUD:", l + 10, t + 316, 0xFFAAAAAA);
+		if (hudToggleButton != null) { hudToggleButton.setPosition(l + 44, t + 312); hudToggleButton.render(c, mx, my, d); }
+		if (hudPosButton != null) { hudPosButton.setPosition(l + 104, t + 312); hudPosButton.render(c, mx, my, d); }
+
 		if (mx >= l + 430 && mx < l + 502 && my >= t + 312 && my < t + 332)
 			c.drawTooltip(textRenderer, Text.literal("Recargar listas desde los archivos CSV"), mx, my);
 
@@ -108,6 +115,8 @@ public final class MaterialsScreen extends Screen {
 		int l = width / 2 - 260, t = height / 2 - 170;
 		if (b == 0 && mx >= l + 500 && mx < l + 520 && my >= t && my < t + 32) { close(); return true; }
 		if (b == 0 && refreshButton != null && refreshButton.isMouseOver(mx, my)) { refreshButton.mouseClicked(mx, my, b); return true; }
+		if (b == 0 && hudToggleButton != null && hudToggleButton.isMouseOver(mx, my)) { hudToggleButton.mouseClicked(mx, my, b); return true; }
+		if (b == 0 && hudPosButton != null && hudPosButton.isMouseOver(mx, my)) { hudPosButton.mouseClicked(mx, my, b); return true; }
 		int listAreaTop = t + 48;
 		int maxScroll = Math.max(0, lists.size() - VISIBLE);
 		if (maxScroll > 0 && b == 0 && mx >= l + 508 && mx <= l + 518 && my >= listAreaTop && my <= t + 308) { draggingScrollbar = true; updateScroll(my); return true; }

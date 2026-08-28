@@ -1,7 +1,6 @@
 package smp.aeternum.carpet.blockers;
 
 import net.minecraft.block.BlockState;
-import net.minecraft.state.property.Properties;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
@@ -127,7 +126,7 @@ public final class BlockerScanner {
                 BlockState state = world.getBlockState(pos);
                 if (isBlocker(state, pos)) {
                     String id = Registries.BLOCK.getId(state.getBlock()).toString();
-                    String reason = isWaterlogged(state) ? "waterlogged blocker" : "configured explosion blocker";
+                    String reason = "configured explosion blocker";
                     scan.matchedEntries++;
                     if (scan.entries.size() < MAX_ENTRIES_PER_SCAN) {
                         scan.entries.add(new BlockerEntry(x, y, z, id, reason));
@@ -164,12 +163,7 @@ public final class BlockerScanner {
 
         private boolean isBlocker(BlockState state, BlockPos pos) {
             if (state.isAir()) return false;
-            if (isWaterlogged(state)) return true;
             return BlockerBlockList.contains(Registries.BLOCK.getId(state.getBlock()).toString());
-        }
-
-        private boolean isWaterlogged(BlockState state) {
-            return state.contains(Properties.WATERLOGGED) && state.get(Properties.WATERLOGGED);
         }
 
         private void sendProgress(MinecraftServer server) {
