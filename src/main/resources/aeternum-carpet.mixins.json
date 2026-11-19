@@ -18,7 +18,9 @@
 		"EndermanPickUpBlockGoalMixin",
 		"EndermanPlaceBlockGoalMixin",
 		"BlockMixin",
-		"EntityPlayerActionPackMixin"
+		"EntityPlayerActionPackMixin",
+		"AbstractFireBlockMixin",
+		"ArmorStandEntityAccessor"
 	],
 	"client": [
 		"client.InGameHudMixin",

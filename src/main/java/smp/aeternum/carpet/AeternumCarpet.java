@@ -54,6 +54,7 @@ import smp.aeternum.carpet.network.CarpetRulesNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.command.RulesCommand;
+import smp.aeternum.carpet.command.SitBehaviourCommand;
 import smp.aeternum.carpet.command.DimensionCommand;
 import smp.aeternum.carpet.command.CameraModeCommand;
 import smp.aeternum.carpet.command.HatCommand;
@@ -62,6 +63,7 @@ import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.FakePlayerReloadManager;
+import smp.aeternum.carpet.util.PlayerSitManager;
 import smp.aeternum.carpet.bot.ModScreenHandlers;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
@@ -102,7 +104,10 @@ public class AeternumCarpet implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server ->
 			CameraModeCommand.attachAfterModRegistration(server.getCommandManager().getDispatcher())
 		);
-		ServerLifecycleEvents.SERVER_STOPPING.register(FakePlayerReloadManager::onServerStopping);
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			FakePlayerReloadManager.onServerStopping(server);
+			PlayerSitManager.onServerStopping();
+		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
@@ -111,6 +116,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FakePlayerReloadManager::tick);
+		ServerTickEvents.END_SERVER_TICK.register(PlayerSitManager::tickServer);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -118,6 +124,7 @@ public class AeternumCarpet implements ModInitializer {
 			if (handler.player instanceof EntityPlayerMPFake bot) FakePlayerReloadManager.onFakePlayerJoin(bot);
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			PlayerSitManager.onPlayerDisconnect(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.onFakePlayerDisconnect(server);
 		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
@@ -163,6 +170,7 @@ public class AeternumCarpet implements ModInitializer {
 			CameraModeCommand.register(dispatcher);
 			HatCommand.register(dispatcher);
 			CarefulBreakCommand.register(dispatcher);
+			SitBehaviourCommand.register(dispatcher);
 		});
 	}
 

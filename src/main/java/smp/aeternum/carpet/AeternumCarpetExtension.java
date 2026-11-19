@@ -72,7 +72,11 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.carefulBreak.name", "Careful Break"),
             Map.entry("carpet.rule.carefulBreak.desc", "Enables /carefulbreak <off|sneak|always> so players can choose to collect mined block drops directly into their inventory."),
             Map.entry("carpet.rule.reloadFakePlayers.name", "Reload Fake Players"),
-            Map.entry("carpet.rule.reloadFakePlayers.desc", "Automatically respawns Carpet fake players and resumes their actions 20 ticks after server start.")
+            Map.entry("carpet.rule.reloadFakePlayers.desc", "Automatically respawns Carpet fake players and resumes their actions 20 ticks after server start."),
+            Map.entry("carpet.rule.playerSit.name", "Player Sit"),
+            Map.entry("carpet.rule.playerSit.desc", "Allows players to sit down after 3 quick sneaks in succession and enables /sitbehaviour clean."),
+            Map.entry("carpet.rule.oldFlintAndSteelBehavior.name", "Old Flint And Steel Behavior"),
+            Map.entry("carpet.rule.oldFlintAndSteelBehavior.desc", "Restores 1.12 flint and steel behavior so it can be used to update observers and BUDs.")
         );
     }
 }

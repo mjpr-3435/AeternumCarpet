@@ -13,12 +13,15 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.util.PlayerSitManager;
 
 @Mixin(ServerPlayerEntity.class)
 public class ServerPlayerEntityMixin {
     @Inject(method = "playerTick", at = @At("TAIL"))
     private void aeternum$allowSpectatorPortalTravel(CallbackInfo ci) {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
+        PlayerSitManager.onSneakChange(player, player.isSneaking());
+        PlayerSitManager.onPlayerTick(player);
         if (!AeternumCarpetSettings.spectatorPortalTravel || !player.isSpectator()) {
             return;
         }

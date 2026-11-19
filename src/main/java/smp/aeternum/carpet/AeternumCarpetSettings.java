@@ -91,4 +91,10 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean reloadFakePlayers = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE, RuleCategory.COMMAND})
+    public static boolean playerSit = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean oldFlintAndSteelBehavior = false;
+
 }
