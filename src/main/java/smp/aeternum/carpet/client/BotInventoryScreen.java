@@ -1,34 +1,42 @@
 package smp.aeternum.carpet.client;
 
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import smp.aeternum.carpet.bot.BotInventoryScreenHandler;
 import smp.aeternum.carpet.client.ui.AeternumTheme;
 
 /** Vanilla-styled player inventory screen for editing a Carpet fake player's equipment and inventory. */
 public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHandler> {
     private static final int HOTBAR_BTN_X = 86;
-    private static final int HOTBAR_BTN_Y = 58;
+    private static final int HOTBAR_BTN_Y = 50;
     private static final int HOTBAR_BTN_W = 9;
     private static final int HOTBAR_BTN_H = 12;
 
-    private static final int MODE_BTN_Y = 81;
-    private static final int MODE_BTN_H = 14;
+    private static final int MODE_BTN_Y = 64;
+    private static final int MODE_BTN_SIZE = 16;
+    private static final int MODE_BTN_GAP = 2;
+    private static final int MODE_BTN_X0 = 115;
+    private static final Identifier HEART_CONTAINER_TEX = Identifier.ofVanilla("hud/heart/container");
+    private static final Identifier HEART_FULL_TEX = Identifier.ofVanilla("hud/heart/full");
+    private static final ItemStack CREATIVE_ICON = new ItemStack(Items.GRASS_BLOCK);
+    private static final ItemStack SPECTATOR_ICON = new ItemStack(Items.ENDER_EYE);
     private static final String[] MODE_LABELS = {"Survival", "Creativo", "Espectador"};
-    private static final int[] MODE_X = {7, 60, 113};
-    private static final int[] MODE_W = {51, 51, 56};
 
     public BotInventoryScreen(BotInventoryScreenHandler handler, PlayerInventory inventory, Text title) {
         super(handler, inventory, title);
         this.backgroundWidth = 176;
-        this.backgroundHeight = 272;
+        this.backgroundHeight = 254;
         this.playerInventoryTitleX = 8;
-        this.playerInventoryTitleY = 178;
+        this.playerInventoryTitleY = 160;
     }
 
     @Override
@@ -60,9 +68,9 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
 
         // Bot name + offhand/main-hand labels
         String botName = AeternumTheme.ellipsize(this.textRenderer, this.title.getString(), 80);
-        c.drawText(this.textRenderer, botName, x + 86, y + 10, 0xFF404040, false);
-        c.drawText(this.textRenderer, "Offhand", x + 107, y + 31, 0xFF555555, false);
-        c.drawText(this.textRenderer, "Mano principal", x + 86, y + 48, 0xFF555555, false);
+        c.drawText(this.textRenderer, botName, x + 86, y + 8, 0xFF404040, false);
+        c.drawText(this.textRenderer, "Offhand", x + 107, y + 24, 0xFF555555, false);
+        c.drawText(this.textRenderer, "Mano principal", x + 86, y + 40, 0xFF555555, false);
 
         // Draw every 18x18 vanilla slot recess
         for (Slot slot : this.handler.slots) {
@@ -72,7 +80,7 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
         // Highlight active hotbar slot on bot's hotbar (handler slots 32..40)
         int selected = this.handler.getSelectedHotbarSlot();
         int activeSlotX = x + 8 + selected * 18 - 1;
-        int activeSlotY = y + 157 - 1;
+        int activeSlotY = y + 139 - 1;
         c.drawBorder(activeSlotX, activeSlotY, 18, 18, 0xFFFFCC33);
 
         // 1..9 Main-hand hotbar slot selector
@@ -88,28 +96,33 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
             c.drawText(this.textRenderer, num, bx + 2, by + 2, active ? 0xFF1A1A1A : 0xFFFFFFFF, false);
         }
 
-        // Bot gamemode selector (Survival | Creativo | Espectador)
+        // Bot gamemode exclusive-toggle icon buttons (Heart | Grass Block | Eye of Ender)
+        c.drawText(this.textRenderer, "Modo", x + 86, y + 68, 0xFF555555, false);
         int activeMode = this.handler.getGameModeCode();
         boolean canCreative = this.handler.canSetCreative();
         for (int i = 0; i < MODE_LABELS.length; i++) {
-            int bx = x + MODE_X[i];
+            int bx = x + MODE_BTN_X0 + i * (MODE_BTN_SIZE + MODE_BTN_GAP);
             int by = y + MODE_BTN_Y;
-            int bw = MODE_W[i];
             boolean enabled = (i != BotInventoryScreenHandler.MODE_CREATIVE) || canCreative;
             boolean active = (i == activeMode);
-            boolean hover = enabled && mouseX >= bx && mouseX < bx + bw && mouseY >= by && mouseY < by + MODE_BTN_H;
+            boolean hover = enabled && mouseX >= bx && mouseX < bx + MODE_BTN_SIZE && mouseY >= by && mouseY < by + MODE_BTN_SIZE;
             int bg = !enabled ? 0xFF6B6B6B : (active ? 0xFFE0A95B : (hover ? 0xFFAFAFAF : 0xFF8B8B8B));
             int border = !enabled ? 0xFF4A4A4A : (active ? 0xFF373737 : 0xFF555555);
-            int textColor = !enabled ? 0xFF9E9E9E : (active ? 0xFF1A1A1A : 0xFFFFFFFF);
-            c.fill(bx, by, bx + bw, by + MODE_BTN_H, bg);
-            c.drawBorder(bx, by, bw, MODE_BTN_H, border);
-            int tw = this.textRenderer.getWidth(MODE_LABELS[i]);
-            c.drawText(this.textRenderer, MODE_LABELS[i], bx + (bw - tw) / 2, by + 3, textColor, false);
+            c.fill(bx, by, bx + MODE_BTN_SIZE, by + MODE_BTN_SIZE, bg);
+            c.drawBorder(bx, by, MODE_BTN_SIZE, MODE_BTN_SIZE, border);
+            if (i == BotInventoryScreenHandler.MODE_SURVIVAL) {
+                c.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HEART_CONTAINER_TEX, bx + 3, by + 3, 9, 9);
+                c.drawGuiTexture(RenderPipelines.GUI_TEXTURED, HEART_FULL_TEX, bx + 3, by + 3, 9, 9);
+            } else if (i == BotInventoryScreenHandler.MODE_CREATIVE) {
+                c.drawItem(CREATIVE_ICON, bx, by);
+            } else {
+                c.drawItem(SPECTATOR_ICON, bx, by);
+            }
         }
 
         // Live 3D bot model looking at cursor
         LivingEntity bot = this.handler.getClientBot();
-        if (bot != null) {
+        if (bot != null && !bot.isRemoved()) {
             InventoryScreen.drawEntity(c, entX1, entY1, entX2, entY2, 30, 0.0625f, (float) mouseX, (float) mouseY, bot);
         }
     }
@@ -135,14 +148,16 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
                 }
             }
             int my = this.y + MODE_BTN_Y;
-            if (mouseY >= my && mouseY < my + MODE_BTN_H && this.client != null && this.client.interactionManager != null) {
+            if (mouseY >= my && mouseY < my + MODE_BTN_SIZE && this.client != null && this.client.interactionManager != null) {
                 for (int i = 0; i < MODE_LABELS.length; i++) {
-                    int bx = this.x + MODE_X[i];
-                    if (mouseX >= bx && mouseX < bx + MODE_W[i]) {
+                    int bx = this.x + MODE_BTN_X0 + i * (MODE_BTN_SIZE + MODE_BTN_GAP);
+                    if (mouseX >= bx && mouseX < bx + MODE_BTN_SIZE) {
                         if (i == BotInventoryScreenHandler.MODE_CREATIVE && !this.handler.canSetCreative()) {
                             return true;
                         }
-                        this.client.interactionManager.clickButton(this.handler.syncId, BotInventoryScreenHandler.MODE_BUTTON_BASE + i);
+                        if (i != this.handler.getGameModeCode()) {
+                            this.client.interactionManager.clickButton(this.handler.syncId, BotInventoryScreenHandler.MODE_BUTTON_BASE + i);
+                        }
                         return true;
                     }
                 }
@@ -155,12 +170,17 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         this.drawMouseoverTooltip(context, mouseX, mouseY);
-        if (!this.handler.canSetCreative()) {
-            int cx = this.x + MODE_X[BotInventoryScreenHandler.MODE_CREATIVE];
-            int cy = this.y + MODE_BTN_Y;
-            int cw = MODE_W[BotInventoryScreenHandler.MODE_CREATIVE];
-            if (mouseX >= cx && mouseX < cx + cw && mouseY >= cy && mouseY < cy + MODE_BTN_H) {
-                context.drawTooltip(this.textRenderer, Text.literal("Solo disponible para OPs"), mouseX, mouseY);
+        int my = this.y + MODE_BTN_Y;
+        if (mouseY >= my && mouseY < my + MODE_BTN_SIZE) {
+            for (int i = 0; i < MODE_LABELS.length; i++) {
+                int bx = this.x + MODE_BTN_X0 + i * (MODE_BTN_SIZE + MODE_BTN_GAP);
+                if (mouseX >= bx && mouseX < bx + MODE_BTN_SIZE) {
+                    String tip = (i == BotInventoryScreenHandler.MODE_CREATIVE && !this.handler.canSetCreative())
+                        ? "Creativo (Solo OPs)"
+                        : MODE_LABELS[i];
+                    context.drawTooltip(this.textRenderer, Text.literal(tip), mouseX, mouseY);
+                    break;
+                }
             }
         }
     }

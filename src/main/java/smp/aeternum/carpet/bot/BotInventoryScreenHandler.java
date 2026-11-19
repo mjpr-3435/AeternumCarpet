@@ -33,12 +33,15 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
 
     private final Inventory botInventory;
     private final EntityPlayerMPFake serverBot;
-    private final LivingEntity clientBot;
+    private final int botEntityId;
+    private final net.minecraft.world.World clientWorld;
+    private LivingEntity clientBot;
     private final PropertyDelegate properties;
 
     /** Client constructor invoked via ExtendedScreenHandlerType. */
     public BotInventoryScreenHandler(int syncId, PlayerInventory viewerInventory, BotOpenData data) {
         this(syncId, viewerInventory, new SimpleInventory(BOT_SLOT_COUNT), null,
+            data.entityId(), viewerInventory.player != null ? viewerInventory.player.getWorld() : null,
             resolveClientEntity(viewerInventory, data.entityId()), new ArrayPropertyDelegate(3));
         this.properties.set(0, Math.max(0, Math.min(8, data.selectedSlot())));
         this.properties.set(1, data.gameModeCode());
@@ -47,7 +50,7 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
 
     /** Server constructor backed by the live fake player. */
     public BotInventoryScreenHandler(int syncId, PlayerInventory viewerInventory, EntityPlayerMPFake bot, boolean canSetCreative) {
-        this(syncId, viewerInventory, new BotInventoryAdapter(bot), bot, bot, createServerProperties(bot, canSetCreative));
+        this(syncId, viewerInventory, new BotInventoryAdapter(bot), bot, bot.getId(), null, bot, createServerProperties(bot, canSetCreative));
     }
 
     private BotInventoryScreenHandler(
@@ -55,12 +58,16 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
         PlayerInventory viewerInventory,
         Inventory botInventory,
         EntityPlayerMPFake serverBot,
+        int botEntityId,
+        net.minecraft.world.World clientWorld,
         LivingEntity clientBot,
         PropertyDelegate properties
     ) {
         super(ModScreenHandlers.BOT_INVENTORY, syncId);
         this.botInventory = botInventory;
         this.serverBot = serverBot;
+        this.botEntityId = botEntityId;
+        this.clientWorld = clientWorld;
         this.clientBot = clientBot;
         this.properties = properties;
         this.addProperties(properties);
@@ -77,7 +84,7 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
         }
 
         // Offhand (slot 4 -> bot inventory 40)
-        this.addSlot(new Slot(botInventory, PlayerInventory.OFF_HAND_SLOT, 86, 26) {
+        this.addSlot(new Slot(botInventory, PlayerInventory.OFF_HAND_SLOT, 86, 20) {
             @Override
             public Identifier getBackgroundSprite() {
                 return PlayerScreenHandler.EMPTY_OFF_HAND_SLOT_TEXTURE;
@@ -87,25 +94,25 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
         // Bot main inventory (slots 5..31 -> bot inventory 9..35)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(botInventory, 9 + row * 9 + col, 8 + col * 18, 100 + row * 18));
+                this.addSlot(new Slot(botInventory, 9 + row * 9 + col, 8 + col * 18, 82 + row * 18));
             }
         }
 
         // Bot hotbar (slots 32..40 -> bot inventory 0..8)
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(botInventory, col, 8 + col * 18, 157));
+            this.addSlot(new Slot(botInventory, col, 8 + col * 18, 139));
         }
 
         // Viewer main inventory (slots 41..67)
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(viewerInventory, 9 + row * 9 + col, 8 + col * 18, 189 + row * 18));
+                this.addSlot(new Slot(viewerInventory, 9 + row * 9 + col, 8 + col * 18, 171 + row * 18));
             }
         }
 
         // Viewer hotbar (slots 68..76)
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(viewerInventory, col, 8 + col * 18, 247));
+            this.addSlot(new Slot(viewerInventory, col, 8 + col * 18, 229));
         }
     }
 
@@ -164,6 +171,12 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
     }
 
     public LivingEntity getClientBot() {
+        if ((clientBot == null || clientBot.isRemoved()) && clientWorld != null) {
+            Entity entity = clientWorld.getEntityById(botEntityId);
+            if (entity instanceof LivingEntity living) {
+                clientBot = living;
+            }
+        }
         return clientBot;
     }
 
