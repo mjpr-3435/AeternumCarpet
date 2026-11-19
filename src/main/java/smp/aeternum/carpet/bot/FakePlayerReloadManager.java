@@ -139,7 +139,7 @@ public final class FakePlayerReloadManager {
 
         if (saveDebounceTicks > 0 && --saveDebounceTicks == 0) {
             if (!stopping && AeternumCarpetSettings.reloadFakePlayers && pendingAttach.isEmpty()) {
-                saveCurrentBots(server);
+                saveCurrentBots(server, false);
             }
         }
     }
@@ -147,7 +147,7 @@ public final class FakePlayerReloadManager {
     public static void onServerStopping(MinecraftServer server) {
         stopping = true;
         if (AeternumCarpetSettings.reloadFakePlayers && reloadTicksRemaining <= 0 && pendingAttach.isEmpty()) {
-            saveCurrentBots(server);
+            saveCurrentBots(server, true);
         }
     }
 
@@ -186,7 +186,7 @@ public final class FakePlayerReloadManager {
     }
 
     @SuppressWarnings("unchecked")
-    private static void saveCurrentBots(MinecraftServer server) {
+    private static void saveCurrentBots(MinecraftServer server, boolean ignoreEmpty) {
         if (file == null) return;
         List<SavedBot> snapshot = new ArrayList<>();
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
@@ -228,12 +228,15 @@ public final class FakePlayerReloadManager {
             snapshot.add(entry);
         }
 
+        if (ignoreEmpty && snapshot.isEmpty()) return;
+
         String json = GSON.toJson(snapshot);
         if (json.equals(lastSavedJson)) return;
         lastSavedJson = json;
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, json);
+            AeternumCarpet.LOGGER.info("Saved {} fake player(s) to reload file", snapshot.size());
         } catch (IOException e) {
             AeternumCarpet.LOGGER.error("Could not save fake players", e);
         }
