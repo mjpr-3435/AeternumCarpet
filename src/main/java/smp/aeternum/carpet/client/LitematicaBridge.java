@@ -200,6 +200,11 @@ public final class LitematicaBridge {
         Object placementManager = dataManagerCls.getMethod("getSchematicPlacementManager").invoke(null);
         Method addMethod = placementManager.getClass().getMethod("addSchematicPlacement", placementCls, boolean.class);
         addMethod.invoke(placementManager, placement, true);
+        try {
+            placementManager.getClass().getMethod("markAllPlacementsOfSchematicForRebuild", schematic.getClass())
+                .invoke(placementManager, schematic);
+        } catch (Throwable ignored) {
+        }
         return true;
     }
 
@@ -233,7 +238,7 @@ public final class LitematicaBridge {
             Class<?>[] params = m.getParameterTypes();
             if (params.length == 5 && params[1] == BlockPos.class && params[2] == String.class
                 && params[3] == boolean.class && params[4] == boolean.class) {
-                return m.invoke(null, schematic, origin, "Aeternum: " + name, true, false);
+                return m.invoke(null, schematic, origin, "Aeternum: " + name, true, true);
             }
             if (params.length == 4 && params[1] == BlockPos.class && params[2] == String.class
                 && params[3] == boolean.class) {
