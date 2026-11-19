@@ -42,7 +42,7 @@ public final class JoinMotd {
             .withHoverEvent(new HoverEvent.ShowText(Text.literal("Conectar a " + name))));
     }
 
-    private static String activeTime() {
+    public static String activeTime() {
         LocalDate today = LocalDate.now();
         int years = today.getYear() - FOUNDATION_DATE.getYear();
         LocalDate anniversary = FOUNDATION_DATE.plusYears(years);

@@ -1,8 +1,4 @@
 {
   "category.aeternum_carpet": "Aeternum",
-  "key.aeternum_carpet.blockers": "Abrir /blockers",
-  "key.aeternum_carpet.guide": "Abrir /guide",
-  "key.aeternum_carpet.materials": "Abrir /projects",
-  "key.aeternum_carpet.exploration": "Abrir /exploration map",
-  "key.aeternum_carpet.actions": "Abrir /actions"
+  "key.aeternum_carpet.quick_dock": "Abrir Aeternum Dock (MOTD y atajos)"
 }

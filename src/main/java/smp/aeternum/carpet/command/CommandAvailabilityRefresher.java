@@ -3,6 +3,7 @@ package smp.aeternum.carpet.command;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.network.ScreenOpenNetworking;
 
 public final class CommandAvailabilityRefresher {
     private static boolean lastTodoEnabled;
@@ -73,5 +74,6 @@ public final class CommandAvailabilityRefresher {
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }
+        ScreenOpenNetworking.broadcastDockState(server);
     }
 }

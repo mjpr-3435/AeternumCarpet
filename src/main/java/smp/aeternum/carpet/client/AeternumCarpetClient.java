@@ -14,6 +14,7 @@ import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
 import smp.aeternum.carpet.network.CarpetRulesDataPayload;
+import smp.aeternum.carpet.network.DockStatePayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
@@ -64,11 +65,15 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ProjectDownloadDataPayload.ID, (payload, context) -> context.client().execute(() ->
             LitematicaBridge.handleDownload(payload)
         ));
+        ClientPlayNetworking.registerGlobalReceiver(DockStatePayload.ID, (payload, context) -> context.client().execute(() ->
+            AeternumDockOverlay.updateState(payload.json())
+        ));
     }
 
     private static void clearClientSession() {
         BlockerGuide.clear();
         BlockerSelectionStore.clearAll();
         MaterialsHudOverlay.clear();
+        AeternumDockOverlay.clearState();
     }
 }

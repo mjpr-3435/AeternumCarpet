@@ -98,6 +98,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			if (AeternumCarpetSettings.joinMotd) JoinMotd.send(handler.player);
+			ScreenOpenNetworking.sendDockState(handler.player);
 		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
