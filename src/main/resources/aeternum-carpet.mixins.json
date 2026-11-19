@@ -14,9 +14,7 @@
 		"ExplosionImplMixin",
 		"PistonHandlerMixin",
 		"HopperBlockEntityMixin",
-		"DecoratedPotBlockMixin",
-		"ServerRecipeManagerMixin",
-		"RecipeCacheMixin"
+		"DecoratedPotBlockMixin"
 	],
 	"client": [
 		"client.InGameHudMixin"

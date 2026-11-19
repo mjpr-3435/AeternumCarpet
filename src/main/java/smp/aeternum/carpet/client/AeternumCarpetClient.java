@@ -12,6 +12,7 @@ import smp.aeternum.carpet.network.ExplorationMapStatusPayload;
 import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
+import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
 import smp.aeternum.carpet.network.CarpetRulesDataPayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
@@ -60,6 +61,9 @@ public final class AeternumCarpetClient implements ClientModInitializer {
             if (context.client().currentScreen instanceof CarpetRulesScreen screen) screen.replaceData(payload.json(), payload.statusMessage(), payload.statusError());
             else if (payload.openScreen()) context.client().setScreen(new CarpetRulesScreen(payload.json()));
         }));
+        ClientPlayNetworking.registerGlobalReceiver(ProjectDownloadDataPayload.ID, (payload, context) -> context.client().execute(() ->
+            LitematicaBridge.handleDownload(payload)
+        ));
     }
 
     private static void clearClientSession() {

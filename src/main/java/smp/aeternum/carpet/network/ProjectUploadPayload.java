@@ -1,0 +1,49 @@
+package smp.aeternum.carpet.network;
+
+import net.minecraft.network.RegistryByteBuf;
+import net.minecraft.network.codec.PacketCodec;
+import net.minecraft.network.packet.CustomPayload;
+import smp.aeternum.carpet.AeternumCarpet;
+
+public record ProjectUploadPayload(
+	String name,
+	byte[] bytes,
+	boolean hasPlacement,
+	String dimension,
+	int x,
+	int y,
+	int z,
+	String rotation,
+	String mirror
+) implements CustomPayload {
+	public static final Id<ProjectUploadPayload> ID = new Id<>(AeternumCarpet.id("project_upload"));
+	public static final PacketCodec<RegistryByteBuf, ProjectUploadPayload> CODEC = PacketCodec.of(
+		(p, b) -> {
+			b.writeString(p.name, 64);
+			b.writeByteArray(p.bytes);
+			b.writeBoolean(p.hasPlacement);
+			b.writeString(p.dimension, 128);
+			b.writeInt(p.x);
+			b.writeInt(p.y);
+			b.writeInt(p.z);
+			b.writeString(p.rotation, 32);
+			b.writeString(p.mirror, 32);
+		},
+		b -> new ProjectUploadPayload(
+			b.readString(64),
+			b.readByteArray(1_048_576),
+			b.readBoolean(),
+			b.readString(128),
+			b.readInt(),
+			b.readInt(),
+			b.readInt(),
+			b.readString(32),
+			b.readString(32)
+		)
+	);
+
+	@Override
+	public Id<? extends CustomPayload> getId() {
+		return ID;
+	}
+}

@@ -52,7 +52,7 @@ public final class MaterialsHudOverlay {
 		if (lists == null) return;
 		for (MaterialList list : lists)
 			for (MaterialEntry entry : list.entries)
-				if (player.equals(entry.claimedBy) && entry.available < entry.total)
+				if (player.equals(entry.claimedBy) && entry.missing() > 0)
 					claimedEntries.add(entry);
 		claimedEntries.sort((a, b) -> Integer.compare(b.total, a.total));
 	}
@@ -112,8 +112,9 @@ public final class MaterialsHudOverlay {
 
 			AeternumTheme.drawItemIcon(context, entry.itemId, x + 5, rowY + 1);
 
-			int missing = Math.max(0, entry.total - entry.available);
-			float ratio = entry.total <= 0 ? 1f : Math.min(1f, (float) entry.available / (float) entry.total);
+			int missing = entry.missing();
+			int have = Math.min(entry.total, entry.placed + entry.available);
+			float ratio = entry.total <= 0 ? 1f : Math.min(1f, (float) have / (float) entry.total);
 			String missingTxt = formatStack(missing);
 			context.drawText(client.textRenderer, missingTxt, x + 26, rowY + 3, AeternumTheme.TEXT_PRIMARY, false);
 			AeternumTheme.drawProgressBar(context, x + 26, rowY + 14, w - 33, 3, ratio, AeternumTheme.ACCENT_CYAN);

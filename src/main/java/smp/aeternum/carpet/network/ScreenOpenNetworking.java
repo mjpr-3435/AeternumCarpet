@@ -15,7 +15,7 @@ public final class ScreenOpenNetworking {
             switch (payload.screen()) {
                 case "blockers" -> { if (AeternumCarpetSettings.commandBlockers) BlockerNetworking.sendSnapshot(player, true); }
                 case "guide" -> { if (AeternumCarpetSettings.commandGuide) GuideNetworking.send(player, true); }
-                case "materials" -> { if (AeternumCarpetSettings.commandMaterials) MaterialsNetworking.send(player); }
+                case "materials", "projects" -> { if (AeternumCarpetSettings.commandProjects) MaterialsNetworking.send(player); }
                 case "exploration" -> { if (AeternumCarpetSettings.explorationManager) ExplorationMapNetworking.open(player); }
                 case "actions" -> { if (AeternumCarpetSettings.commandActions) CommandPacksNetworking.sendSnapshot(player, true); }
             }

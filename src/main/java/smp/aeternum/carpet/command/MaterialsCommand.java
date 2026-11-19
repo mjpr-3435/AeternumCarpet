@@ -22,9 +22,9 @@ public final class MaterialsCommand {
 	private MaterialsCommand() {}
 
 	public static void register(CommandDispatcher<ServerCommandSource> d) {
-		d.register(literal("materials")
-			.requires(s -> AeternumCarpetSettings.commandMaterials)
-			.executes(c -> { try { MaterialsNetworking.send(c.getSource().getPlayerOrThrow()); return 1; } catch (Exception e) { c.getSource().sendError(Text.literal("La lista de materiales se abre en el juego.")); return 0; } })
+		d.register(literal("projects")
+			.requires(s -> AeternumCarpetSettings.commandProjects)
+			.executes(c -> { try { MaterialsNetworking.send(c.getSource().getPlayerOrThrow()); return 1; } catch (Exception e) { c.getSource().sendError(Text.literal("La lista de proyectos se abre en el juego.")); return 0; } })
 			.then(literal("storage")
 				.requires(s -> s.hasPermissionLevel(2))
 				.then(literal("list").executes(MaterialsCommand::listRegions))
@@ -64,7 +64,7 @@ public final class MaterialsCommand {
 			for (int i = 0; i < regions.size(); i++) {
 				var region = regions.get(i);
 				final int idx = i;
-				String delCmd = "/materials storage del " + list.name + " " + (idx + 1);
+				String delCmd = "/projects storage del " + list.name + " " + (idx + 1);
 				c.getSource().sendFeedback(() -> Text.empty()
 					.append(Text.literal("[x]").setStyle(Style.EMPTY.withColor(Formatting.RED)
 						.withClickEvent(new ClickEvent.RunCommand(delCmd))

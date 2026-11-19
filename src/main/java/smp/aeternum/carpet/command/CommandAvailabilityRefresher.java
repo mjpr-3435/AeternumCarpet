@@ -16,6 +16,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastActionsEnabled;
     private static boolean lastJoinMotdEnabled;
     private static boolean lastGuideEnabled;
+    private static boolean lastProjectsEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -32,6 +33,7 @@ public final class CommandAvailabilityRefresher {
         lastActionsEnabled = AeternumCarpetSettings.commandActions;
         lastJoinMotdEnabled = AeternumCarpetSettings.joinMotd;
         lastGuideEnabled = AeternumCarpetSettings.commandGuide;
+        lastProjectsEnabled = AeternumCarpetSettings.commandProjects;
     }
 
     public static void tick(MinecraftServer server) {
@@ -46,12 +48,13 @@ public final class CommandAvailabilityRefresher {
         boolean actionsEnabled = AeternumCarpetSettings.commandActions;
         boolean joinMotdEnabled = AeternumCarpetSettings.joinMotd;
         boolean guideEnabled = AeternumCarpetSettings.commandGuide;
+        boolean projectsEnabled = AeternumCarpetSettings.commandProjects;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && guideEnabled == lastGuideEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled) {
             return;
         }
 
@@ -66,6 +69,7 @@ public final class CommandAvailabilityRefresher {
         lastActionsEnabled = actionsEnabled;
         lastJoinMotdEnabled = joinMotdEnabled;
         lastGuideEnabled = guideEnabled;
+        lastProjectsEnabled = projectsEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }
