@@ -2,24 +2,27 @@ package smp.aeternum.carpet.client;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import smp.aeternum.carpet.blockers.BlockerScan;
-
 import java.lang.reflect.Type;
 import java.util.Comparator;
 import java.util.List;
-import java.util.ArrayList;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.text.Text;
+import smp.aeternum.carpet.blockers.BlockerScan;
+import smp.aeternum.carpet.client.ui.AeternumTheme;
+import smp.aeternum.carpet.client.ui.UiScreen;
 
 /** Landing page: scans first, then an explicit detail screen. */
-public final class BlockersScreen extends Screen {
+public final class BlockersScreen extends UiScreen {
     private static final Gson GSON = new Gson();
     private static final Type SCANS = new TypeToken<List<BlockerScan>>() {}.getType();
+    private static final int CARD_H = 40;
+    private static final int CARD_GAP = 4;
+    private static final int ROW_STRIDE = CARD_H + CARD_GAP;
+
     private List<BlockerScan> scans;
     private boolean canDelete;
-    private final List<ButtonWidget> deleteButtons = new ArrayList<>();
+    private double scroll, targetScroll;
+    private boolean draggingScrollbar;
 
     public BlockersScreen(String json, boolean canDelete) {
         super(Text.literal("Blocker scans"));
@@ -30,84 +33,187 @@ public final class BlockersScreen extends Screen {
     public void replaceData(String json, boolean canDelete) {
         this.canDelete = canDelete;
         scans = decode(json);
-        reloadDeleteButtons();
+    }
+
+    private int listTop() { return panelY + 54; }
+    private int listBottom() { return panelY + panelH - 16; }
+
+    private int maxScrollPx() {
+        int contentH = scans.size() * ROW_STRIDE - CARD_GAP;
+        int viewH = listBottom() - listTop();
+        return Math.max(0, contentH - viewH);
     }
 
     @Override
-    protected void init() {
-        createDeleteButtons();
-    }
+    public void render(DrawContext c, int mx, int my, float delta) {
+        computePanel(Math.min(640, (int) (width * 0.74)), Math.min(410, (int) (height * 0.76)));
+        int maxScroll = maxScrollPx();
+        targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
+        scroll += (targetScroll - scroll) * Math.min(1.0, delta * 0.45 + 0.25);
+        scroll = Math.max(0, Math.min(scroll, maxScroll));
 
-    private void reloadDeleteButtons() {
-        clearChildren();
-        deleteButtons.clear();
-        createDeleteButtons();
-    }
+        renderBackground(c, mx, my, delta);
+        drawWindowFrame(c, "BLOCKER SCANS", "Escoge un análisis para ver e inspeccionar sus bloqueadores");
+        drawCloseButton(c, mx, my);
 
-    private void createDeleteButtons() {
-        int count = Math.min(14, scans.size());
-        for (int i = 0; i < count; i++) {
-            String id = scans.get(i).id;
-            ButtonWidget button = ButtonWidget.builder(Text.literal("X"), ignored -> BlockerDeleteRequest.send(id))
-                .dimensions(0, 0, 38, 18).build();
-            deleteButtons.add(button);
-        }
-    }
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = lBottom - lTop;
+        int cardX = panelX + 12;
+        int cardW = panelW - 30;
 
-    @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
-        int panelW = Math.max(480, (int) (width * 0.70)), panelH = Math.max(320, (int) (height * 0.70));
-        panelW = Math.min(panelW, width - 32);
-        panelH = Math.min(panelH, height - 32);
-        int left = (width - panelW) / 2, top = (height - panelH) / 2;
-        context.fill(left, top, left + panelW, top + panelH, 0xE0101010);
-        context.drawBorder(left, top, panelW, panelH, 0xFF909090);
-        context.fill(left + 1, top + 1, left + panelW - 1, top + 43, 0xCC242424);
-        context.drawTextWithShadow(textRenderer, "BLOCKER SCANS", left + 14, top + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer, "Escoge un análisis para ver sus bloqueadores", left + 14, top + 27, 0xFFAAAAAA);
-        context.drawTextWithShadow(textRenderer, "×", left + panelW - 18, top + 10, 0xFFFFFFFF);
         if (scans.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, "No hay análisis guardados.", width / 2, top + panelH / 2 - 8, 0xFFAAAAAA);
-            context.drawCenteredTextWithShadow(textRenderer, "Usa /blockers <coord1> <coord2> <nombre>.", width / 2, top + panelH / 2 + 8, 0xFF888888);
+            c.drawCenteredTextWithShadow(textRenderer, "No hay análisis guardados.", width / 2, lTop + viewH / 2 - 12, AeternumTheme.TEXT_SECONDARY);
+            c.drawCenteredTextWithShadow(textRenderer, "Usa /blockers <coord1> <coord2> <nombre>", width / 2, lTop + viewH / 2 + 4, AeternumTheme.TEXT_MUTED);
+            super.render(c, mx, my, delta);
             return;
         }
-        int rowY = top + 52;
-        for (int i = 0; i < Math.min(14, scans.size()); i++, rowY += 20) {
+
+        c.enableScissor(panelX + 6, lTop, panelX + panelW - 10, lBottom);
+        for (int i = 0; i < scans.size(); i++) {
+            int cardY = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
+            if (cardY + CARD_H < lTop || cardY > lBottom) continue;
+
             BlockerScan scan = scans.get(i);
-            boolean hover = mouseX >= left + 9 && mouseX < left + panelW - 9 && mouseY >= rowY - 2 && mouseY < rowY + 16;
-            if (i % 2 == 0) context.fill(left + 9, rowY - 2, left + panelW - 9, rowY + 16, 0x40202020);
-            if (hover) context.fill(left + 8, rowY - 2, left + panelW - 8, rowY + 16, 0xFF30465A);
-            String state = scan.complete ? "Terminado" : scan.scannedChunks + "/" + scan.totalChunks + " chunks";
-            context.drawTextWithShadow(textRenderer, scan.id, left + 14, rowY + 1, 0xFFFFFFFF);
+            int delX = cardX + cardW - 34;
+            int delY = cardY + (CARD_H - 20) / 2;
+            boolean inArea = my >= lTop && my < lBottom;
+            boolean overCard = inArea && mx >= cardX && mx < cardX + cardW && my >= cardY && my < cardY + CARD_H;
+            boolean overDel = inArea && mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20;
+
+            int bg = (overCard && !overDel) ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG;
+            int border = (overCard && !overDel) ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE;
+            AeternumTheme.drawCard(c, cardX, cardY, cardW, CARD_H, bg, border);
+
+            String title = AeternumTheme.ellipsize(textRenderer, scan.id, cardW - 220);
+            c.drawTextWithShadow(textRenderer, title, cardX + 12, cardY + 7, AeternumTheme.TEXT_PRIMARY);
+
+            String shortDim = scan.dimension == null ? "" : scan.dimension.replace("minecraft:", "");
+            int badgeX = cardX + 16 + textRenderer.getWidth(title);
+            AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, shortDim, 0xFF1E2436, AeternumTheme.ACCENT_BLUE);
+
             int matches = scan.matchedEntries > 0 ? scan.matchedEntries : scan.entries.size();
             String results = scan.entriesTruncated ? matches + "+ bloqueadores" : matches + " bloqueadores";
-            context.drawTextWithShadow(textRenderer, results + "  ·  " + state, left + 170, rowY + 1, 0xFFB0B0B0);
-            ButtonWidget delete = deleteButtons.get(i);
-            delete.setPosition(left + panelW - 54, rowY - 2);
-            delete.active = canDelete && hasShiftDown();
-            delete.render(context, mouseX, mouseY, delta);
+            c.drawText(textRenderer, results, cardX + 12, cardY + 24, matches > 0 ? AeternumTheme.ACCENT_GOLD : AeternumTheme.TEXT_SECONDARY, false);
+
+            if (scan.complete) {
+                String doneLabel = "Terminado";
+                int bw = textRenderer.getWidth(doneLabel) + 10;
+                AeternumTheme.drawBadge(c, textRenderer, delX - bw - 10, cardY + 13, doneLabel, 0xFF152920, AeternumTheme.ACCENT_GREEN);
+            } else {
+                String prog = scan.scannedChunks + "/" + scan.totalChunks + " chunks";
+                int pw = textRenderer.getWidth(prog);
+                c.drawText(textRenderer, prog, delX - pw - 12, cardY + 8, AeternumTheme.ACCENT_CYAN, false);
+                float ratio = scan.totalChunks <= 0 ? 0f : (float) scan.scannedChunks / (float) scan.totalChunks;
+                AeternumTheme.drawProgressBar(c, delX - 112, cardY + 24, 100, 5, ratio, AeternumTheme.ACCENT_CYAN);
+            }
+
+            boolean shift = canDelete && hasShiftDown();
+            int delBg = overDel ? (shift ? 0xFF5A2229 : 0xFF282D3B) : (shift ? 0xFF3A1A1F : 0xFF161A24);
+            int delBorder = shift ? AeternumTheme.withAlpha(AeternumTheme.ACCENT_RED, 0xB0) : AeternumTheme.BORDER_SUBTLE;
+            int delFg = shift ? 0xFFFCA5A5 : AeternumTheme.TEXT_MUTED;
+            AeternumTheme.drawCard(c, delX, delY, 26, 20, delBg, delBorder);
+            c.drawTextWithShadow(textRenderer, "\u00D7", delX + 10, delY + 6, delFg);
         }
-        if (mouseX >= left + panelW - 60 && mouseY >= top + 52 && mouseY < top + 332) {
-            context.drawTooltip(textRenderer, Text.literal(canDelete ? "Mantén Shift y haz clic para borrar el scan." : "Solo operadores pueden borrar scans."), mouseX, mouseY);
+        c.disableScissor();
+
+        AeternumTheme.drawScrollbar(
+            c, panelX + panelW - 12, lTop, lBottom,
+            scans.size() * ROW_STRIDE - CARD_GAP, viewH, scroll, draggingScrollbar
+        );
+
+        super.render(c, mx, my, delta);
+
+        if (isCloseButtonHit(mx, my)) {
+            c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+        } else if (my >= lTop && my < lBottom) {
+            for (int i = 0; i < scans.size(); i++) {
+                int cardY = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
+                int delX = cardX + cardW - 34;
+                int delY = cardY + (CARD_H - 20) / 2;
+                if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+                    c.drawTooltip(textRenderer, Text.literal(canDelete ? (hasShiftDown() ? "Eliminar scan" : "Mantén Shift para borrar el scan") : "Solo operadores pueden borrar scans"), mx, my);
+                    break;
+                }
+            }
         }
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int panelW = Math.max(480, (int) (width * 0.70)), panelH = Math.max(320, (int) (height * 0.70));
-        panelW = Math.min(panelW, width - 32);
-        panelH = Math.min(panelH, height - 32);
-        int left = (width - panelW) / 2, top = (height - panelH) / 2;
-        if (button == 0 && mouseX >= left + panelW - 25 && mouseY >= top && mouseY < top + 30) { close(); return true; }
-        int index = (int) ((mouseY - (top + 52)) / 20);
-        if (button == 0 && index >= 0 && index < Math.min(14, scans.size())) {
-            BlockerScan scan = scans.get(index);
-            if (mouseX >= left + panelW - 60) return deleteButtons.get(index).mouseClicked(mouseX, mouseY, button);
-            client.setScreen(new BlockerScanScreen(this, scan));
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 0 && isCloseButtonHit(mx, my)) {
+            close();
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (super.mouseClicked(mx, my, button)) return true;
+        if (button != 0) return false;
+
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = lBottom - lTop;
+        int maxScroll = maxScrollPx();
+        if (maxScroll > 0 && mx >= panelX + panelW - 16 && mx <= panelX + panelW - 4 && my >= lTop && my <= lBottom) {
+            draggingScrollbar = true;
+            updateScrollFromMouse(my, lTop, viewH, maxScroll);
+            return true;
+        }
+
+        int cardX = panelX + 12;
+        int cardW = panelW - 30;
+        if (my >= lTop && my < lBottom && mx >= cardX && mx < cardX + cardW) {
+            int relY = (int) (my - lTop + scroll);
+            int idx = relY / ROW_STRIDE;
+            if (idx >= 0 && idx < scans.size() && (relY % ROW_STRIDE) < CARD_H) {
+                int cardY = lTop + idx * ROW_STRIDE - (int) Math.round(scroll);
+                int delX = cardX + cardW - 34;
+                int delY = cardY + (CARD_H - 20) / 2;
+                BlockerScan scan = scans.get(idx);
+                if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+                    if (canDelete && hasShiftDown()) {
+                        BlockerDeleteRequest.send(scan.id);
+                    }
+                    return true;
+                }
+                client.setScreen(new BlockerScanScreen(this, scan));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (draggingScrollbar && button == 0) {
+            updateScrollFromMouse(my, listTop(), listBottom() - listTop(), maxScrollPx());
+            return true;
+        }
+        return super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int button) {
+        if (button == 0 && draggingScrollbar) {
+            draggingScrollbar = false;
+            return true;
+        }
+        return super.mouseReleased(mx, my, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double h, double v) {
+        if (v != 0 && maxScrollPx() > 0) {
+            targetScroll = Math.max(0, Math.min(maxScrollPx(), targetScroll - v * 28));
+            return true;
+        }
+        return super.mouseScrolled(mx, my, h, v);
+    }
+
+    private void updateScrollFromMouse(double my, int top, int viewH, int maxScroll) {
+        int totalH = scans.size() * ROW_STRIDE - CARD_GAP;
+        int barH = Math.max(22, viewH * viewH / Math.max(1, totalH));
+        double frac = (my - top - barH / 2.0) / Math.max(1.0, viewH - barH);
+        targetScroll = Math.max(0, Math.min(1, frac)) * maxScroll;
+        scroll = targetScroll;
     }
 
     private static List<BlockerScan> decode(String json) {

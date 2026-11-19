@@ -9,10 +9,7 @@ import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import smp.aeternum.carpet.client.ui.AeternumTheme;
 import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 
@@ -93,28 +90,33 @@ public final class MaterialsHudOverlay {
 		if (client.player == null || claimedEntries.isEmpty()) return;
 
 		int shown = Math.min(claimedEntries.size(), 7);
-		int w = 103, h = 16 + shown * 18;
-		int[] o = hudPosition.box(client.getWindow().getScaledWidth(), client.getWindow().getScaledHeight(), w, h, 4);
-		int x = o[0] + 4, y = o[1] + 4;
+		int w = 136;
+		int h = 22 + shown * 20;
+		int[] o = hudPosition.box(client.getWindow().getScaledWidth(), client.getWindow().getScaledHeight(), w, h, 6);
+		int x = o[0];
+		int y = o[1];
 
-		context.fill(x - 4, y - 4, x + 99, y + 12 + shown * 18, 0x80000000);
-		context.drawText(client.textRenderer, "Item", x, y + 2, 0xFFFFAA00, false);
-		context.drawText(client.textRenderer, "Falta", x + 30, y + 2, 0xFFFFAA00, false);
+		context.fill(x, y, x + w, y + h, 0xCC0D0D10);
+		context.drawBorder(x, y, w, h, AeternumTheme.BORDER_BRIGHT);
+		context.fill(x + 1, y + 1, x + w - 1, y + 2, AeternumTheme.ACCENT_GOLD);
 
-		y += 14;
+		context.drawText(client.textRenderer, "MATERIALES", x + 6, y + 6, AeternumTheme.ACCENT_GOLD, false);
+		String countStr = claimedEntries.size() + "";
+		context.drawText(client.textRenderer, countStr, x + w - 6 - client.textRenderer.getWidth(countStr), y + 6, AeternumTheme.TEXT_MUTED, false);
+
+		int listY = y + 19;
 		for (int i = 0; i < shown; i++) {
 			MaterialEntry entry = claimedEntries.get(i);
-			int rowY = y + i * 18;
+			int rowY = listY + i * 20;
+			if (i % 2 == 0) context.fill(x + 2, rowY, x + w - 2, rowY + 19, 0x381E1E24);
 
-			ItemStack icon = ItemStack.EMPTY;
-			if (entry.itemId != null && !entry.itemId.isEmpty()) {
-				var item = Registries.ITEM.get(Identifier.of(entry.itemId));
-				if (item != Items.AIR) icon = new ItemStack(item);
-			}
-			if (!icon.isEmpty()) context.drawItem(icon, x, rowY);
+			AeternumTheme.drawItemIcon(context, entry.itemId, x + 5, rowY + 1);
 
 			int missing = Math.max(0, entry.total - entry.available);
-			context.drawText(client.textRenderer, formatStack(missing), x + 30, rowY + 5, 0xFFAAAAAA, false);
+			float ratio = entry.total <= 0 ? 1f : Math.min(1f, (float) entry.available / (float) entry.total);
+			String missingTxt = formatStack(missing);
+			context.drawText(client.textRenderer, missingTxt, x + 26, rowY + 3, AeternumTheme.TEXT_PRIMARY, false);
+			AeternumTheme.drawProgressBar(context, x + 26, rowY + 14, w - 33, 3, ratio, AeternumTheme.ACCENT_CYAN);
 		}
 	}
 

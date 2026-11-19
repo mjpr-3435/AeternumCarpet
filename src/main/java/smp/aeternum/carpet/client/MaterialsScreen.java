@@ -5,22 +5,28 @@ import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
+import smp.aeternum.carpet.client.ui.AeternumTheme;
+import smp.aeternum.carpet.client.ui.UiButton;
+import smp.aeternum.carpet.client.ui.UiScreen;
+import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 import smp.aeternum.carpet.network.MaterialsDeletePayload;
 import smp.aeternum.carpet.network.MaterialsRefreshPayload;
 
-public final class MaterialsScreen extends Screen {
+public final class MaterialsScreen extends UiScreen {
 	private static final Gson GSON = new Gson();
-	private static final int ROW_HEIGHT = 20, VISIBLE = 13;
+	private static final int CARD_H = 38;
+	private static final int CARD_GAP = 4;
+	private static final int ROW_STRIDE = CARD_H + CARD_GAP;
+
 	private List<MaterialList> lists;
-	private final List<ButtonWidget> deleteButtons = new ArrayList<>();
-	private ButtonWidget refreshButton;
-	private ButtonWidget hudToggleButton, hudPosButton;
+	private UiButton refreshButton;
+	private UiButton hudToggleButton;
+	private UiButton hudPosButton;
 	private long refreshEnableAt;
-	private int scroll;
+	private double scroll;
+	private double targetScroll;
 	private boolean draggingScrollbar;
 
 	public MaterialsScreen(String json) {
@@ -30,142 +36,259 @@ public final class MaterialsScreen extends Screen {
 
 	public void replaceData(String json) {
 		lists = decode(json);
-		reloadDeleteButtons();
+		clampScroll();
 	}
 
-	@Override protected void init() { createButtons(); }
+	@Override
+	protected void init() {
+		clearChildren();
+		computePanel(Math.min(620, (int) (width * 0.72)), Math.min(410, (int) (height * 0.76)));
+		int footerY = panelY + panelH - 28;
+		hudToggleButton = UiButton.secondary(panelX + 46, footerY, 52, 20,
+			MaterialsHudOverlay.hudEnabled ? "ON" : "OFF",
+			b -> {
+				MaterialsHudOverlay.toggle();
+				b.setLabel(MaterialsHudOverlay.hudEnabled ? "ON" : "OFF");
+				b.setVariant(MaterialsHudOverlay.hudEnabled ? UiButton.Variant.SUCCESS : UiButton.Variant.DANGER);
+			});
+		hudToggleButton.setVariant(MaterialsHudOverlay.hudEnabled ? UiButton.Variant.SUCCESS : UiButton.Variant.DANGER);
+		addDrawableChild(hudToggleButton);
 
-	private void reloadDeleteButtons() { clearChildren(); deleteButtons.clear(); refreshButton = null; createButtons(); }
+		hudPosButton = UiButton.secondary(panelX + 104, footerY, 58, 20,
+			MaterialsHudOverlay.hudPosition.name(),
+			b -> {
+				MaterialsHudOverlay.cyclePosition();
+				b.setLabel(MaterialsHudOverlay.hudPosition.name());
+			});
+		addDrawableChild(hudPosButton);
 
-	private void createButtons() {
-		refreshButton = ButtonWidget.builder(Text.literal("Refrescar"), b -> { b.active = false; b.setFocused(false); refreshEnableAt = System.currentTimeMillis() + 300; ClientPlayNetworking.send(new MaterialsRefreshPayload()); }).dimensions(0, 0, 72, 20).build();
-		hudToggleButton = ButtonWidget.builder(Text.literal(MaterialsHudOverlay.hudEnabled ? "ON" : "OFF"), b -> { MaterialsHudOverlay.toggle(); b.setMessage(Text.literal(MaterialsHudOverlay.hudEnabled ? "ON" : "OFF")); }).dimensions(0, 0, 56, 20).build();
-		hudPosButton = ButtonWidget.builder(Text.literal(MaterialsHudOverlay.hudPosition.name()), b -> { MaterialsHudOverlay.cyclePosition(); b.setMessage(Text.literal(MaterialsHudOverlay.hudPosition.name())); }).dimensions(0, 0, 56, 20).build();
-		int count = Math.min(VISIBLE + 4, lists.size());
-		for (int i = 0; i < count; i++) {
-			final int idx = i;
-			ButtonWidget button = ButtonWidget.builder(Text.literal("X"), b -> ClientPlayNetworking.send(new MaterialsDeletePayload(lists.get(idx).name)))
-				.dimensions(0, 0, 38, 18).build();
-			deleteButtons.add(button);
-		}
+		refreshButton = UiButton.primary(panelX + panelW - 92, footerY, 80, 20, "Refrescar", b -> {
+			b.active = false;
+			b.setFocused(false);
+			refreshEnableAt = System.currentTimeMillis() + 300;
+			ClientPlayNetworking.send(new MaterialsRefreshPayload());
+		});
+		addDrawableChild(refreshButton);
 	}
 
-	@Override public void renderBackground(DrawContext c, int x, int y, float d) {}
+	private int listTop() { return panelY + 54; }
+	private int listBottom() { return panelY + panelH - 42; }
 
-	@Override public void render(DrawContext c, int mx, int my, float d) {
-		int l = width / 2 - 260, t = height / 2 - 170;
-		c.fill(0, 0, width, height, 0x90000000);
-		c.fill(l, t, l + 520, t + 340, 0xE0101010);
-		c.drawBorder(l, t, 520, 340, 0xFF909090);
-		c.drawTextWithShadow(textRenderer, "MATERIALES", l + 14, t + 14, 0xFFFFFFFF);
-		c.drawTextWithShadow(textRenderer, "\u00D7", l + 502, t + 14, 0xFFFFFFFF);
+	private int maxScrollPx() {
+		int contentH = lists.size() * ROW_STRIDE - CARD_GAP;
+		int viewH = listBottom() - listTop();
+		return Math.max(0, contentH - viewH);
+	}
+
+	private void clampScroll() {
+		int max = maxScrollPx();
+		targetScroll = Math.max(0, Math.min(targetScroll, max));
+		scroll = Math.max(0, Math.min(scroll, max));
+	}
+
+	@Override
+	public void render(DrawContext c, int mx, int my, float d) {
+		computePanel(Math.min(620, (int) (width * 0.72)), Math.min(410, (int) (height * 0.76)));
+		scroll += (targetScroll - scroll) * Math.min(1.0, d * 0.45 + 0.25);
+		clampScroll();
+
+		renderBackground(c, mx, my, d);
+		drawWindowFrame(c, "MATERIALES DE PROYECTO", lists.size() + (lists.size() == 1 ? " lista registrada" : " listas registradas"));
+		drawCloseButton(c, mx, my);
+
+		int lTop = listTop();
+		int lBottom = listBottom();
+		int viewH = lBottom - lTop;
+		int cardX = panelX + 12;
+		int cardW = panelW - 30;
 
 		if (lists.isEmpty()) {
-			c.drawCenteredTextWithShadow(textRenderer, "No hay listas de materiales.", width / 2, t + 160, 0xFFAAAAAA);
-			c.drawCenteredTextWithShadow(textRenderer, "Pon archivos .csv en world/data/aeternum_materials.", width / 2, t + 180, 0xFF888888);
+			c.drawCenteredTextWithShadow(textRenderer, "No hay listas de materiales.", width / 2, lTop + viewH / 2 - 12, AeternumTheme.TEXT_SECONDARY);
+			c.drawCenteredTextWithShadow(textRenderer, "Coloca archivos .csv en world/data/aeternum_materials", width / 2, lTop + viewH / 2 + 4, AeternumTheme.TEXT_MUTED);
 		} else {
-			int listAreaTop = t + 48, listAreaBottom = t + 308;
-			scroll = Math.max(0, Math.min(scroll, Math.max(0, lists.size() - VISIBLE)));
+			c.enableScissor(panelX + 6, lTop, panelX + panelW - 10, lBottom);
+			for (int i = 0; i < lists.size(); i++) {
+				int cardY = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
+				if (cardY + CARD_H < lTop || cardY > lBottom) continue;
 
-			int rowY = listAreaTop;
-			for (int i = 0; i < VISIBLE && i + scroll < lists.size() && i < deleteButtons.size(); i++, rowY += ROW_HEIGHT) {
-				int idx = i + scroll;
-				MaterialList list = lists.get(idx);
-				boolean hover = mx >= l + 9 && mx < l + 510 && my >= rowY && my < rowY + 18;
-				if (idx % 2 == 0) c.fill(l + 9, rowY, l + 510, rowY + 18, 0x40202020);
-				if (hover) c.fill(l + 8, rowY, l + 510, rowY + 18, 0xFF30465A);
-			c.drawTextWithShadow(textRenderer, list.name, l + 14, rowY + 2, 0xFFFFFFFF);
-			c.drawTextWithShadow(textRenderer, list.entries.size() + " items", l + 260, rowY + 2, 0xFFB0B0B0);
+				MaterialList list = lists.get(i);
+				int delX = cardX + cardW - 34;
+				int delY = cardY + (CARD_H - 20) / 2;
+				boolean inListArea = my >= lTop && my < lBottom;
+				boolean overCard = inListArea && mx >= cardX && mx < cardX + cardW && my >= cardY && my < cardY + CARD_H;
+				boolean overDelete = inListArea && mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20;
 
-				ButtonWidget del = deleteButtons.get(i);
-				del.setPosition(l + 470, rowY);
-				del.active = hasShiftDown();
-				del.render(c, mx, my, d);
+				int bg = (overCard && !overDelete) ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG;
+				int border = (overCard && !overDelete) ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE;
+				AeternumTheme.drawCard(c, cardX, cardY, cardW, CARD_H, bg, border);
+
+				ProgressStats stats = computeStats(list);
+				int pct = Math.round(stats.ratio * 100f);
+				int barColor = stats.ratio >= 1f ? AeternumTheme.ACCENT_GREEN : (stats.ratio >= 0.5f ? AeternumTheme.ACCENT_CYAN : AeternumTheme.ACCENT_GOLD);
+
+				String title = AeternumTheme.ellipsize(textRenderer, list.name, cardW - 210);
+				c.drawTextWithShadow(textRenderer, title, cardX + 12, cardY + 8, AeternumTheme.TEXT_PRIMARY);
+
+				int badgeX = cardX + 16 + textRenderer.getWidth(title);
+				AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 6, list.entries.size() + " ítems", 0xFF1F2536, AeternumTheme.TEXT_SECONDARY);
+
+				String pctLabel = pct + "%  (" + stats.completed + "/" + list.entries.size() + " completos)";
+				int pctW = textRenderer.getWidth(pctLabel);
+				c.drawText(textRenderer, pctLabel, delX - pctW - 12, cardY + 9, stats.ratio >= 1f ? AeternumTheme.ACCENT_GREEN : AeternumTheme.TEXT_SECONDARY, false);
+
+				AeternumTheme.drawProgressBar(c, cardX + 12, cardY + 25, delX - cardX - 24, 5, stats.ratio, barColor);
+
+				boolean shift = hasShiftDown();
+				int delBg = overDelete ? (shift ? 0xFF5A2229 : 0xFF282D3B) : (shift ? 0xFF3A1A1F : 0xFF161A24);
+				int delBorder = shift ? AeternumTheme.withAlpha(AeternumTheme.ACCENT_RED, 0xB0) : AeternumTheme.BORDER_SUBTLE;
+				int delFg = shift ? 0xFFFCA5A5 : AeternumTheme.TEXT_MUTED;
+				AeternumTheme.drawCard(c, delX, delY, 26, 20, delBg, delBorder);
+				c.drawTextWithShadow(textRenderer, "\u00D7", delX + 10, delY + 6, delFg);
 			}
+			c.disableScissor();
 
-			renderScrollbar(c, l, t, listAreaTop, listAreaBottom, mx, my);
-
-		if (mx >= l + 470 && mx < l + 508 && my >= listAreaTop && my < listAreaBottom)
-			c.drawTooltip(textRenderer, Text.literal(hasShiftDown() ? "Eliminar esta lista" : "Mantén Shift para eliminar"), mx, my);
+			AeternumTheme.drawScrollbar(
+				c, panelX + panelW - 12, lTop, lBottom,
+				lists.size() * ROW_STRIDE - CARD_GAP, viewH, scroll, draggingScrollbar
+			);
 		}
 
-		if (refreshButton != null) { refreshButton.setPosition(l + 430, t + 312); refreshButton.render(c, mx, my, d); }
-
-		c.drawTextWithShadow(textRenderer, "HUD:", l + 10, t + 316, 0xFFAAAAAA);
-		if (hudToggleButton != null) { hudToggleButton.setPosition(l + 44, t + 312); hudToggleButton.render(c, mx, my, d); }
-		if (hudPosButton != null) { hudPosButton.setPosition(l + 104, t + 312); hudPosButton.render(c, mx, my, d); }
-
-		if (mx >= l + 430 && mx < l + 502 && my >= t + 312 && my < t + 332)
-			c.drawTooltip(textRenderer, Text.literal("Recargar listas desde los archivos CSV"), mx, my);
-
+		AeternumTheme.drawFooter(c, panelX, panelY + panelH - 36, panelW, panelY + panelH);
+		c.drawText(textRenderer, "HUD", panelX + 14, panelY + panelH - 22, AeternumTheme.TEXT_SECONDARY, false);
 		super.render(c, mx, my, d);
+
+		// Tooltips
+		if (isCloseButtonHit(mx, my)) {
+			c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+		} else if (refreshButton != null && refreshButton.isMouseOver(mx, my)) {
+			c.drawTooltip(textRenderer, Text.literal("Recargar listas desde los archivos CSV"), mx, my);
+		} else if (hudPosButton != null && hudPosButton.isMouseOver(mx, my)) {
+			c.drawTooltip(textRenderer, Text.literal("Cambiar posición del HUD en pantalla"), mx, my);
+		} else if (!lists.isEmpty() && my >= lTop && my < lBottom) {
+			for (int i = 0; i < lists.size(); i++) {
+				int cardY = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
+				int delX = cardX + cardW - 34;
+				int delY = cardY + (CARD_H - 20) / 2;
+				if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+					c.drawTooltip(textRenderer, Text.literal(hasShiftDown() ? "Eliminar esta lista" : "Mantén Shift para eliminar"), mx, my);
+					break;
+				}
+			}
+		}
 	}
 
-	private void renderScrollbar(DrawContext c, int l, int t, int top, int bottom, int mx, int my) {
-		int max = Math.max(0, lists.size() - VISIBLE);
-		if (max == 0) return;
-		int trackH = bottom - top;
-		int barH = Math.max(20, trackH * VISIBLE / (max + VISIBLE));
-		int barY = top + (trackH - barH) * scroll / max;
-		c.fill(l + 510, top, l + 516, bottom, 0xFF333333);
-		c.fill(l + 510, barY, l + 516, barY + barH, 0xFFAAAAAA);
-	}
+	@Override
+	public boolean mouseClicked(double mx, double my, int b) {
+		if (b == 0 && isCloseButtonHit(mx, my)) {
+			close();
+			return true;
+		}
+		if (super.mouseClicked(mx, my, b)) return true;
+		if (b != 0) return false;
 
-	@Override public boolean mouseClicked(double mx, double my, int b) {
-		int l = width / 2 - 260, t = height / 2 - 170;
-		if (b == 0 && mx >= l + 500 && mx < l + 520 && my >= t && my < t + 32) { close(); return true; }
-		if (b == 0 && refreshButton != null && refreshButton.isMouseOver(mx, my)) { refreshButton.mouseClicked(mx, my, b); return true; }
-		if (b == 0 && hudToggleButton != null && hudToggleButton.isMouseOver(mx, my)) { hudToggleButton.mouseClicked(mx, my, b); return true; }
-		if (b == 0 && hudPosButton != null && hudPosButton.isMouseOver(mx, my)) { hudPosButton.mouseClicked(mx, my, b); return true; }
-		int listAreaTop = t + 48;
-		int maxScroll = Math.max(0, lists.size() - VISIBLE);
-		if (maxScroll > 0 && b == 0 && mx >= l + 508 && mx <= l + 518 && my >= listAreaTop && my <= t + 308) { draggingScrollbar = true; updateScroll(my); return true; }
-		int index = (int) ((my - listAreaTop) / ROW_HEIGHT) + scroll;
-		if (b == 0 && my >= listAreaTop && my < t + 308 && index >= 0 && index < lists.size()) {
-			if (hasShiftDown() && mx >= l + 470 && mx < l + 508) {
-				int localIdx = index - scroll;
-				if (localIdx >= 0 && localIdx < deleteButtons.size()) deleteButtons.get(localIdx).mouseClicked(mx, my, b);
+		int lTop = listTop();
+		int lBottom = listBottom();
+		int viewH = lBottom - lTop;
+		int maxScroll = maxScrollPx();
+		if (maxScroll > 0 && mx >= panelX + panelW - 16 && mx <= panelX + panelW - 4 && my >= lTop && my <= lBottom) {
+			draggingScrollbar = true;
+			updateScrollFromMouse(my, lTop, viewH, maxScroll);
+			return true;
+		}
+
+		int cardX = panelX + 12;
+		int cardW = panelW - 30;
+		if (my >= lTop && my < lBottom && mx >= cardX && mx < cardX + cardW) {
+			int relY = (int) (my - lTop + scroll);
+			int idx = relY / ROW_STRIDE;
+			if (idx >= 0 && idx < lists.size() && (relY % ROW_STRIDE) < CARD_H) {
+				int cardY = lTop + idx * ROW_STRIDE - (int) Math.round(scroll);
+				int delX = cardX + cardW - 34;
+				int delY = cardY + (CARD_H - 20) / 2;
+				if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+					if (hasShiftDown()) {
+						ClientPlayNetworking.send(new MaterialsDeletePayload(lists.get(idx).name));
+					}
+					return true;
+				}
+				client.setScreen(new MaterialsDetailScreen(this, lists.get(idx)));
 				return true;
 			}
-			if (mx >= l + 9 && mx < l + 470) { client.setScreen(new MaterialsDetailScreen(this, lists.get(index))); return true; }
 		}
-		return super.mouseClicked(mx, my, b);
+		return false;
 	}
 
-	@Override public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-		if (draggingScrollbar && button == 0) { updateScroll(my); return true; }
+	@Override
+	public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+		if (draggingScrollbar && button == 0) {
+			updateScrollFromMouse(my, listTop(), listBottom() - listTop(), maxScrollPx());
+			return true;
+		}
 		return super.mouseDragged(mx, my, button, dx, dy);
 	}
 
-	@Override public boolean mouseReleased(double mx, double my, int b) {
-		if (b == 0 && draggingScrollbar) { draggingScrollbar = false; return true; }
+	@Override
+	public boolean mouseReleased(double mx, double my, int b) {
+		if (b == 0 && draggingScrollbar) {
+			draggingScrollbar = false;
+			return true;
+		}
 		return super.mouseReleased(mx, my, b);
 	}
 
-	@Override public boolean mouseScrolled(double mx, double my, double h, double v) {
-		if (v != 0) { scroll -= Math.signum(v); return true; }
+	@Override
+	public boolean mouseScrolled(double mx, double my, double h, double v) {
+		if (v != 0 && maxScrollPx() > 0) {
+			targetScroll = Math.max(0, Math.min(maxScrollPx(), targetScroll - v * 28));
+			return true;
+		}
 		return super.mouseScrolled(mx, my, h, v);
 	}
 
-	private void updateScroll(double my) {
-		int t = height / 2 - 170;
-		int max = Math.max(0, lists.size() - VISIBLE);
-		if (max == 0) return;
-		int top = t + 48, bottom = t + 308;
-		int trackH = bottom - top;
-		int barH = Math.max(20, trackH * VISIBLE / (max + VISIBLE));
-		double f = (my - top - barH / 2.0) / Math.max(1, trackH - barH);
-		scroll = (int) Math.round(Math.max(0, Math.min(1, f)) * max);
+	private void updateScrollFromMouse(double my, int top, int viewH, int maxScroll) {
+		int totalH = lists.size() * ROW_STRIDE - CARD_GAP;
+		int barH = Math.max(22, viewH * viewH / Math.max(1, totalH));
+		double frac = (my - top - barH / 2.0) / Math.max(1.0, viewH - barH);
+		targetScroll = Math.max(0, Math.min(1, frac)) * maxScroll;
+		scroll = targetScroll;
 	}
 
-	@Override public boolean shouldPause() { return false; }
-	@Override public void tick() { if (refreshButton != null && !refreshButton.active && System.currentTimeMillis() >= refreshEnableAt) refreshButton.active = true; }
-	@Override public void close() { client.setScreen(null); }
+	@Override
+	public void tick() {
+		if (refreshButton != null && !refreshButton.active && System.currentTimeMillis() >= refreshEnableAt) {
+			refreshButton.active = true;
+		}
+	}
+
+	@Override
+	public void close() {
+		client.setScreen(null);
+	}
+
+	private static ProgressStats computeStats(MaterialList list) {
+		if (list.entries.isEmpty()) return new ProgressStats(0f, 0);
+		long totalUnits = 0;
+		long availableUnits = 0;
+		int completed = 0;
+		for (MaterialEntry e : list.entries) {
+			int t = Math.max(0, e.total);
+			int a = Math.max(0, Math.min(t, e.available));
+			totalUnits += t;
+			availableUnits += a;
+			if (a >= t) completed++;
+		}
+		float ratio = totalUnits == 0 ? 1f : (float) availableUnits / (float) totalUnits;
+		return new ProgressStats(ratio, completed);
+	}
+
+	private record ProgressStats(float ratio, int completed) {}
 
 	static List<MaterialList> decodeLists(String json) {
 		MaterialList[] arr = GSON.fromJson(json, MaterialList[].class);
 		return arr == null ? new ArrayList<>() : new ArrayList<>(List.of(arr));
 	}
 
-	private static List<MaterialList> decode(String json) { return decodeLists(json); }
+	private static List<MaterialList> decode(String json) {
+		return decodeLists(json);
+	}
 }

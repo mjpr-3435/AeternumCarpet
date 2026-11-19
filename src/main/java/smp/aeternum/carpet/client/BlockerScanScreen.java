@@ -1,25 +1,31 @@
 package smp.aeternum.carpet.client;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-import smp.aeternum.carpet.blockers.BlockerEntry;
-import smp.aeternum.carpet.blockers.BlockerScan;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.text.Text;
+import smp.aeternum.carpet.blockers.BlockerEntry;
+import smp.aeternum.carpet.blockers.BlockerScan;
+import smp.aeternum.carpet.client.ui.AeternumTheme;
+import smp.aeternum.carpet.client.ui.UiButton;
+import smp.aeternum.carpet.client.ui.UiScreen;
+import smp.aeternum.carpet.client.ui.UiTextField;
 
 /** Detail view keeps the target unset until the player explicitly chooses Guide. */
-public final class BlockerScanScreen extends Screen {
+public final class BlockerScanScreen extends UiScreen {
+    private static final int ROW_H = 26;
+    private static final int ROW_GAP = 2;
+    private static final int ROW_STRIDE = ROW_H + ROW_GAP;
+
     private final Screen parent;
     private final BlockerScan scan;
     private final List<BlockerEntry> entries;
-    private int scroll;
-    private ButtonWidget clearButton;
-    private ButtonWidget selectAllButton;
+    private double scroll, targetScroll;
+    private UiTextField searchField;
+    private UiButton clearButton, selectAllButton;
     private boolean draggingScrollbar;
 
     public BlockerScanScreen(Screen parent, BlockerScan scan) {
@@ -31,120 +37,226 @@ public final class BlockerScanScreen extends Screen {
         syncGuide();
     }
 
-    @Override public void close() { client.setScreen(parent); }
+    @Override
+    public void close() {
+        client.setScreen(parent);
+    }
 
     @Override
     protected void init() {
-        clearButton = ButtonWidget.builder(Text.literal("Limpiar selección"), button -> {
+        String prevQuery = searchField != null ? searchField.getText() : "";
+        clearChildren();
+        computePanel(Math.min(700, (int) (width * 0.78)), Math.min(430, (int) (height * 0.80)));
+
+        addDrawableChild(UiButton.ghost(panelX + 10, panelY + 10, 24, 24, "\u2190", b -> close()));
+
+        searchField = new UiTextField(textRenderer, panelX + 12, panelY + 52, panelW - 24, 20, "Filtrar por bloque, coordenada o motivo…");
+        searchField.setMaxLength(80);
+        searchField.setText(prevQuery);
+        searchField.setChangedListener(s -> {
+            targetScroll = 0;
+            scroll = 0;
+        });
+        addDrawableChild(searchField);
+
+        int footerY = panelY + panelH - 28;
+        clearButton = UiButton.secondary(panelX + panelW - 244, footerY, 114, 20, "Limpiar selección", b -> {
             BlockerSelectionStore.clear(scan.id);
             BlockerGuide.clear();
-        }).dimensions(0, 0, 112, 20).build();
-        selectAllButton = ButtonWidget.builder(Text.literal("Seleccionar todo"), button -> {
+        });
+        selectAllButton = UiButton.primary(panelX + panelW - 124, footerY, 112, 20, "Seleccionar todo", b -> {
             BlockerSelectionStore.selectAll(scan.id, entries);
             syncGuide();
-        }).dimensions(0, 0, 112, 20).build();
+        });
+        addDrawableChild(clearButton);
+        addDrawableChild(selectAllButton);
     }
 
-    @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
-        int panelW = Math.max(540, (int) (width * 0.70)), panelH = Math.max(360, (int) (height * 0.70));
-        panelW = Math.min(panelW, width - 32);
-        panelH = Math.min(panelH, height - 32);
-        int left = (width - panelW) / 2, top = (height - panelH) / 2;
-        context.fill(left, top, left + panelW, top + panelH, 0xE0101010);
-        context.drawBorder(left, top, panelW, panelH, 0xFF909090);
-        context.fill(left + 1, top + 1, left + panelW - 1, top + 43, 0xCC242424);
-        context.drawTextWithShadow(textRenderer, "‹  " + scan.id, left + 12, top + 10, 0xFFFFFFFF);
-        context.drawTextWithShadow(textRenderer, entries.size() + " bloqueadores", left + 12, top + 26, 0xFFFFD080);
-        context.drawTextWithShadow(textRenderer, scan.dimension, left + 145, top + 26, 0xFFAAAAAA);
-        context.drawTextWithShadow(textRenderer, "×", left + panelW - 18, top + 10, 0xFFFFFFFF);
-        int listTop = top + 52, listBottom = top + panelH - 78, visible = (listBottom - listTop) / 18;
-        context.fill(left + 9, listTop - 18, left + panelW - 10, listTop - 2, 0xFF1D1D1D);
-        context.drawTextWithShadow(textRenderer, "BLOQUE", left + 14, listTop - 14, 0xFF8F8F8F);
-        context.drawTextWithShadow(textRenderer, "COORDENADAS", left + 145, listTop - 14, 0xFF8F8F8F);
-        context.drawTextWithShadow(textRenderer, "MOTIVO", left + 290, listTop - 14, 0xFF8F8F8F);
-        scroll = Math.max(0, Math.min(scroll, Math.max(0, entries.size() - visible)));
-        for (int i = 0; i < visible && i + scroll < entries.size(); i++) {
-            BlockerEntry e = entries.get(i + scroll); int y = listTop + i * 18;
-            boolean hover = mouseX >= left + 10 && mouseX < left + panelW - 23 && mouseY >= y - 2 && mouseY < y + 15;
-            if (BlockerSelectionStore.isSelected(scan.id, e)) context.fill(left + 9, y - 2, left + panelW - 23, y + 15, 0xFF176C71);
-            else if (hover) context.fill(left + 9, y - 2, left + panelW - 23, y + 15, 0xFF30465A);
-            context.drawTextWithShadow(textRenderer, e.blockId().replace("minecraft:", ""), left + 14, y + 1, 0xFFFFFFFF);
-            context.drawTextWithShadow(textRenderer, e.x() + ", " + e.y() + ", " + e.z(), left + 145, y + 1, 0xFFB8D8FF);
-            context.drawTextWithShadow(textRenderer, e.reason(), left + 290, y + 1, 0xFFAAAAAA);
-        }
-        if (entries.size() > visible) {
-            int barH = Math.max(20, (listBottom - listTop) * visible / entries.size());
-            int barY = listTop + (listBottom - listTop - barH) * scroll / Math.max(1, entries.size() - visible);
-            context.fill(left + panelW - 17, listTop, left + panelW - 11, listBottom, 0xFF333333);
-            context.fill(left + panelW - 17, barY, left + panelW - 11, barY + barH, 0xFFAAAAAA);
-        }
-        int selectedCount = BlockerSelectionStore.keys(scan.id).size();
-        String target = selectedCount == 0 ? "Sin objetivo seleccionado" : selectedCount + " objetivos guiados";
-        context.drawTextWithShadow(textRenderer, target, left + 12, top + panelH - 60, 0xFF55FFFF);
-        context.drawTextWithShadow(textRenderer, selectedCount == 0 ? "Selecciona bloques de la lista para guiarlos." : "", left + 12, top + panelH - 38, 0xFF666666);
-        clearButton.setPosition(left + 12, top + panelH - 48);
-        clearButton.active = selectedCount > 0;
-        clearButton.render(context, mouseX, mouseY, delta);
-        selectAllButton.setPosition(left + 128, top + panelH - 48);
-        selectAllButton.active = selectedCount < entries.size();
-        selectAllButton.render(context, mouseX, mouseY, delta);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int panelW = Math.max(540, (int) (width * 0.70)), panelH = Math.max(360, (int) (height * 0.70));
-        panelW = Math.min(panelW, width - 32);
-        panelH = Math.min(panelH, height - 32);
-        int left = (width - panelW) / 2, top = (height - panelH) / 2, listTop = top + 52, listBottom = top + panelH - 78;
-        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
-        if (mouseX >= left && mouseX < left + 45 && mouseY >= top && mouseY < top + 35) { close(); return true; }
-        if (mouseX >= left + panelW - 25 && mouseY >= top && mouseY < top + 30) { client.setScreen(null); return true; }
-        if (mouseX >= left + panelW - 20 && mouseX <= left + panelW - 7 && mouseY >= listTop && mouseY <= listBottom && entries.size() > visibleRows(panelH)) {
-            draggingScrollbar = true;
-            updateScrollFromMouse(mouseY, top, panelH);
-            return true;
-        }
-        if (mouseY >= listTop && mouseY < listBottom) {
-            int i = (int)((mouseY - listTop) / 18) + scroll;
-            if (i < entries.size()) {
-                BlockerSelectionStore.toggle(scan.id, entries.get(i));
-                syncGuide();
+    private List<BlockerEntry> filteredEntries() {
+        String q = searchField != null ? searchField.getText().trim().toLowerCase() : "";
+        if (q.isEmpty()) return entries;
+        List<BlockerEntry> out = new ArrayList<>();
+        for (BlockerEntry e : entries) {
+            String block = e.blockId() == null ? "" : e.blockId().toLowerCase();
+            String reason = e.reason() == null ? "" : e.reason().toLowerCase();
+            String coords = e.x() + ", " + e.y() + ", " + e.z();
+            if (block.contains(q) || reason.contains(q) || coords.contains(q)) {
+                out.add(e);
             }
-            return true;
         }
-        if (clearButton.mouseClicked(mouseX, mouseY, button) || selectAllButton.mouseClicked(mouseX, mouseY, button)) return true;
-        return super.mouseClicked(mouseX, mouseY, button);
+        return out;
     }
 
-    @Override public boolean mouseScrolled(double mouseX, double mouseY, double h, double v) { scroll -= (int)Math.signum(v); return true; }
+    private int listTop() { return panelY + 96; }
+    private int listBottom() { return panelY + panelH - 42; }
+
+    private int maxScrollPx(int count) {
+        int contentH = count * ROW_STRIDE - ROW_GAP;
+        int viewH = listBottom() - listTop();
+        return Math.max(0, contentH - viewH);
+    }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public void render(DrawContext c, int mx, int my, float delta) {
+        computePanel(Math.min(700, (int) (width * 0.78)), Math.min(430, (int) (height * 0.80)));
+        List<BlockerEntry> shown = filteredEntries();
+        int maxScroll = maxScrollPx(shown.size());
+        targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
+        scroll += (targetScroll - scroll) * Math.min(1.0, delta * 0.45 + 0.25);
+        scroll = Math.max(0, Math.min(scroll, maxScroll));
+
+        renderBackground(c, mx, my, delta);
+        AeternumTheme.drawPanel(c, panelX, panelY, panelW, panelH);
+        AeternumTheme.drawHeader(c, panelX, panelY, panelW, 44);
+        c.fill(panelX + 1, panelY + 1, panelX + 4, panelY + 43, AeternumTheme.ACCENT_GOLD);
+
+        c.drawTextWithShadow(textRenderer, scan.id, panelX + 38, panelY + 10, AeternumTheme.TEXT_PRIMARY);
+        String dim = scan.dimension == null ? "" : scan.dimension.replace("minecraft:", "");
+        c.drawText(textRenderer, entries.size() + " bloqueadores  ·  " + dim, panelX + 38, panelY + 25, AeternumTheme.ACCENT_GOLD, false);
+        drawCloseButton(c, mx, my);
+
+        int colY = panelY + 78;
+        c.fill(panelX + 12, colY, panelX + panelW - 18, colY + 15, AeternumTheme.CARD_ALT_BG);
+        int colCoordX = panelX + (int) (panelW * 0.42);
+        int colReasonX = panelX + (int) (panelW * 0.64);
+        c.drawText(textRenderer, "BLOQUE", panelX + 40, colY + 4, AeternumTheme.TEXT_MUTED, false);
+        c.drawText(textRenderer, "COORDENADAS", colCoordX, colY + 4, AeternumTheme.TEXT_MUTED, false);
+        c.drawText(textRenderer, "MOTIVO", colReasonX, colY + 4, AeternumTheme.TEXT_MUTED, false);
+
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = lBottom - lTop;
+        int rowX = panelX + 12;
+        int rowW = panelW - 30;
+
+        if (shown.isEmpty()) {
+            c.drawCenteredTextWithShadow(textRenderer, "No hay coincidencias.", width / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
+        } else {
+            c.enableScissor(panelX + 6, lTop, panelX + panelW - 10, lBottom);
+            for (int i = 0; i < shown.size(); i++) {
+                int ry = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
+                if (ry + ROW_H < lTop || ry > lBottom) continue;
+
+                BlockerEntry e = shown.get(i);
+                boolean isSel = BlockerSelectionStore.isSelected(scan.id, e);
+                boolean hover = my >= lTop && my < lBottom && mx >= rowX && mx < rowX + rowW && my >= ry && my < ry + ROW_H;
+
+                int bg = isSel ? AeternumTheme.CARD_SELECTED : (hover ? AeternumTheme.CARD_HOVER : (i % 2 == 0 ? AeternumTheme.CARD_BG : AeternumTheme.CARD_ALT_BG));
+                int border = isSel ? AeternumTheme.withAlpha(AeternumTheme.ACCENT_CYAN, 0x90) : AeternumTheme.BORDER_SUBTLE;
+                AeternumTheme.drawCard(c, rowX, ry, rowW, ROW_H, bg, border);
+
+                // Selection check
+                int chkX = rowX + 6;
+                int chkY = ry + 7;
+                AeternumTheme.drawCard(c, chkX, chkY, 12, 12, isSel ? 0xFF17454D : 0xFF0E1118, isSel ? AeternumTheme.ACCENT_CYAN : AeternumTheme.BORDER_BRIGHT);
+                if (isSel) {
+                    c.drawText(textRenderer, "\u2713", chkX + 3, chkY + 2, AeternumTheme.ACCENT_CYAN, false);
+                }
+
+                AeternumTheme.drawItemIcon(c, e.blockId(), rowX + 24, ry + 5);
+
+                String blockName = e.blockId().replace("minecraft:", "");
+                String shortBlock = AeternumTheme.ellipsize(textRenderer, blockName, colCoordX - (rowX + 46));
+                c.drawTextWithShadow(textRenderer, shortBlock, rowX + 44, ry + 9, AeternumTheme.TEXT_PRIMARY);
+
+                c.drawText(textRenderer, e.x() + ", " + e.y() + ", " + e.z(), colCoordX, ry + 9, AeternumTheme.ACCENT_BLUE, false);
+
+                String reason = AeternumTheme.ellipsize(textRenderer, e.reason(), rowX + rowW - colReasonX - 8);
+                c.drawText(textRenderer, reason, colReasonX, ry + 9, AeternumTheme.TEXT_SECONDARY, false);
+            }
+            c.disableScissor();
+
+            AeternumTheme.drawScrollbar(
+                c, panelX + panelW - 12, lTop, lBottom,
+                shown.size() * ROW_STRIDE - ROW_GAP, viewH, scroll, draggingScrollbar
+            );
+        }
+
+        AeternumTheme.drawFooter(c, panelX, panelY + panelH - 36, panelW, panelY + panelH);
+        int selectedCount = BlockerSelectionStore.keys(scan.id).size();
+        String targetTxt = selectedCount == 0 ? "Selecciona bloques de la lista para guiarlos" : selectedCount + " objetivos guiados";
+        c.drawText(textRenderer, targetTxt, panelX + 14, panelY + panelH - 22,
+            selectedCount == 0 ? AeternumTheme.TEXT_MUTED : AeternumTheme.ACCENT_CYAN, false);
+
+        if (clearButton != null) clearButton.active = selectedCount > 0;
+        if (selectAllButton != null) selectAllButton.active = selectedCount < entries.size();
+
+        if (searchField != null) {
+            searchField.renderBox(c, panelX + 12, panelY + 52, panelW - 24, 20, mx, my, delta);
+        }
+        super.render(c, mx, my, delta);
+    }
+
+    @Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 0 && isCloseButtonHit(mx, my)) {
+            client.setScreen(null);
+            return true;
+        }
+        if (super.mouseClicked(mx, my, button)) return true;
+        if (button != 0) return false;
+
+        List<BlockerEntry> shown = filteredEntries();
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = lBottom - lTop;
+        int maxScroll = maxScrollPx(shown.size());
+        if (maxScroll > 0 && mx >= panelX + panelW - 16 && mx <= panelX + panelW - 4 && my >= lTop && my <= lBottom) {
+            draggingScrollbar = true;
+            updateScrollFromMouse(my, lTop, viewH, maxScroll, shown.size());
+            return true;
+        }
+
+        int rowX = panelX + 12;
+        int rowW = panelW - 30;
+        if (my >= lTop && my < lBottom && mx >= rowX && mx < rowX + rowW) {
+            int relY = (int) (my - lTop + scroll);
+            int idx = relY / ROW_STRIDE;
+            if (idx >= 0 && idx < shown.size() && (relY % ROW_STRIDE) < ROW_H) {
+                BlockerSelectionStore.toggle(scan.id, shown.get(idx));
+                syncGuide();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double h, double v) {
+        if (v != 0) {
+            int maxScroll = maxScrollPx(filteredEntries().size());
+            targetScroll = Math.max(0, Math.min(maxScroll, targetScroll - v * 28));
+            return true;
+        }
+        return super.mouseScrolled(mx, my, h, v);
+    }
+
+    @Override
+    public boolean mouseDragged(double mx, double my, int button, double deltaX, double deltaY) {
         if (draggingScrollbar && button == 0) {
-            int panelH = Math.min(Math.max(360, (int) (height * 0.70)), height - 32);
-            updateScrollFromMouse(mouseY, (height - panelH) / 2, panelH);
+            List<BlockerEntry> shown = filteredEntries();
+            updateScrollFromMouse(my, listTop(), listBottom() - listTop(), maxScrollPx(shown.size()), shown.size());
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(mx, my, button, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && draggingScrollbar) { draggingScrollbar = false; return true; }
-        return super.mouseReleased(mouseX, mouseY, button);
+    public boolean mouseReleased(double mx, double my, int button) {
+        if (button == 0 && draggingScrollbar) {
+            draggingScrollbar = false;
+            return true;
+        }
+        return super.mouseReleased(mx, my, button);
     }
 
-    private int visibleRows(int panelH) { return (panelH - 78 - 52) / 18; }
-
-    private void updateScrollFromMouse(double mouseY, int top, int panelH) {
-        int listTop = top + 52, listBottom = top + panelH - 78, visible = visibleRows(panelH);
-        int max = Math.max(0, entries.size() - visible);
-        if (max == 0) return;
-        int barH = Math.max(20, (listBottom - listTop) * visible / entries.size());
-        double fraction = (mouseY - listTop - barH / 2.0) / Math.max(1.0, listBottom - listTop - barH);
-        scroll = (int) Math.round(Math.max(0.0, Math.min(1.0, fraction)) * max);
+    private void updateScrollFromMouse(double my, int top, int viewH, int maxScroll, int count) {
+        if (maxScroll == 0) return;
+        int totalH = count * ROW_STRIDE - ROW_GAP;
+        int barH = Math.max(22, viewH * viewH / Math.max(1, totalH));
+        double fraction = (my - top - barH / 2.0) / Math.max(1.0, viewH - barH);
+        targetScroll = Math.max(0.0, Math.min(1.0, fraction)) * maxScroll;
+        scroll = targetScroll;
     }
 
     private void syncGuide() {
