@@ -51,8 +51,10 @@ import smp.aeternum.carpet.network.GuideNetworking;
 import smp.aeternum.carpet.network.ExplorationMapNetworking;
 import smp.aeternum.carpet.network.MaterialsNetworking;
 import smp.aeternum.carpet.network.ScreenOpenNetworking;
+import smp.aeternum.carpet.network.CarpetRulesNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
+import smp.aeternum.carpet.command.RulesCommand;
 import smp.aeternum.carpet.materials.MaterialsStore;
 import smp.aeternum.carpet.materials.MaterialItemResolver;
 
@@ -68,6 +70,7 @@ public class AeternumCarpet implements ModInitializer {
 		ExplorationMapNetworking.registerPayloads();
 		MaterialsNetworking.registerPayloads();
 		ScreenOpenNetworking.registerPayloads();
+		CarpetRulesNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -126,6 +129,7 @@ public class AeternumCarpet implements ModInitializer {
 			MotdCommand.register(dispatcher);
 			GuideCommand.register(dispatcher);
 			MaterialsCommand.register(dispatcher);
+			RulesCommand.register(dispatcher);
 		});
 	}
 

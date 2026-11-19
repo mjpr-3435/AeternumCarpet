@@ -12,6 +12,7 @@ import smp.aeternum.carpet.network.ExplorationMapStatusPayload;
 import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
+import smp.aeternum.carpet.network.CarpetRulesDataPayload;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
@@ -55,6 +56,10 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(MaterialsOverlayPayload.ID, (payload, context) -> context.client().execute(() ->
             MaterialsHudOverlay.update(context.client().player != null ? context.client().player.getName().getString() : "", payload.json())
         ));
+        ClientPlayNetworking.registerGlobalReceiver(CarpetRulesDataPayload.ID, (payload, context) -> context.client().execute(() -> {
+            if (context.client().currentScreen instanceof CarpetRulesScreen screen) screen.replaceData(payload.json(), payload.statusMessage(), payload.statusError());
+            else if (payload.openScreen()) context.client().setScreen(new CarpetRulesScreen(payload.json()));
+        }));
     }
 
     private static void clearClientSession() {

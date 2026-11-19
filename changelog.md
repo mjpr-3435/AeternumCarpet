@@ -25,3 +25,16 @@
 
 ### Documentación (`AeternumBot/Guides`)
 - Actualizadas las guías en español e inglés (`Finder.md`, `Aeternum Carpet.md` y `Comandos.md` / `Commands.md`) con `craftableCalcite`, `/finder clean`, la nueva sintaxis `<lugar>` y `near_me`.
+
+### Rediseño de Interfaces (UI monocromática)
+- **Sistema UI propio (`smp.aeternum.carpet.client.ui`)**:
+  - Nuevos componentes `AeternumTheme`, `UiScreen`, `UiButton` y `UiTextField` con paleta monocromática (blancos, negros y grises), desenfoque de fondo (`applyBlur`), paneles responsivos, scroll interpolado y recortes `enableScissor`.
+- **Pantallas migradas** (manteniendo `ExplorationMapScreen` intacto):
+  - **Materiales (`MaterialsScreen`, `MaterialsDetailScreen`, `MaterialsHudOverlay`)**: tarjetas con progreso global y por ítem, iconos reales, buscador y chips de filtro (`Todos`, `Faltan`, `Míos`, `Listos`), botones `Claim`/`Soltar` y HUD monocromático con barras. Eliminados el botón `Refrescar` y el contador regresivo del detalle específico.
+  - **Guías (`GuideScreen`)**: sidebar con buscador e indicador activo, selector `ES | EN`, lector con scroll suave, editor con badge de guardado y modal de sintaxis.
+  - **Blockers (`BlockersScreen`, `BlockerScanScreen`)**: tarjetas con dimensión y progreso en vivo, buscador por bloque/coordenada/motivo, iconos de bloque y checkboxes de selección.
+  - **Actions (`CommandPacksScreen`, `CommandPackEditorScreen`)**: catálogo con buscador, descripción, badge de pasos y editor de pasos `CMD`/`ESPERA`.
+
+### Interfaz universal de reglas (`/rules`)
+- Añadido el comando `/rules` (solo OP nivel 2+) para gestionar todas las reglas de Carpet y de cualquier extensión registrada (`CarpetServer.forEachManager`).
+- Nueva pantalla `CarpetRulesScreen` con filtros por `Todas`, `Modificadas`, manager y categoría, buscador en vivo, toggle en 1 clic para booleanas, ciclo en opciones estrictas, editor inline para números/texto, restauración al default (`↺`) y opción `Guardar Default: SÍ/NO` (`carpet.conf`).
