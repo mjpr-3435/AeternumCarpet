@@ -35,12 +35,10 @@ public final class MaterialsDetailScreen extends UiScreen {
 	private MainTab activeTab;
 	private MatFilter matFilter = MatFilter.ALL;
 	private SubFilter subFilter = SubFilter.ALL;
-	private String scopedSubregionName; // null = whole project
 
 	private UiTextField searchField;
 	private UiButton tabMatBtn, tabSubBtn, tabSyncBtn;
 	private UiButton f1Btn, f2Btn, f3Btn, f4Btn;
-	private UiButton scopeResetBtn;
 
 	// Sync tab widgets
 	private UiTextField xField, yField, zField;
@@ -140,20 +138,11 @@ public final class MaterialsDetailScreen extends UiScreen {
 			addDrawableChild(f4Btn);
 			updateFilterStyles();
 
-			if (activeTab == MainTab.MATERIALS && scopedSubregionName != null) {
-				scopeResetBtn = UiButton.secondary(panelX + panelW - 102, panelY + 76, 90, 16, "Ver todo \u00D7", b -> {
-					scopedSubregionName = null;
-					init();
-				});
-				addDrawableChild(scopeResetBtn);
-			} else {
-				scopeResetBtn = null;
-			}
 			xField = null; yField = null; zField = null;
 			usePosBtn = null; rotBtn = null; mirrorBtn = null; savePlacementBtn = null;
 			loadLitematicaBtn = null; downloadBtn = null;
 		} else {
-			searchField = null; f1Btn = null; f2Btn = null; f3Btn = null; f4Btn = null; scopeResetBtn = null;
+			searchField = null; f1Btn = null; f2Btn = null; f3Btn = null; f4Btn = null;
 			initSyncTab();
 		}
 	}
@@ -265,11 +254,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 	}
 
 	private List<MaterialEntry> activeMaterialSource() {
-		if (scopedSubregionName != null && list.subregions != null) {
-			for (var sub : list.subregions) {
-				if (sub.name.equals(scopedSubregionName)) return sub.entries;
-			}
-		}
 		return list.entries != null ? list.entries : List.of();
 	}
 
@@ -311,10 +295,11 @@ public final class MaterialsDetailScreen extends UiScreen {
 			}
 			out.add(sub);
 		}
+		out.sort(Comparator.comparing(s -> s.name, String.CASE_INSENSITIVE_ORDER));
 		return out;
 	}
 
-	private int matListTop() { return scopedSubregionName != null ? panelY + 114 : panelY + 98; }
+	private int matListTop() { return panelY + 98; }
 	private int subListTop() { return panelY + 80; }
 	private int listBottom() { return panelY + panelH - 14; }
 
@@ -360,10 +345,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 		targetScroll = Math.max(0, Math.min(targetScroll, maxScroll));
 		scroll += (targetScroll - scroll) * Math.min(1.0, d * 0.45 + 0.25);
 		scroll = Math.max(0, Math.min(scroll, maxScroll));
-
-		if (scopedSubregionName != null) {
-			c.drawText(textRenderer, "Subregión: " + scopedSubregionName, panelX + 14, panelY + 80, AeternumTheme.TEXT_PRIMARY, false);
-		}
 
 		int colY = lTop - 18;
 		c.fill(panelX + 12, colY, panelX + panelW - 18, colY + 15, AeternumTheme.CARD_ALT_BG);
@@ -461,8 +442,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 			int border = isDone ? AeternumTheme.TEXT_PRIMARY : (isClaimed ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
 			AeternumTheme.drawCard(c, rowX, ry, rowW, SUB_ROW_H, bg, border);
 
-			int itemsBtnX = rowX + rowW - 56;
-			int doneBtnX = itemsBtnX - 62;
+			int doneBtnX = rowX + rowW - 64;
 			int claimBtnX = doneBtnX - 62;
 			int btnY = ry + 10;
 
@@ -502,11 +482,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 			int dBorder = isDone ? AeternumTheme.TEXT_PRIMARY : 0xFFD0D0DC;
 			AeternumTheme.drawCard(c, doneBtnX, btnY, 56, 20, dBg, dBorder);
 			c.drawTextWithShadow(textRenderer, doneLabel, doneBtnX + (56 - textRenderer.getWidth(doneLabel)) / 2, btnY + 6, AeternumTheme.TEXT_PRIMARY);
-
-			// Button 3: View materials of this subregion
-			boolean overItems = my >= lTop && my < lBottom && mx >= itemsBtnX && mx < itemsBtnX + 50 && my >= btnY && my < btnY + 20;
-			AeternumTheme.drawCard(c, itemsBtnX, btnY, 50, 20, overItems ? 0xFF2A2A34 : 0xFF16161C, AeternumTheme.BORDER_BRIGHT);
-			c.drawTextWithShadow(textRenderer, "Ítems", itemsBtnX + (50 - textRenderer.getWidth("Ítems")) / 2, btnY + 6, AeternumTheme.TEXT_SECONDARY);
 		}
 		c.disableScissor();
 
@@ -591,15 +566,9 @@ public final class MaterialsDetailScreen extends UiScreen {
 				if (idx >= 0 && idx < subs.size() && (relY % SUB_STRIDE) < SUB_ROW_H) {
 					MaterialList.SubregionInfo sub = subs.get(idx);
 					int ry = lTop + idx * SUB_STRIDE - (int) Math.round(scroll);
-					int itemsBtnX = rowX + rowW - 56;
-					int doneBtnX = itemsBtnX - 62;
+					int doneBtnX = rowX + rowW - 64;
 					int claimBtnX = doneBtnX - 62;
 					int btnY = ry + 10;
-					if (b == 0 && mx >= itemsBtnX && mx < itemsBtnX + 50 && my >= btnY && my < btnY + 20) {
-						scopedSubregionName = sub.name;
-						switchTab(MainTab.MATERIALS);
-						return true;
-					}
 					if (b == 0 && mx >= doneBtnX && mx < doneBtnX + 56 && my >= btnY && my < btnY + 20) {
 						String nextAction = "DONE".equals(sub.status) ? "reopen" : "done";
 						ClientPlayNetworking.send(new ProjectSubregionActionPayload(list.name, sub.name, nextAction));

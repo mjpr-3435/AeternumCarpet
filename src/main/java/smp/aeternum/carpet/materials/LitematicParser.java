@@ -186,6 +186,7 @@ public final class LitematicParser {
             ));
         }
 
+        subregions.sort(Comparator.comparing(s -> s.name, String.CASE_INSENSITIVE_ORDER));
         return new ParsedSchematic(
             grandTotalBlocks,
             toEntries(globalCounts, globalNames),

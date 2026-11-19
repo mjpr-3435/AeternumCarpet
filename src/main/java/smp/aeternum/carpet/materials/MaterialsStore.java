@@ -299,7 +299,7 @@ public final class MaterialsStore {
 		list.placement = meta.placement != null ? meta.placement : new MaterialList.PlacementInfo();
 		list.subregions = new ArrayList<>();
 		for (LitematicParser.ParsedSubregion pSub : parsed.subregions()) {
-			MaterialList.SubregionInfo info = new MaterialList.SubregionInfo(pSub.name, pSub.totalBlocks, copyEntries(pSub.entries));
+			MaterialList.SubregionInfo info = new MaterialList.SubregionInfo(pSub.name, pSub.totalBlocks, List.of());
 			SubregionMeta sm = meta.subregions.get(pSub.name);
 			if (sm != null) {
 				info.status = sm.status != null ? sm.status : "NONE";
