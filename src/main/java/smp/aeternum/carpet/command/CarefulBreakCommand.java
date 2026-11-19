@@ -11,6 +11,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
+import smp.aeternum.carpet.network.ScreenOpenNetworking;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -46,6 +47,7 @@ public final class CarefulBreakCommand {
             return 0;
         }
         CarefulBreakStore.setMode(player.getUuid(), norm);
+        ScreenOpenNetworking.sendDockState(player);
         context.getSource().sendFeedback(
             () -> Text.literal("CarefulBreak configurado en: " + norm).formatted(Formatting.GRAY),
             false

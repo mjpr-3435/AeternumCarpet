@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.motd.JoinMotd;
 import smp.aeternum.carpet.motd.MotdTaskStore;
 import smp.aeternum.carpet.todo.TodoListStore;
@@ -82,6 +83,9 @@ public final class ScreenOpenNetworking {
         state.quickDock = AeternumCarpetSettings.quickDock;
         state.todoList = AeternumCarpetSettings.todoList;
         state.dimension = AeternumCarpetSettings.commandDimension;
+        state.cameraMode = AeternumCarpetSettings.commandCameraMode;
+        state.carefulBreak = AeternumCarpetSettings.carefulBreak;
+        state.carefulBreakMode = AeternumCarpetSettings.carefulBreak ? CarefulBreakStore.getMode(player.getUuid()) : "off";
         state.showJoinBanner = showJoinBanner && AeternumCarpetSettings.joinMotd;
         state.projects = AeternumCarpetSettings.commandProjects;
         state.guide = AeternumCarpetSettings.commandGuide;
@@ -106,6 +110,9 @@ public final class ScreenOpenNetworking {
         public boolean quickDock;
         public boolean todoList;
         public boolean dimension;
+        public String cameraMode = "off";
+        public boolean carefulBreak;
+        public String carefulBreakMode = "off";
         public boolean showJoinBanner;
         public boolean projects;
         public boolean guide;

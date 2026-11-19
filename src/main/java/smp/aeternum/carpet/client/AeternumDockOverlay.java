@@ -38,7 +38,11 @@ public final class AeternumDockOverlay {
     private static final int DIM_TILE_H = 16;
     private static final int DIM_TILE_GAP = 3;
     private static final int DIM_OFFSET_Y = 4;
-    private static final int DIM_ROW_W = 3 * DIM_TILE_W + 2 * DIM_TILE_GAP;
+    private static final int MICRO_SEP_W = 7;
+    private static final Identifier CS_CAMERA_TEX = AeternumCarpet.id("textures/gui/cs_camera.png");
+    private static final Identifier CB_OFF_TEX = AeternumCarpet.id("textures/gui/cb_off.png");
+    private static final Identifier CB_SNEAK_TEX = AeternumCarpet.id("textures/gui/cb_sneak.png");
+    private static final Identifier CB_ALWAYS_TEX = AeternumCarpet.id("textures/gui/cb_always.png");
     private static final DimButton[] DIMENSIONS = {
         new DimButton("Overworld", "minecraft:overworld", "overworld", AeternumCarpet.id("textures/gui/dim_overworld.png"), AeternumTheme.ACCENT_GREEN),
         new DimButton("Nether", "minecraft:the_nether", "nether", AeternumCarpet.id("textures/gui/dim_nether.png"), 0xFFD452FF),
@@ -93,6 +97,17 @@ public final class AeternumDockOverlay {
         }
     }
 
+    private static boolean canShowCamera(MinecraftClient client) {
+        return client != null
+            && client.player != null
+            && cachedState.cameraMode != null
+            && !"off".equals(cachedState.cameraMode);
+    }
+
+    private static boolean canShowCarefulBreak(MinecraftClient client) {
+        return client != null && client.player != null && cachedState.carefulBreak;
+    }
+
     private static boolean canShowDimensions(MinecraftClient client) {
         return cachedState.dimension
             && client != null
@@ -101,7 +116,12 @@ public final class AeternumDockOverlay {
     }
 
     private static boolean anySectionEnabled(MinecraftClient client) {
-        return cachedState.joinMotd || cachedState.quickDock || cachedState.todoList || canShowDimensions(client);
+        return cachedState.joinMotd
+            || cachedState.quickDock
+            || cachedState.todoList
+            || canShowCamera(client)
+            || canShowCarefulBreak(client)
+            || canShowDimensions(client);
     }
 
     /** True ONLY while Alt is held and cursor is unlocked for interactive clicks. */
@@ -179,7 +199,81 @@ public final class AeternumDockOverlay {
         return out;
     }
 
-    private static Layout resolveLayout(TextRenderer tr, int width, int height, boolean showDim, boolean showMotd, boolean showDock, boolean showTodo, int slideOffset, List<DockAction> actions) {
+    private static List<MicroItem> buildMicroToolbar(MinecraftClient client) {
+        boolean showCs = canShowCamera(client);
+        boolean showCb = canShowCarefulBreak(client);
+        boolean showDim = canShowDimensions(client);
+        List<MicroItem> items = new ArrayList<>();
+        int cursor = 0;
+
+        if (showCs) {
+            boolean active = client.player != null && client.player.isSpectator();
+            items.add(new MicroItem(
+                false, cursor, "cs", null, CS_CAMERA_TEX, AeternumTheme.ACCENT_CYAN, active,
+                active ? "Salir de /cs (modo cámara activo)" : "Entrar a /cs (modo cámara)"
+            ));
+            cursor += DIM_TILE_W;
+        }
+
+        if (showCb) {
+            if (!items.isEmpty()) {
+                items.add(new MicroItem(true, cursor, null, null, null, 0, false, null));
+                cursor += MICRO_SEP_W;
+            }
+            String mode = cachedState.carefulBreakMode == null ? "off" : cachedState.carefulBreakMode;
+            Identifier tex = switch (mode) {
+                case "sneak" -> CB_SNEAK_TEX;
+                case "always" -> CB_ALWAYS_TEX;
+                default -> CB_OFF_TEX;
+            };
+            int accent = switch (mode) {
+                case "sneak" -> AeternumTheme.ACCENT_CYAN;
+                case "always" -> AeternumTheme.ACCENT_GOLD;
+                default -> 0;
+            };
+            boolean active = !"off".equals(mode);
+            String nextMode = switch (mode) {
+                case "off" -> "sneak";
+                case "sneak" -> "always";
+                default -> "off";
+            };
+            items.add(new MicroItem(
+                false, cursor, "cb:" + nextMode, null, tex, accent, active,
+                "CarefulBreak: " + mode.toUpperCase() + " (clic \u2192 " + nextMode + ")"
+            ));
+            cursor += DIM_TILE_W;
+        }
+
+        if (showDim && client.player != null) {
+            if (!items.isEmpty()) {
+                items.add(new MicroItem(true, cursor, null, null, null, 0, false, null));
+                cursor += MICRO_SEP_W;
+            }
+            String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
+            for (int i = 0; i < DIMENSIONS.length; i++) {
+                DimButton dim = DIMENSIONS[i];
+                if (i > 0) cursor += DIM_TILE_GAP;
+                boolean current = dim.worldId.equals(currentDim);
+                items.add(new MicroItem(
+                    false, cursor, "dim:" + dim.command, dim.worldId, dim.texture, dim.accent, current,
+                    current ? (dim.label + " (dimensión actual)") : ("Ir a " + dim.label + " (/" + dim.command + ")")
+                ));
+                cursor += DIM_TILE_W;
+            }
+        }
+        return items;
+    }
+
+    private static int microToolbarWidth(List<MicroItem> items) {
+        if (items.isEmpty()) return 0;
+        MicroItem last = items.get(items.size() - 1);
+        return last.xOffset + (last.separator ? MICRO_SEP_W : DIM_TILE_W);
+    }
+
+    private static Layout resolveLayout(TextRenderer tr, int width, int height, List<MicroItem> microItems, boolean showMotd, boolean showDock, boolean showTodo, int slideOffset, List<DockAction> actions) {
+        boolean showMicro = !microItems.isEmpty();
+        int microW = microToolbarWidth(microItems);
+
         int dockRowW = actions.isEmpty() ? 220 : actions.size() * TILE_W + (actions.size() - 1) * TILE_GAP;
         int dockBoxW = showDock ? Math.max(380, dockRowW + 20) : 0;
         int dockBoxH = showDock ? TILE_H + 14 : 0;
@@ -189,8 +283,8 @@ public final class AeternumDockOverlay {
         int motdH = showMotd ? 44 + (shownTasks > 0 ? 12 + shownTasks * 12 : 0) : 0;
         int motdW = showMotd ? (showDock ? Math.max(dockBoxW, 420) : 420) : 0;
 
-        int centerW = Math.max(showDim ? DIM_ROW_W : 0, Math.max(motdW, dockBoxW));
-        boolean centerActive = showDim || showMotd || showDock;
+        int centerW = Math.max(microW, Math.max(motdW, dockBoxW));
+        boolean centerActive = showMicro || showMotd || showDock;
 
         List<String> todos = cachedState.todos != null ? cachedState.todos : List.of();
         boolean todoCompact = todos.isEmpty() || MaterialsHudOverlay.todoCollapsed;
@@ -226,11 +320,11 @@ public final class AeternumDockOverlay {
         int motdX = centerX + (centerW - motdW) / 2;
         int motdY = showDock ? (dockY - 8 - motdH) : (baseBottom - motdH);
 
-        int dimX = showMotd ? motdX : (showDock ? dockX : (centerX + (centerW - DIM_ROW_W) / 2));
+        int dimX = showMotd ? motdX : (showDock ? dockX : (centerX + (centerW - microW) / 2));
         int dimAnchorBottom = showMotd ? (motdY - DIM_OFFSET_Y) : (showDock ? (dockY - DIM_OFFSET_Y) : baseBottom);
-        int dimY = dimAnchorBottom - (showDim ? DIM_TILE_H : 0);
+        int dimY = dimAnchorBottom - (showMicro ? DIM_TILE_H : 0);
 
-        int stackTop = showDim ? dimY : (showMotd ? motdY : dockY);
+        int stackTop = showMicro ? dimY : (showMotd ? motdY : dockY);
         int maxTodoH = todoOnSide ? Math.max(64, height - 64)
             : (centerActive ? Math.max(64, stackTop - 16) : Math.max(64, height - 64));
         TodoLayout todoLayout = (!showTodo || todoCompact)
@@ -300,11 +394,11 @@ public final class AeternumDockOverlay {
         int width = client.getWindow().getScaledWidth();
         int height = client.getWindow().getScaledHeight();
 
-        boolean showDim = interactive && canShowDimensions(client);
+        List<MicroItem> microItems = interactive ? buildMicroToolbar(client) : List.of();
         boolean showMotd = interactive ? cachedState.joinMotd : true;
         boolean showDock = interactive && cachedState.quickDock;
         boolean showTodo = interactive && cachedState.todoList;
-        if (!showDim && !showMotd && !showDock && !showTodo) return;
+        if (microItems.isEmpty() && !showMotd && !showDock && !showTodo) return;
 
         int mx = interactive ? (int) Math.round(client.mouse.getScaledX(client.getWindow())) : -9999;
         int my = interactive ? (int) Math.round(client.mouse.getScaledY(client.getWindow())) : -9999;
@@ -326,12 +420,11 @@ public final class AeternumDockOverlay {
         }
 
         List<DockAction> actions = showDock ? buildActions() : List.of();
-        Layout l = resolveLayout(tr, width, height, showDim, showMotd, showDock, showTodo, slideOffset, actions);
+        Layout l = resolveLayout(tr, width, height, microItems, showMotd, showDock, showTodo, slideOffset, actions);
         String hoveredTooltip = null;
 
-        if (showDim) {
-            String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
-            hoveredTooltip = renderDimensionBar(c, tr, l, currentDim, mx, my, hoveredTooltip);
+        if (!microItems.isEmpty()) {
+            hoveredTooltip = renderMicroToolbar(c, l, microItems, mx, my, hoveredTooltip);
         }
         if (showMotd) {
             hoveredTooltip = renderMotdCard(c, tr, l, interactive, joinBanner, mx, my, hoveredTooltip);
@@ -352,27 +445,27 @@ public final class AeternumDockOverlay {
         }
     }
 
-    private static String renderDimensionBar(DrawContext c, TextRenderer tr, Layout l, String currentDim, int mx, int my, String hoveredTooltip) {
-        for (int i = 0; i < DIMENSIONS.length; i++) {
-            DimButton dim = DIMENSIONS[i];
-            int bx = l.dimX + i * (DIM_TILE_W + DIM_TILE_GAP);
-            int by = l.dimY;
-            boolean current = dim.worldId.equals(currentDim);
+    private static String renderMicroToolbar(DrawContext c, Layout l, List<MicroItem> items, int mx, int my, String hoveredTooltip) {
+        int by = l.dimY;
+        for (MicroItem item : items) {
+            int bx = l.dimX + item.xOffset;
+            if (item.separator) {
+                c.fill(bx + 3, by + 2, bx + 4, by + DIM_TILE_H - 2, AeternumTheme.BORDER_BRIGHT);
+                continue;
+            }
             boolean over = mx >= bx && mx < bx + DIM_TILE_W && my >= by && my < by + DIM_TILE_H;
             c.fill(bx - 1, by + 1, bx + DIM_TILE_W + 1, by + DIM_TILE_H + 2, 0x40000000);
-            int bg = current ? 0xE61F2029 : (over ? 0xE6282834 : 0xCC121216);
-            int border = current ? dim.accent : (over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
+            int bg = item.active ? 0xE61F2029 : (over ? 0xE6282834 : 0xCC121216);
+            int border = item.active ? item.accent : (over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             AeternumTheme.drawCard(c, bx, by, DIM_TILE_W, DIM_TILE_H, bg, border);
-            if (current) {
-                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 2, dim.accent);
+            if (item.active) {
+                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 2, item.accent);
             } else if (over) {
                 c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 2, AeternumTheme.TEXT_PRIMARY);
             }
-            c.drawTexture(RenderPipelines.GUI_TEXTURED, dim.texture, bx + 2, by + 2, 0f, 0f, 12, 12, 12, 12);
-            if (over) {
-                hoveredTooltip = current
-                    ? (dim.label + " (dimensión actual)")
-                    : ("Ir a " + dim.label + " (/" + dim.command + ")");
+            c.drawTexture(RenderPipelines.GUI_TEXTURED, item.texture, bx + 2, by + 2, 0f, 0f, 12, 12, 12, 12);
+            if (over && item.tooltip != null) {
+                hoveredTooltip = item.tooltip;
             }
         }
         return hoveredTooltip;
@@ -578,25 +671,35 @@ public final class AeternumDockOverlay {
         int width = client.getWindow().getScaledWidth();
         int height = client.getWindow().getScaledHeight();
 
-        boolean showDim = canShowDimensions(client);
+        List<MicroItem> microItems = buildMicroToolbar(client);
         boolean showMotd = cachedState.joinMotd;
         boolean showDock = cachedState.quickDock;
         boolean showTodo = cachedState.todoList;
-        if (!showDim && !showMotd && !showDock && !showTodo) return;
+        if (microItems.isEmpty() && !showMotd && !showDock && !showTodo) return;
 
         List<DockAction> actions = showDock ? buildActions() : List.of();
-        Layout l = resolveLayout(client.textRenderer, width, height, showDim, showMotd, showDock, showTodo, 0, actions);
+        Layout l = resolveLayout(client.textRenderer, width, height, microItems, showMotd, showDock, showTodo, 0, actions);
 
-        if (showDim) {
+        if (!microItems.isEmpty()) {
             String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
-            for (int i = 0; i < DIMENSIONS.length; i++) {
-                DimButton dim = DIMENSIONS[i];
-                int bx = l.dimX + i * (DIM_TILE_W + DIM_TILE_GAP);
-                int by = l.dimY;
+            int by = l.dimY;
+            for (MicroItem item : microItems) {
+                if (item.separator) continue;
+                int bx = l.dimX + item.xOffset;
                 if (mx >= bx && mx < bx + DIM_TILE_W && my >= by && my < by + DIM_TILE_H) {
-                    if (!dim.worldId.equals(currentDim) && client.player.networkHandler != null) {
-                        client.player.networkHandler.sendChatCommand(dim.command);
+                    if (client.player.networkHandler == null) return;
+                    if ("cs".equals(item.action)) {
+                        client.player.networkHandler.sendChatCommand("cs");
                         closeAfterAction(client, true);
+                    } else if (item.action != null && item.action.startsWith("cb:")) {
+                        String nextMode = item.action.substring(3);
+                        cachedState.carefulBreakMode = nextMode;
+                        client.player.networkHandler.sendChatCommand("carefulbreak " + nextMode);
+                    } else if (item.action != null && item.action.startsWith("dim:")) {
+                        if (item.worldId == null || !item.worldId.equals(currentDim)) {
+                            client.player.networkHandler.sendChatCommand(item.action.substring(4));
+                            closeAfterAction(client, true);
+                        }
                     }
                     return;
                 }
@@ -704,6 +807,8 @@ public final class AeternumDockOverlay {
     private record DockAction(String label, String screenId, ItemStack icon, String tooltip) {}
 
     private record DimButton(String label, String worldId, String command, Identifier texture, int accent) {}
+
+    private record MicroItem(boolean separator, int xOffset, String action, String worldId, Identifier texture, int accent, boolean active, String tooltip) {}
 
     private record WrappedTodo(int index, String prefix, int prefixW, List<OrderedText> lines, int yOffset, int height) {}
 
