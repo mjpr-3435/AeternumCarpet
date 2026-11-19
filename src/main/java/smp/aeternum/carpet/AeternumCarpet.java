@@ -61,6 +61,7 @@ import smp.aeternum.carpet.command.CarefulBreakCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
+import smp.aeternum.carpet.bot.FakePlayerReloadManager;
 import smp.aeternum.carpet.bot.ModScreenHandlers;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
@@ -95,8 +96,13 @@ public class AeternumCarpet implements ModInitializer {
 			MaterialsStore.load(server);
 			CameraModeStore.load(server);
 			CarefulBreakStore.load(server);
+			FakePlayerReloadManager.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
+		ServerLifecycleEvents.SERVER_STARTED.register(server ->
+			CameraModeCommand.attachAfterModRegistration(server.getCommandManager().getDispatcher())
+		);
+		ServerLifecycleEvents.SERVER_STOPPING.register(FakePlayerReloadManager::onServerStopping);
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
@@ -104,11 +110,16 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(FakePlayerReloadManager::tick);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
-		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd)
-		);
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd);
+			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.markDirty();
+		});
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.markDirty();
+		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});

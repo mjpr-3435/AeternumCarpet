@@ -45,7 +45,7 @@ public final class CommandAvailabilityRefresher {
         lastProjectsEnabled = AeternumCarpetSettings.commandProjects;
         lastDimensionEnabled = AeternumCarpetSettings.commandDimension;
         lastBotInventoryEnabled = AeternumCarpetSettings.editBotInventory;
-        lastCameraMode = AeternumCarpetSettings.commandCameraMode;
+        lastCameraMode = AeternumCarpetSettings.cameraMode;
         lastHatEnabled = AeternumCarpetSettings.commandHat;
         lastCarefulBreakEnabled = AeternumCarpetSettings.carefulBreak;
     }
@@ -66,7 +66,7 @@ public final class CommandAvailabilityRefresher {
         boolean projectsEnabled = AeternumCarpetSettings.commandProjects;
         boolean dimensionEnabled = AeternumCarpetSettings.commandDimension;
         boolean botInventoryEnabled = AeternumCarpetSettings.editBotInventory;
-        String cameraMode = AeternumCarpetSettings.commandCameraMode;
+        String cameraMode = AeternumCarpetSettings.cameraMode;
         boolean hatEnabled = AeternumCarpetSettings.commandHat;
         boolean carefulBreakEnabled = AeternumCarpetSettings.carefulBreak;
         if (todoEnabled == lastTodoEnabled

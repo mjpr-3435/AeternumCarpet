@@ -1,9 +1,13 @@
 package smp.aeternum.carpet.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.tree.CommandNode;
+import java.lang.reflect.Field;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -25,13 +29,36 @@ public final class CameraModeCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("cs")
-            .requires(source -> !"off".equals(AeternumCarpetSettings.commandCameraMode))
+            .requires(source -> !"off".equals(AeternumCarpetSettings.cameraMode))
             .executes(CameraModeCommand::toggle));
+    }
+
+    /** Ensures /cs root executor and permission work even if another mod (e.g. WorldEdit) also registers /cs. */
+    @SuppressWarnings("unchecked")
+    public static void attachAfterModRegistration(CommandDispatcher<ServerCommandSource> dispatcher) {
+        CommandNode<ServerCommandSource> existing = dispatcher.getRoot().getChild("cs");
+        if (existing == null) {
+            register(dispatcher);
+            return;
+        }
+        Predicate<ServerCommandSource> existingReq = existing.getRequirement();
+        Predicate<ServerCommandSource> combinedReq = source ->
+            !"off".equals(AeternumCarpetSettings.cameraMode) || (existingReq != null && existingReq.test(source));
+        try {
+            Field reqField = CommandNode.class.getDeclaredField("requirement");
+            reqField.setAccessible(true);
+            reqField.set(existing, combinedReq);
+        } catch (ReflectiveOperationException ignored) {
+        }
+        LiteralArgumentBuilder<ServerCommandSource> patch = literal("cs")
+            .requires(combinedReq)
+            .executes(CameraModeCommand::toggle);
+        dispatcher.register(patch);
     }
 
     private static int toggle(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
-        String mode = AeternumCarpetSettings.commandCameraMode;
+        String mode = AeternumCarpetSettings.cameraMode;
         if ("off".equals(mode)) {
             context.getSource().sendError(Text.literal("El comando /cs está desactivado."));
             return 0;

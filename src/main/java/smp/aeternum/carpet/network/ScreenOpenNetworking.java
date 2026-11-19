@@ -83,7 +83,7 @@ public final class ScreenOpenNetworking {
         state.quickDock = AeternumCarpetSettings.quickDock;
         state.todoList = AeternumCarpetSettings.todoList;
         state.dimension = AeternumCarpetSettings.commandDimension;
-        state.cameraMode = AeternumCarpetSettings.commandCameraMode;
+        state.cameraMode = AeternumCarpetSettings.cameraMode;
         state.carefulBreak = AeternumCarpetSettings.carefulBreak;
         state.carefulBreakMode = AeternumCarpetSettings.carefulBreak ? CarefulBreakStore.getMode(player.getUuid()) : "off";
         state.showJoinBanner = showJoinBanner && AeternumCarpetSettings.joinMotd;
