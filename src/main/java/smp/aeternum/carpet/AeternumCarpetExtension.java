@@ -52,7 +52,7 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandActions.name", "Command Actions"),
             Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation."),
             Map.entry("carpet.rule.joinMotd.name", "Join MOTD"),
-            Map.entry("carpet.rule.joinMotd.desc", "Shows the Aeternum Network MOTD banner on player join (7s) and in the hold-Alt overlay."),
+            Map.entry("carpet.rule.joinMotd.desc", "Shows the Aeternum Network MOTD banner on player join (5s) and in the hold-Alt overlay."),
             Map.entry("carpet.rule.quickDock.name", "Quick Dock"),
             Map.entry("carpet.rule.quickDock.desc", "Enables the hold-Alt quick access dock bar above the hotbar."),
             Map.entry("carpet.rule.commandGuide.name", "Command Guide"),

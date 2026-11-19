@@ -24,7 +24,7 @@ public final class AeternumDockOverlay {
     private static final Gson GSON = new Gson();
     private static final Identifier LOGO_TEX = AeternumCarpet.id("textures/gui/aeternum_logo.png");
     private static final String[] SERVERS = {"SMP", "CMP", "MMP", "PMP"};
-    private static final long JOIN_BANNER_DURATION_MS = 7_000L;
+    private static final long JOIN_BANNER_DURATION_MS = 5_000L;
     private static final int TILE_W = 62;
     private static final int TILE_H = 42;
     private static final int TILE_GAP = 6;
@@ -34,15 +34,15 @@ public final class AeternumDockOverlay {
     private static final int TODO_LINE_H = 10;
     private static final int TODO_ITEM_GAP = 4;
     private static final int TODO_PILL_H = 18;
-    private static final int DIM_TILE_W = 86;
-    private static final int DIM_TILE_H = 22;
-    private static final int DIM_TILE_GAP = 6;
-    private static final int DIM_BOX_W = 3 * DIM_TILE_W + 2 * DIM_TILE_GAP + 14;
-    private static final int DIM_BOX_H = DIM_TILE_H + 10;
+    private static final int DIM_TILE_W = 16;
+    private static final int DIM_TILE_H = 16;
+    private static final int DIM_TILE_GAP = 3;
+    private static final int DIM_OFFSET_Y = 4;
+    private static final int DIM_ROW_W = 3 * DIM_TILE_W + 2 * DIM_TILE_GAP;
     private static final DimButton[] DIMENSIONS = {
         new DimButton("Overworld", "minecraft:overworld", "overworld", AeternumCarpet.id("textures/gui/dim_overworld.png"), AeternumTheme.ACCENT_GREEN),
         new DimButton("Nether", "minecraft:the_nether", "nether", AeternumCarpet.id("textures/gui/dim_nether.png"), 0xFFD452FF),
-        new DimButton("End", "minecraft:the_end", "end", AeternumCarpet.id("textures/gui/dim_end.png"), AeternumTheme.ACCENT_GOLD)
+        new DimButton("End", "minecraft:the_end", "end", AeternumCarpet.id("textures/gui/dim_end.png"), 0xFFE3E59C)
     };
 
     private static DockState cachedState = new DockState();
@@ -189,10 +189,7 @@ public final class AeternumDockOverlay {
         int motdH = showMotd ? 44 + (shownTasks > 0 ? 12 + shownTasks * 12 : 0) : 0;
         int motdW = showMotd ? (showDock ? Math.max(dockBoxW, 420) : 420) : 0;
 
-        int dimBoxW = showDim ? DIM_BOX_W : 0;
-        int dimBoxH = showDim ? DIM_BOX_H : 0;
-
-        int centerW = Math.max(dimBoxW, Math.max(motdW, dockBoxW));
+        int centerW = Math.max(showDim ? DIM_ROW_W : 0, Math.max(motdW, dockBoxW));
         boolean centerActive = showDim || showMotd || showDock;
 
         List<String> todos = cachedState.todos != null ? cachedState.todos : List.of();
@@ -228,9 +225,10 @@ public final class AeternumDockOverlay {
         int dockY = baseBottom - dockBoxH;
         int motdX = centerX + (centerW - motdW) / 2;
         int motdY = showDock ? (dockY - 8 - motdH) : (baseBottom - motdH);
-        int dimX = centerX + (centerW - dimBoxW) / 2;
-        int dimAnchorBottom = showMotd ? (motdY - 6) : (showDock ? (dockY - 6) : baseBottom);
-        int dimY = dimAnchorBottom - dimBoxH;
+
+        int dimX = showMotd ? motdX : (showDock ? dockX : (centerX + (centerW - DIM_ROW_W) / 2));
+        int dimAnchorBottom = showMotd ? (motdY - DIM_OFFSET_Y) : (showDock ? (dockY - DIM_OFFSET_Y) : baseBottom);
+        int dimY = dimAnchorBottom - (showDim ? DIM_TILE_H : 0);
 
         int stackTop = showDim ? dimY : (showMotd ? motdY : dockY);
         int maxTodoH = todoOnSide ? Math.max(64, height - 64)
@@ -253,7 +251,7 @@ public final class AeternumDockOverlay {
             todoY = Math.max(8, baseBottom - todoH);
         }
 
-        return new Layout(dimX, dimY, dimBoxW, dimBoxH, motdX, motdY, motdW, motdH, dockX, dockY, dockBoxW, dockBoxH, dockRowW, todoX, todoY, todoW, todoH, shownTasks, todoCompact, compactLabel, todoLayout);
+        return new Layout(dimX, dimY, motdX, motdY, motdW, motdH, dockX, dockY, dockBoxW, dockBoxH, dockRowW, todoX, todoY, todoW, todoH, shownTasks, todoCompact, compactLabel, todoLayout);
     }
 
     private static TodoLayout measureTodos(TextRenderer tr, List<String> rawTodos, int w, boolean interactive, int maxHeight) {
@@ -355,29 +353,22 @@ public final class AeternumDockOverlay {
     }
 
     private static String renderDimensionBar(DrawContext c, TextRenderer tr, Layout l, String currentDim, int mx, int my, String hoveredTooltip) {
-        c.fill(l.dimX - 2, l.dimY + 2, l.dimX + l.dimBoxW + 2, l.dimY + l.dimBoxH + 3, 0x45000000);
-        c.fill(l.dimX, l.dimY, l.dimX + l.dimBoxW, l.dimY + l.dimBoxH, 0xE60D0D10);
-        c.drawBorder(l.dimX, l.dimY, l.dimBoxW, l.dimBoxH, AeternumTheme.BORDER_BRIGHT);
-        c.fill(l.dimX + 1, l.dimY + 1, l.dimX + l.dimBoxW - 1, l.dimY + 2, AeternumTheme.TOP_HIGHLIGHT);
-
-        int bxStart = l.dimX + 7;
-        int by = l.dimY + 5;
         for (int i = 0; i < DIMENSIONS.length; i++) {
             DimButton dim = DIMENSIONS[i];
-            int bx = bxStart + i * (DIM_TILE_W + DIM_TILE_GAP);
+            int bx = l.dimX + i * (DIM_TILE_W + DIM_TILE_GAP);
+            int by = l.dimY;
             boolean current = dim.worldId.equals(currentDim);
             boolean over = mx >= bx && mx < bx + DIM_TILE_W && my >= by && my < by + DIM_TILE_H;
-            int bg = current ? 0xFF1F2029 : (over ? AeternumTheme.CARD_SELECTED : AeternumTheme.CARD_BG);
+            c.fill(bx - 1, by + 1, bx + DIM_TILE_W + 1, by + DIM_TILE_H + 2, 0x40000000);
+            int bg = current ? 0xE61F2029 : (over ? 0xE6282834 : 0xCC121216);
             int border = current ? dim.accent : (over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             AeternumTheme.drawCard(c, bx, by, DIM_TILE_W, DIM_TILE_H, bg, border);
             if (current) {
-                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 3, dim.accent);
+                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 2, dim.accent);
             } else if (over) {
-                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 3, AeternumTheme.TEXT_PRIMARY);
+                c.fill(bx + 1, by + 1, bx + DIM_TILE_W - 1, by + 2, AeternumTheme.TEXT_PRIMARY);
             }
-            c.drawTexture(RenderPipelines.GUI_TEXTURED, dim.texture, bx + 5, by + 3, 0f, 0f, 16, 16, 16, 16);
-            c.drawTextWithShadow(tr, dim.label, bx + 25, by + 7,
-                (current || over) ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
+            c.drawTexture(RenderPipelines.GUI_TEXTURED, dim.texture, bx + 2, by + 2, 0f, 0f, 12, 12, 12, 12);
             if (over) {
                 hoveredTooltip = current
                     ? (dim.label + " (dimensión actual)")
@@ -598,11 +589,10 @@ public final class AeternumDockOverlay {
 
         if (showDim) {
             String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
-            int bxStart = l.dimX + 7;
-            int by = l.dimY + 5;
             for (int i = 0; i < DIMENSIONS.length; i++) {
                 DimButton dim = DIMENSIONS[i];
-                int bx = bxStart + i * (DIM_TILE_W + DIM_TILE_GAP);
+                int bx = l.dimX + i * (DIM_TILE_W + DIM_TILE_GAP);
+                int by = l.dimY;
                 if (mx >= bx && mx < bx + DIM_TILE_W && my >= by && my < by + DIM_TILE_H) {
                     if (!dim.worldId.equals(currentDim) && client.player.networkHandler != null) {
                         client.player.networkHandler.sendChatCommand(dim.command);
@@ -722,7 +712,7 @@ public final class AeternumDockOverlay {
     }
 
     private record Layout(
-        int dimX, int dimY, int dimBoxW, int dimBoxH,
+        int dimX, int dimY,
         int motdX, int motdY, int motdW, int motdH,
         int dockX, int dockY, int dockBoxW, int dockBoxH, int dockRowW,
         int todoX, int todoY, int todoW, int todoH,
