@@ -220,8 +220,8 @@ public final class AeternumDockOverlay {
             }
             String mode = cachedState.carefulBreakMode == null ? "off" : cachedState.carefulBreakMode;
             int accent = switch (mode) {
-                case "sneak" -> 0xFF47D1FF;
-                case "always" -> 0xFFE8B948;
+                case "sneak" -> 0xFFF6E66D;
+                case "always" -> 0xFFE69A28;
                 default -> 0;
             };
             boolean active = !"off".equals(mode);
