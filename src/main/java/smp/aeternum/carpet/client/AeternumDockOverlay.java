@@ -188,12 +188,12 @@ public final class AeternumDockOverlay {
     private static List<DockAction> buildActions() {
         List<DockAction> out = new ArrayList<>();
         DockState s = cachedState;
-        if (s.actions) out.add(new DockAction("Acciones", "actions", new ItemStack(Items.COMPARATOR), "Paquetes de comandos"));
-        if (s.guide) out.add(new DockAction("Guías", "guide", new ItemStack(Items.BOOKSHELF), "Biblioteca de guías del servidor"));
-        if (s.projects) out.add(new DockAction("Proyectos", "projects", new ItemStack(Items.SHULKER_BOX), "Proyectos, subregiones y materiales"));
-        if (s.blockers) out.add(new DockAction("Blockers", "blockers", new ItemStack(Items.PISTON), "Escáner de bloqueadores"));
-        if (s.exploration) out.add(new DockAction("Mapa", "exploration", new ItemStack(Items.FILLED_MAP), "Mapa topográfico y regiones"));
-        if (s.isOp) out.add(new DockAction("Rules", "rules", new ItemStack(Items.COMMAND_BLOCK), "Editor universal de reglas Carpet"));
+        if (s.actions) out.add(new DockAction("Acciones", "actions", new ItemStack(Items.COMPARATOR)));
+        if (s.guide) out.add(new DockAction("Guías", "guide", new ItemStack(Items.BOOKSHELF)));
+        if (s.projects) out.add(new DockAction("Proyectos", "projects", new ItemStack(Items.SHULKER_BOX)));
+        if (s.blockers) out.add(new DockAction("Blockers", "blockers", new ItemStack(Items.PISTON)));
+        if (s.exploration) out.add(new DockAction("Mapa", "exploration", new ItemStack(Items.FILLED_MAP)));
+        if (s.isOp) out.add(new DockAction("Rules", "rules", new ItemStack(Items.COMMAND_BLOCK)));
         return out;
     }
 
@@ -206,16 +206,13 @@ public final class AeternumDockOverlay {
 
         if (showCs) {
             boolean active = client.player != null && client.player.isSpectator();
-            items.add(new MicroItem(
-                false, cursor, DIM_TILE_W, "cs", null, null, CS_ICON, 0xFF3FD8FF, active,
-                active ? "Modo cámara (/cs): ACTIVO" : "Modo cámara (/cs): clic para entrar"
-            ));
+            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cs", null, null, CS_ICON, 0xFF3FD8FF, active));
             cursor += DIM_TILE_W;
         }
 
         if (showCb) {
             if (!items.isEmpty()) {
-                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false, null));
+                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false));
                 cursor += MICRO_SEP_W;
             }
             String mode = cachedState.carefulBreakMode == null ? "off" : cachedState.carefulBreakMode;
@@ -230,16 +227,13 @@ public final class AeternumDockOverlay {
                 case "sneak" -> "always";
                 default -> "off";
             };
-            items.add(new MicroItem(
-                false, cursor, DIM_TILE_W, "cb:" + nextMode, null, null, CB_ICON, accent, active,
-                "CarefulBreak: " + mode.toUpperCase() + " (clic \u2192 " + nextMode + ")"
-            ));
+            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cb:" + nextMode, null, null, CB_ICON, accent, active));
             cursor += DIM_TILE_W;
         }
 
         if (showDim && client.player != null) {
             if (!items.isEmpty()) {
-                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false, null));
+                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false));
                 cursor += MICRO_SEP_W;
             }
             String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
@@ -247,10 +241,7 @@ public final class AeternumDockOverlay {
                 DimButton dim = DIMENSIONS[i];
                 if (i > 0) cursor += DIM_TILE_GAP;
                 boolean current = dim.worldId.equals(currentDim);
-                items.add(new MicroItem(
-                    false, cursor, DIM_TILE_W, "dim:" + dim.command, dim.worldId, dim.texture, ItemStack.EMPTY, dim.accent, current,
-                    current ? (dim.label + " (dimensión actual)") : ("Ir a " + dim.label + " (/" + dim.command + ")")
-                ));
+                items.add(new MicroItem(false, cursor, DIM_TILE_W, "dim:" + dim.command, dim.worldId, dim.texture, ItemStack.EMPTY, dim.accent, current));
                 cursor += DIM_TILE_W;
             }
         }
@@ -414,31 +405,26 @@ public final class AeternumDockOverlay {
 
         List<DockAction> actions = showDock ? buildActions() : List.of();
         Layout l = resolveLayout(tr, width, height, microItems, showMotd, showDock, showTodo, slideOffset, actions);
-        String hoveredTooltip = null;
 
         if (!microItems.isEmpty()) {
-            hoveredTooltip = renderMicroToolbar(c, tr, l, microItems, mx, my, hoveredTooltip);
+            renderMicroToolbar(c, l, microItems, mx, my);
         }
         if (showMotd) {
-            hoveredTooltip = renderMotdCard(c, tr, l, interactive, joinBanner, mx, my, hoveredTooltip);
+            renderMotdCard(c, tr, l, interactive, joinBanner, mx, my);
         }
         if (showDock) {
-            hoveredTooltip = renderDockBar(c, tr, l, width, actions, mx, my, hoveredTooltip);
+            renderDockBar(c, tr, l, width, actions, mx, my);
         }
         if (showTodo) {
             if (l.todoCompact) {
-                hoveredTooltip = renderCompactTodoPill(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.compactTodoLabel, mx, my, hoveredTooltip);
+                renderCompactTodoPill(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.compactTodoLabel, mx, my);
             } else {
-                hoveredTooltip = renderTodoCard(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.todoLayout, true, mx, my, hoveredTooltip);
+                renderTodoCard(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.todoLayout, true, mx, my);
             }
-        }
-
-        if (interactive && hoveredTooltip != null) {
-            c.drawTooltip(tr, Text.literal(hoveredTooltip), mx, my);
         }
     }
 
-    private static String renderMicroToolbar(DrawContext c, TextRenderer tr, Layout l, List<MicroItem> items, int mx, int my, String hoveredTooltip) {
+    private static void renderMicroToolbar(DrawContext c, Layout l, List<MicroItem> items, int mx, int my) {
         int by = l.dimY;
         for (MicroItem item : items) {
             int bx = l.dimX + item.xOffset;
@@ -466,14 +452,10 @@ public final class AeternumDockOverlay {
                 c.drawItem(item.icon, 0, 0);
                 c.getMatrices().popMatrix();
             }
-            if (over && item.tooltip != null) {
-                hoveredTooltip = item.tooltip;
-            }
         }
-        return hoveredTooltip;
     }
 
-    private static String renderMotdCard(DrawContext c, TextRenderer tr, Layout l, boolean interactive, boolean joinBanner, int mx, int my, String hoveredTooltip) {
+    private static void renderMotdCard(DrawContext c, TextRenderer tr, Layout l, boolean interactive, boolean joinBanner, int mx, int my) {
         c.fill(l.motdX - 2, l.motdY + 2, l.motdX + l.motdW + 2, l.motdY + l.motdH + 3, 0x45000000);
         c.fill(l.motdX, l.motdY, l.motdX + l.motdW, l.motdY + l.motdH, 0xE60D0D10);
         c.drawBorder(l.motdX, l.motdY, l.motdW, l.motdH, AeternumTheme.BORDER_BRIGHT);
@@ -500,7 +482,6 @@ public final class AeternumDockOverlay {
             String editLabel = "Tareas";
             c.drawTextWithShadow(tr, editLabel, editX + (EDIT_BTN_W - tr.getWidth(editLabel)) / 2, pillY + 5,
                 overEdit ? AeternumTheme.ACCENT_GOLD : AeternumTheme.TEXT_SECONDARY);
-            if (overEdit) hoveredTooltip = "Editar tareas del MOTD";
         }
 
         for (int i = 0; i < SERVERS.length; i++) {
@@ -510,7 +491,6 @@ public final class AeternumDockOverlay {
             AeternumTheme.drawCard(c, px, pillY, pillW, 18, over ? 0xFF2C2C36 : 0xFF17171D, over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             c.drawTextWithShadow(tr, srv, px + (pillW - tr.getWidth(srv)) / 2, pillY + 5,
                 over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-            if (over) hoveredTooltip = "Conectar a " + srv;
         }
 
         List<String> tasks = cachedState.tasks != null ? cachedState.tasks : List.of();
@@ -535,10 +515,9 @@ public final class AeternumDockOverlay {
                 c.fill(l.motdX + 1, l.motdY + l.motdH - 2, l.motdX + 1 + barW, l.motdY + l.motdH - 1, AeternumTheme.ACCENT_GOLD);
             }
         }
-        return hoveredTooltip;
     }
 
-    private static String renderDockBar(DrawContext c, TextRenderer tr, Layout l, int width, List<DockAction> actions, int mx, int my, String hoveredTooltip) {
+    private static void renderDockBar(DrawContext c, TextRenderer tr, Layout l, int width, List<DockAction> actions, int mx, int my) {
         c.fill(l.dockX - 2, l.dockY + 2, l.dockX + l.dockBoxW + 2, l.dockY + l.dockBoxH + 3, 0x45000000);
         c.fill(l.dockX, l.dockY, l.dockX + l.dockBoxW, l.dockY + l.dockBoxH, 0xE60D0D10);
         c.drawBorder(l.dockX, l.dockY, l.dockBoxW, l.dockBoxH, AeternumTheme.BORDER_BRIGHT);
@@ -546,7 +525,7 @@ public final class AeternumDockOverlay {
 
         if (actions.isEmpty()) {
             c.drawCenteredTextWithShadow(tr, "Sin módulos activos en el servidor.", width / 2, l.dockY + (l.dockBoxH - 8) / 2, AeternumTheme.TEXT_MUTED);
-            return hoveredTooltip;
+            return;
         }
 
         int startX = l.dockX + (l.dockBoxW - l.dockRowW) / 2;
@@ -560,16 +539,14 @@ public final class AeternumDockOverlay {
             AeternumTheme.drawCard(c, tx, tileY, TILE_W, TILE_H, bg, border);
             if (over) {
                 c.fill(tx + 1, tileY + 1, tx + TILE_W - 1, tileY + 3, AeternumTheme.TEXT_PRIMARY);
-                hoveredTooltip = act.tooltip;
             }
             c.drawItem(act.icon, tx + (TILE_W - 16) / 2, tileY + 6);
             c.drawTextWithShadow(tr, act.label, tx + (TILE_W - tr.getWidth(act.label)) / 2, tileY + 27,
                 over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
         }
-        return hoveredTooltip;
     }
 
-    private static String renderCompactTodoPill(DrawContext c, TextRenderer tr, int x, int y, int w, int h, String label, int mx, int my, String hoveredTooltip) {
+    private static void renderCompactTodoPill(DrawContext c, TextRenderer tr, int x, int y, int w, int h, String label, int mx, int my) {
         List<String> todos = cachedState.todos != null ? cachedState.todos : List.of();
         boolean over = mx >= x && mx < x + w && my >= y && my < y + h;
         c.fill(x - 1, y + 1, x + w + 1, y + h + 2, 0x40000000);
@@ -580,15 +557,9 @@ public final class AeternumDockOverlay {
         }
         c.drawTextWithShadow(tr, label, x + (w - tr.getWidth(label)) / 2, y + 5,
             over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-        if (over) {
-            hoveredTooltip = todos.isEmpty()
-                ? "Añadir nota rápida"
-                : ("Expandir tus notas (" + todos.size() + ")");
-        }
-        return hoveredTooltip;
     }
 
-    private static String renderTodoCard(DrawContext c, TextRenderer tr, int x, int y, int w, int h, TodoLayout todoLayout, boolean interactive, int mx, int my, String hoveredTooltip) {
+    private static void renderTodoCard(DrawContext c, TextRenderer tr, int x, int y, int w, int h, TodoLayout todoLayout, boolean interactive, int mx, int my) {
         List<String> todos = cachedState.todos != null ? cachedState.todos : List.of();
         boolean pinned = MaterialsHudOverlay.todoPinned;
         c.fill(x - 2, y + 2, x + w + 2, y + h + 3, 0x45000000);
@@ -606,7 +577,6 @@ public final class AeternumDockOverlay {
             AeternumTheme.drawCard(c, addX, btnY, 15, 13, overAdd ? 0xFF2C2C36 : 0xFF17171D,
                 overAdd ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             c.drawTextWithShadow(tr, "+", addX + 5, btnY + 3, overAdd ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-            if (overAdd) hoveredTooltip = "Añadir nota rápida";
 
             int pinX = addX - 18;
             boolean overPin = mx >= pinX && mx < pinX + 15 && my >= btnY && my < btnY + 13;
@@ -614,14 +584,12 @@ public final class AeternumDockOverlay {
                 pinned ? 0xFF2A2416 : (overPin ? 0xFF2C2C36 : 0xFF17171D),
                 pinned ? AeternumTheme.ACCENT_GOLD : (overPin ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE));
             c.drawTextWithShadow(tr, "\u2022", pinX + 5, btnY + 3, pinned ? AeternumTheme.ACCENT_GOLD : AeternumTheme.TEXT_SECONDARY);
-            if (overPin) hoveredTooltip = pinned ? "Desfijar notas del HUD" : "Fijar notas en la esquina superior izquierda";
 
             int minX = pinX - 18;
             boolean overMin = mx >= minX && mx < minX + 15 && my >= btnY && my < btnY + 13;
             AeternumTheme.drawCard(c, minX, btnY, 15, 13, overMin ? 0xFF2C2C36 : 0xFF17171D,
                 overMin ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             c.drawTextWithShadow(tr, "-", minX + 5, btnY + 3, overMin ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-            if (overMin) hoveredTooltip = "Minimizar notas";
         }
 
         int sepY = y + 21;
@@ -629,7 +597,7 @@ public final class AeternumDockOverlay {
 
         if (todoLayout.rows.isEmpty()) {
             c.drawText(tr, interactive ? "Sin notas. Pulsa + para añadir." : "Sin notas pendientes.", x + 8, sepY + 5, AeternumTheme.TEXT_MUTED, false);
-            return hoveredTooltip;
+            return;
         }
 
         int listTop = sepY + 4;
@@ -645,7 +613,6 @@ public final class AeternumDockOverlay {
                 boolean overDel = mx >= delX && mx < delX + 12 && my >= ry && my < ry + 12;
                 if (overDel) {
                     c.fill(delX, ry, delX + 12, ry + 12, 0x45E55353);
-                    hoveredTooltip = "Completar / borrar nota";
                 }
                 c.drawText(tr, "\u00D7", delX + 3, ry + 1, overDel ? AeternumTheme.ACCENT_RED : AeternumTheme.TEXT_MUTED, false);
             }
@@ -654,7 +621,6 @@ public final class AeternumDockOverlay {
             WrappedTodo last = todoLayout.rows.get(todoLayout.rows.size() - 1);
             c.drawText(tr, "+" + todoLayout.extraCount + " más", x + 8, listTop + last.yOffset + last.height, AeternumTheme.TEXT_MUTED, false);
         }
-        return hoveredTooltip;
     }
 
     private static void renderPinnedTodo(DrawContext c) {
@@ -664,7 +630,7 @@ public final class AeternumDockOverlay {
         int screenH = client.getWindow().getScaledHeight();
         int todoW = Math.min(230, Math.max(180, screenW / 3));
         TodoLayout layout = measureTodos(tr, cachedState.todos, todoW, false, Math.max(80, screenH - 24));
-        renderTodoCard(c, tr, 10, 10, todoW, layout.height, layout, false, -9999, -9999, null);
+        renderTodoCard(c, tr, 10, 10, todoW, layout.height, layout, false, -9999, -9999);
     }
 
     public static void handleClick(double mx, double my) {
@@ -809,11 +775,11 @@ public final class AeternumDockOverlay {
         }
     }
 
-    private record DockAction(String label, String screenId, ItemStack icon, String tooltip) {}
+    private record DockAction(String label, String screenId, ItemStack icon) {}
 
     private record DimButton(String label, String worldId, String command, Identifier texture, int accent) {}
 
-    private record MicroItem(boolean separator, int xOffset, int width, String action, String worldId, Identifier texture, ItemStack icon, int accent, boolean active, String tooltip) {}
+    private record MicroItem(boolean separator, int xOffset, int width, String action, String worldId, Identifier texture, ItemStack icon, int accent, boolean active) {}
 
     private record WrappedTodo(int index, String prefix, int prefixW, List<OrderedText> lines, int yOffset, int height) {}
 

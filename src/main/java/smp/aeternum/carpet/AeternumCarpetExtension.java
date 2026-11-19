@@ -72,7 +72,7 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.carefulBreak.name", "Careful Break"),
             Map.entry("carpet.rule.carefulBreak.desc", "Enables /carefulbreak <off|sneak|always> so players can choose to collect mined block drops directly into their inventory."),
             Map.entry("carpet.rule.reloadFakePlayers.name", "Reload Fake Players"),
-            Map.entry("carpet.rule.reloadFakePlayers.desc", "Automatically respawns Carpet fake players and resumes their actions 100 ticks after server start.")
+            Map.entry("carpet.rule.reloadFakePlayers.desc", "Automatically respawns Carpet fake players and resumes their actions 20 ticks after server start.")
         );
     }
 }

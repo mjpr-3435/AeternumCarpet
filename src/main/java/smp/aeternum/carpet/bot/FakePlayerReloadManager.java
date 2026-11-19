@@ -32,7 +32,7 @@ import smp.aeternum.carpet.AeternumCarpetSettings;
 public final class FakePlayerReloadManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type LIST_TYPE = new TypeToken<List<SavedBot>>() {}.getType();
-    private static final int RELOAD_DELAY_TICKS = 100;
+    private static final int RELOAD_DELAY_TICKS = 20;
     private static final int SAVE_DEBOUNCE_TICKS = 10;
 
     private static final Field ACTIONS_FIELD = field(EntityPlayerActionPack.class, "actions");
