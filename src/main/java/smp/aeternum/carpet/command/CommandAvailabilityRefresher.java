@@ -26,6 +26,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastHatEnabled;
     private static boolean lastCarefulBreakEnabled;
     private static boolean lastPlayerSitEnabled;
+    private static boolean lastViewInventoryEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -50,6 +51,7 @@ public final class CommandAvailabilityRefresher {
         lastHatEnabled = AeternumCarpetSettings.commandHat;
         lastCarefulBreakEnabled = AeternumCarpetSettings.carefulBreak;
         lastPlayerSitEnabled = AeternumCarpetSettings.playerSit;
+        lastViewInventoryEnabled = AeternumCarpetSettings.commandViewInventory;
     }
 
     public static void tick(MinecraftServer server) {
@@ -72,12 +74,13 @@ public final class CommandAvailabilityRefresher {
         boolean hatEnabled = AeternumCarpetSettings.commandHat;
         boolean carefulBreakEnabled = AeternumCarpetSettings.carefulBreak;
         boolean playerSitEnabled = AeternumCarpetSettings.playerSit;
+        boolean viewInventoryEnabled = AeternumCarpetSettings.commandViewInventory;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled && viewInventoryEnabled == lastViewInventoryEnabled) {
             return;
         }
 
@@ -100,6 +103,7 @@ public final class CommandAvailabilityRefresher {
         lastHatEnabled = hatEnabled;
         lastCarefulBreakEnabled = carefulBreakEnabled;
         lastPlayerSitEnabled = playerSitEnabled;
+        lastViewInventoryEnabled = viewInventoryEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }

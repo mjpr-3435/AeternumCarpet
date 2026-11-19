@@ -100,4 +100,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"false", "true", "silence"})
     public static String updateSuppressionCrashFix = "false";
 
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandViewInventory = false;
+
 }

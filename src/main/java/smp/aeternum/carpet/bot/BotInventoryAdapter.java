@@ -1,21 +1,21 @@
 package smp.aeternum.carpet.bot;
 
-import carpet.patches.EntityPlayerMPFake;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.network.ServerPlayerEntity;
 
-/** Live 41-slot Inventory wrapper directly backed by a Carpet fake player's PlayerInventory. */
+/** Live 41-slot Inventory wrapper directly backed by a ServerPlayerEntity's PlayerInventory. */
 public final class BotInventoryAdapter implements Inventory {
     public static final int SLOT_COUNT = 41;
-    private final EntityPlayerMPFake bot;
+    private final ServerPlayerEntity target;
 
-    public BotInventoryAdapter(EntityPlayerMPFake bot) {
-        this.bot = bot;
+    public BotInventoryAdapter(ServerPlayerEntity target) {
+        this.target = target;
     }
 
-    public EntityPlayerMPFake bot() {
-        return bot;
+    public ServerPlayerEntity target() {
+        return target;
     }
 
     @Override
@@ -25,41 +25,41 @@ public final class BotInventoryAdapter implements Inventory {
 
     @Override
     public boolean isEmpty() {
-        return bot.getInventory().isEmpty();
+        return target.getInventory().isEmpty();
     }
 
     @Override
     public ItemStack getStack(int slot) {
-        return bot.getInventory().getStack(slot);
+        return target.getInventory().getStack(slot);
     }
 
     @Override
     public ItemStack removeStack(int slot, int amount) {
-        return bot.getInventory().removeStack(slot, amount);
+        return target.getInventory().removeStack(slot, amount);
     }
 
     @Override
     public ItemStack removeStack(int slot) {
-        return bot.getInventory().removeStack(slot);
+        return target.getInventory().removeStack(slot);
     }
 
     @Override
     public void setStack(int slot, ItemStack stack) {
-        bot.getInventory().setStack(slot, stack);
+        target.getInventory().setStack(slot, stack);
     }
 
     @Override
     public void markDirty() {
-        bot.getInventory().markDirty();
+        target.getInventory().markDirty();
     }
 
     @Override
     public boolean canPlayerUse(PlayerEntity player) {
-        return !bot.isRemoved() && bot.isAlive();
+        return !target.isRemoved() && target.isAlive();
     }
 
     @Override
     public void clear() {
-        bot.getInventory().clear();
+        target.getInventory().clear();
     }
 }

@@ -147,6 +147,7 @@ public final class CarpetRulesScreen extends UiScreen {
         Map.entry("commandProjects", "Comandos"),
         Map.entry("commandDimension", "Comandos"),
         Map.entry("commandHat", "Comandos"),
+        Map.entry("commandViewInventory", "Comandos"),
         Map.entry("phantomSpawning", "Mundo & Mecánicas"),
         Map.entry("spectatorPortalTravel", "Mundo & Mecánicas"),
         Map.entry("openShulkerInHand", "Mundo & Mecánicas"),
@@ -160,8 +161,14 @@ public final class CarpetRulesScreen extends UiScreen {
         Map.entry("updateSuppressionCrashFix", "Mundo & Mecánicas")
     );
 
+    private static String resolveSource(RuleSnapshot r) {
+        if (r.sourceMod != null && !r.sourceMod.isBlank()) return r.sourceMod;
+        return r.managerId != null ? r.managerId : "Carpet";
+    }
+
     private static String resolveSubfolder(RuleSnapshot r) {
-        if ("aeternum".equalsIgnoreCase(r.managerId) && r.name != null) {
+        String source = resolveSource(r);
+        if ("Aeternum".equalsIgnoreCase(source) && r.name != null) {
             String mapped = AETERNUM_FOLDERS.get(r.name);
             if (mapped != null) return mapped;
         }
@@ -170,7 +177,11 @@ public final class CarpetRulesScreen extends UiScreen {
         for (String cat : r.categories) {
             if (cat == null || cat.isBlank()) continue;
             String low = cat.toLowerCase(Locale.ROOT);
-            if (low.equalsIgnoreCase(r.managerId) || low.equals("aeternum")) continue;
+            if (low.equalsIgnoreCase(source) || low.equalsIgnoreCase(r.managerId)
+                || low.equals("aeternum") || low.equals("chronos") || low.equals("tis")
+                || low.equals("ams") || low.equals("extra") || low.equals("org")) {
+                continue;
+            }
             if (low.equals("feature") || low.equals("command") || low.equals("experimental")) {
                 if (fallback == null) fallback = formatFolderName(cat);
                 continue;
@@ -197,20 +208,29 @@ public final class CarpetRulesScreen extends UiScreen {
         Map<String, Integer> managerModified = new LinkedHashMap<>();
         Map<String, Map<String, Integer>> managerSubs = new LinkedHashMap<>();
         for (RuleSnapshot r : rules) {
-            managerTotals.merge(r.managerId, 1, Integer::sum);
+            String src = resolveSource(r);
+            managerTotals.merge(src, 1, Integer::sum);
             if (!r.isDefault) {
-                managerModified.merge(r.managerId, 1, Integer::sum);
+                managerModified.merge(src, 1, Integer::sum);
             }
             String sub = resolveSubfolder(r);
-            managerSubs.computeIfAbsent(r.managerId, k -> new LinkedHashMap<>()).merge(sub, 1, Integer::sum);
+            managerSubs.computeIfAbsent(src, k -> new LinkedHashMap<>()).merge(sub, 1, Integer::sum);
         }
 
-        for (var entry : managerTotals.entrySet()) {
-            String mgr = entry.getKey();
-            int total = entry.getValue();
+        List<String> sortedManagers = new ArrayList<>(managerTotals.keySet());
+        sortedManagers.sort((a, b) -> {
+            if (a.equals("Aeternum")) return -1;
+            if (b.equals("Aeternum")) return 1;
+            if (a.equals("Carpet")) return -1;
+            if (b.equals("Carpet")) return 1;
+            return a.compareToIgnoreCase(b);
+        });
+
+        for (String mgr : sortedManagers) {
+            int total = managerTotals.get(mgr);
             int mod = managerModified.getOrDefault(mgr, 0);
             boolean expanded = expandedManagers.contains(mgr);
-            String mgrLabel = formatFolderName(mgr) + " (" + total + ")";
+            String mgrLabel = mgr + " (" + total + ")";
             scopes.add(new ScopeItem("MGR:" + mgr, mgrLabel, 0, true, expanded, mgr));
             if (expanded) {
                 scopes.add(new ScopeItem("MGR:" + mgr, "Todas (" + total + ")", 1, false, false, mgr));
@@ -234,16 +254,17 @@ public final class CarpetRulesScreen extends UiScreen {
         String q = searchField != null ? searchField.getText().trim().toLowerCase(Locale.ROOT) : "";
         List<RuleSnapshot> out = new ArrayList<>();
         for (RuleSnapshot r : rules) {
+            String src = resolveSource(r);
             if ("MODIFIED".equals(selectedScope) && r.isDefault) continue;
-            if (selectedScope.startsWith("MGR:") && !r.managerId.equals(selectedScope.substring(4))) continue;
-            if (selectedScope.startsWith("MGR_MOD:") && (r.isDefault || !r.managerId.equals(selectedScope.substring(8)))) continue;
+            if (selectedScope.startsWith("MGR:") && !src.equals(selectedScope.substring(4))) continue;
+            if (selectedScope.startsWith("MGR_MOD:") && (r.isDefault || !src.equals(selectedScope.substring(8)))) continue;
             if (selectedScope.startsWith("SUB:")) {
                 String rest = selectedScope.substring(4);
                 int slash = rest.indexOf('/');
                 if (slash > 0) {
                     String mgr = rest.substring(0, slash);
                     String sub = rest.substring(slash + 1);
-                    if (!r.managerId.equals(mgr) || !resolveSubfolder(r).equals(sub)) continue;
+                    if (!src.equals(mgr) || !resolveSubfolder(r).equals(sub)) continue;
                 }
             }
 

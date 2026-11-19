@@ -55,6 +55,7 @@ import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.command.RulesCommand;
 import smp.aeternum.carpet.command.SitBehaviourCommand;
+import smp.aeternum.carpet.command.ViewInventoryCommand;
 import smp.aeternum.carpet.command.DimensionCommand;
 import smp.aeternum.carpet.command.CameraModeCommand;
 import smp.aeternum.carpet.command.HatCommand;
@@ -171,6 +172,7 @@ public class AeternumCarpet implements ModInitializer {
 			HatCommand.register(dispatcher);
 			CarefulBreakCommand.register(dispatcher);
 			SitBehaviourCommand.register(dispatcher);
+			ViewInventoryCommand.register(dispatcher);
 		});
 	}
 

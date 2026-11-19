@@ -5,10 +5,12 @@ import carpet.api.settings.CarpetRule;
 import carpet.api.settings.InvalidRuleValueException;
 import carpet.api.settings.RuleHelper;
 import carpet.api.settings.SettingsManager;
+import carpet.settings.ParsedRule;
 import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.command.ServerCommandSource;
@@ -102,6 +104,7 @@ public final class CarpetRulesNetworking {
     private static RuleSnapshot toSnapshot(String managerId, CarpetRule<?> rule) {
         RuleSnapshot s = new RuleSnapshot();
         s.managerId = managerId;
+        s.sourceMod = resolveSourceMod(managerId, rule);
         s.name = rule.name();
         s.displayName = RuleHelper.translatedName(rule);
         s.description = RuleHelper.translatedDescription(rule);
@@ -115,8 +118,41 @@ public final class CarpetRulesNetworking {
         return s;
     }
 
+    private static String resolveSourceMod(String managerId, CarpetRule<?> rule) {
+        String className = rule.getClass().getName();
+        if (rule instanceof ParsedRule<?> parsed && parsed.field != null) {
+            className = parsed.field.getDeclaringClass().getName();
+        }
+        String pkg = className.toLowerCase(Locale.ROOT);
+        if (pkg.startsWith("smp.aeternum.")) return "Aeternum";
+        if (pkg.startsWith("carpetextra.")) return "Carpet Extra";
+        if (pkg.startsWith("carpettisaddition.")) return "TIS Addition";
+        if (pkg.startsWith("club.mcams.")) return "AMS Addition";
+        if (pkg.startsWith("chronos.")) return "Chronos";
+        if (pkg.contains("carpetorgaddition")) return "Carpet Org";
+        if (pkg.startsWith("carpet.carpetsettings")) return "Carpet";
+
+        if (rule.categories() != null) {
+            for (String cat : rule.categories()) {
+                if (cat == null) continue;
+                String low = cat.toLowerCase(Locale.ROOT);
+                if (low.equals("aeternum")) return "Aeternum";
+                if (low.equals("extra")) return "Carpet Extra";
+                if (low.equals("tis")) return "TIS Addition";
+                if (low.equals("ams")) return "AMS Addition";
+                if (low.equals("chronos")) return "Chronos";
+                if (low.equals("org") || low.equals("carpet_org")) return "Carpet Org";
+            }
+        }
+        if (managerId != null && !managerId.isBlank() && !"carpet".equalsIgnoreCase(managerId)) {
+            return Character.toUpperCase(managerId.charAt(0)) + managerId.substring(1);
+        }
+        return "Carpet";
+    }
+
     public static final class RuleSnapshot {
         public String managerId;
+        public String sourceMod;
         public String name;
         public String displayName;
         public String description;

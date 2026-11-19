@@ -24,33 +24,70 @@ public final class BotInventoryOpener {
     private BotInventoryOpener() {}
 
     public static void open(ServerPlayerEntity viewer, EntityPlayerMPFake bot) {
+        openOnline(viewer, bot);
+    }
+
+    public static void openOnline(ServerPlayerEntity viewer, ServerPlayerEntity target) {
         if (ServerPlayNetworking.canSend(viewer, DockStatePayload.ID)) {
-            openPlayerStyleUi(viewer, bot);
-        } else {
+            openPlayerStyleOnline(viewer, target);
+        } else if (target instanceof EntityPlayerMPFake bot) {
             openVanillaFallbackUi(viewer, bot);
+        } else {
+            viewer.sendMessage(Text.literal("Necesitas el mod cliente AeternumCarpet para usar /viewinv."), false);
         }
     }
 
-    private static void openPlayerStyleUi(ServerPlayerEntity viewer, EntityPlayerMPFake bot) {
+    public static void openOffline(ServerPlayerEntity viewer, String targetName, OfflinePlayerSession session) {
+        if (!ServerPlayNetworking.canSend(viewer, DockStatePayload.ID)) {
+            viewer.sendMessage(Text.literal("Necesitas el mod cliente AeternumCarpet para usar /viewinv."), false);
+            return;
+        }
         viewer.openHandledScreen(new ExtendedScreenHandlerFactory<BotOpenData>() {
             @Override
             public BotOpenData getScreenOpeningData(ServerPlayerEntity player) {
                 return new BotOpenData(
-                    bot.getId(),
-                    bot.getInventory().getSelectedSlot(),
-                    BotInventoryScreenHandler.toModeCode(bot.interactionManager.getGameMode()),
-                    player.hasPermissionLevel(2)
+                    -1,
+                    session.selectedSlot,
+                    BotInventoryScreenHandler.toModeCode(session.gameMode),
+                    player.hasPermissionLevel(2),
+                    "Offline"
                 );
             }
 
             @Override
             public Text getDisplayName() {
-                return Text.literal(bot.getName().getString());
+                return Text.literal(targetName);
             }
 
             @Override
             public ScreenHandler createMenu(int syncId, PlayerInventory viewerInventory, PlayerEntity playerEntity) {
-                return new BotInventoryScreenHandler(syncId, viewerInventory, bot, playerEntity.hasPermissionLevel(2));
+                return new BotInventoryScreenHandler(syncId, viewerInventory, session, playerEntity.hasPermissionLevel(2));
+            }
+        });
+    }
+
+    private static void openPlayerStyleOnline(ServerPlayerEntity viewer, ServerPlayerEntity target) {
+        String statusLabel = target instanceof EntityPlayerMPFake ? "Bot" : "Online";
+        viewer.openHandledScreen(new ExtendedScreenHandlerFactory<BotOpenData>() {
+            @Override
+            public BotOpenData getScreenOpeningData(ServerPlayerEntity player) {
+                return new BotOpenData(
+                    target.getId(),
+                    target.getInventory().getSelectedSlot(),
+                    BotInventoryScreenHandler.toModeCode(target.interactionManager.getGameMode()),
+                    player.hasPermissionLevel(2),
+                    statusLabel
+                );
+            }
+
+            @Override
+            public Text getDisplayName() {
+                return Text.literal(target.getName().getString());
+            }
+
+            @Override
+            public ScreenHandler createMenu(int syncId, PlayerInventory viewerInventory, PlayerEntity playerEntity) {
+                return new BotInventoryScreenHandler(syncId, viewerInventory, target, playerEntity.hasPermissionLevel(2));
             }
         });
     }

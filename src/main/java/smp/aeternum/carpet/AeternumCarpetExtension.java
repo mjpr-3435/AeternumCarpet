@@ -78,7 +78,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.oldFlintAndSteelBehavior.name", "Old Flint And Steel Behavior"),
             Map.entry("carpet.rule.oldFlintAndSteelBehavior.desc", "Restores 1.12 flint and steel behavior so it can be used to update observers and BUDs."),
             Map.entry("carpet.rule.updateSuppressionCrashFix.name", "Update Suppression Crash Fix"),
-            Map.entry("carpet.rule.updateSuppressionCrashFix.desc", "Prevents update suppression crashes from stopping the server (false, true, or silence).")
+            Map.entry("carpet.rule.updateSuppressionCrashFix.desc", "Prevents update suppression crashes from stopping the server (false, true, or silence)."),
+            Map.entry("carpet.rule.commandViewInventory.name", "Command View Inventory"),
+            Map.entry("carpet.rule.commandViewInventory.desc", "Enables /viewinv <player> for OPs to inspect and edit inventories, ender chests, and gamemodes of online, bot, and offline players.")
         );
     }
 }

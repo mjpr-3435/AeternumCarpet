@@ -33,7 +33,7 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
 
     public BotInventoryScreen(BotInventoryScreenHandler handler, PlayerInventory inventory, Text title) {
         super(handler, inventory, title);
-        this.backgroundWidth = 176;
+        this.backgroundWidth = 348;
         this.backgroundHeight = 254;
         this.playerInventoryTitleX = 8;
         this.playerInventoryTitleY = 160;
@@ -120,11 +120,33 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
             }
         }
 
-        // Live 3D bot model looking at cursor
+        // Live 3D bot model looking at cursor (or Offline indicator)
         LivingEntity bot = this.handler.getClientBot();
         if (bot != null && !bot.isRemoved()) {
             InventoryScreen.drawEntity(c, entX1, entY1, entX2, entY2, 30, 0.0625f, (float) mouseX, (float) mouseY, bot);
+        } else if ("Offline".equals(this.handler.getStatusLabel())) {
+            String off = "Offline";
+            c.drawText(this.textRenderer, off, entX1 + (entX2 - entX1 - this.textRenderer.getWidth(off)) / 2, entY1 + 31, 0xFF9E9E9E, false);
         }
+
+        // Right-side Ender Chest panel (side-by-side)
+        c.fill(x + 174, y + 6, x + 175, y + h - 6, 0xFF8B8B8B);
+        c.fill(x + 175, y + 6, x + 176, y + h - 6, 0xFFFFFFFF);
+
+        String status = this.handler.getStatusLabel();
+        int statusColor = "Online".equals(status) ? 0xFF2E7D32 : ("Offline".equals(status) ? 0xFF8B4513 : 0xFF404040);
+        c.drawText(this.textRenderer, "Estado: " + status, x + 180, y + 10, statusColor, false);
+
+        String infoNote = "Offline".equals(status)
+            ? "Editando archivo playerdata (.dat). Los cambios se guardarán al cerrar esta ventana."
+            : "Los cambios en inventario, Ender Chest, mano principal y modo se aplican al instante.";
+        int noteY = y + 23;
+        for (var line : this.textRenderer.wrapLines(Text.literal(infoNote), 160)) {
+            c.drawText(this.textRenderer, line, x + 180, noteY, 0xFF555555, false);
+            noteY += 10;
+        }
+
+        c.drawText(this.textRenderer, "Ender Chest", x + 180, y + 69, 0xFF404040, false);
     }
 
     private static void drawBevelBox(DrawContext c, int x, int y, int w, int h, int fill) {
