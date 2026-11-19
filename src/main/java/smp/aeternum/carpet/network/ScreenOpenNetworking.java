@@ -81,6 +81,7 @@ public final class ScreenOpenNetworking {
         state.joinMotd = AeternumCarpetSettings.joinMotd;
         state.quickDock = AeternumCarpetSettings.quickDock;
         state.todoList = AeternumCarpetSettings.todoList;
+        state.dimension = AeternumCarpetSettings.commandDimension;
         state.showJoinBanner = showJoinBanner && AeternumCarpetSettings.joinMotd;
         state.projects = AeternumCarpetSettings.commandProjects;
         state.guide = AeternumCarpetSettings.commandGuide;
@@ -104,6 +105,7 @@ public final class ScreenOpenNetworking {
         public boolean joinMotd;
         public boolean quickDock;
         public boolean todoList;
+        public boolean dimension;
         public boolean showJoinBanner;
         public boolean projects;
         public boolean guide;
