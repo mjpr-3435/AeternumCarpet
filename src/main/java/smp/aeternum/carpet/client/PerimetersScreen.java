@@ -39,6 +39,9 @@ public final class PerimetersScreen extends UiScreen {
     private boolean savingPreset;
     private String lastPresetName = "";
     private UiTextField presetNameField;
+    private UiTextField targetYField;
+    private UiTextField stallSecField;
+    private String syncedMonitorPerimeterId;
 
     private double sidebarScroll, targetSidebarScroll;
     private double clusterScroll, targetClusterScroll;
@@ -59,6 +62,7 @@ public final class PerimetersScreen extends UiScreen {
             Perimeter sel = selectedPerimeter();
             if (sel != null) picker.syncFromParent(sel.palette);
         }
+        syncMonitorFields(false);
     }
 
     public DataSnapshot currentData() {
@@ -109,6 +113,43 @@ public final class PerimetersScreen extends UiScreen {
             }));
         } else {
             presetNameField = null;
+        }
+
+        if (activeTab == TAB_MONITOR && selectedPerimeter() != null) {
+            int cx = contentX();
+            int cw = contentW();
+            int c3Y = panelY + 238;
+            int fieldX = cx + cw - 120;
+            int r1Y = c3Y + 23;
+            int r2Y = c3Y + 46;
+
+            targetYField = new UiTextField(textRenderer, fieldX, r1Y, 56, 18, "-64..320");
+            targetYField.setMaxLength(4);
+            targetYField.setTextPredicate(s -> s.isEmpty() || s.matches("-?\\d{0,3}"));
+            addDrawableChild(targetYField);
+
+            stallSecField = new UiTextField(textRenderer, fieldX, r2Y, 56, 18, "5..600");
+            stallSecField.setMaxLength(3);
+            stallSecField.setTextPredicate(s -> s.isEmpty() || s.matches("\\d{0,3}"));
+            addDrawableChild(stallSecField);
+
+            syncMonitorFields(true);
+        } else {
+            targetYField = null;
+            stallSecField = null;
+            syncedMonitorPerimeterId = null;
+        }
+    }
+
+    private void syncMonitorFields(boolean force) {
+        if (activeTab != TAB_MONITOR || targetYField == null || stallSecField == null) return;
+        Perimeter sel = selectedPerimeter();
+        if (sel == null) return;
+        boolean changedPerimeter = !sel.id.equals(syncedMonitorPerimeterId);
+        if (force || changedPerimeter || (!targetYField.isFocused() && !stallSecField.isFocused())) {
+            targetYField.setText(String.valueOf(sel.effectiveTargetLowY()));
+            stallSecField.setText(String.valueOf(sel.weStallSeconds));
+            syncedMonitorPerimeterId = sel.id;
         }
     }
 
@@ -220,7 +261,7 @@ public final class PerimetersScreen extends UiScreen {
             if (activeTab == TAB_ANALYSIS) {
                 tooltipText = renderAnalysisTab(c, sel, clusters, cx, cw, mx, my, delta);
             } else {
-                renderMonitorTab(c, sel, cx, cw, mx, my);
+                renderMonitorTab(c, sel, cx, cw, mx, my, delta);
             }
         }
 
@@ -350,7 +391,7 @@ public final class PerimetersScreen extends UiScreen {
         return tooltipText;
     }
 
-    private void renderMonitorTab(DrawContext c, Perimeter sel, int cx, int cw, int mx, int my) {
+    private void renderMonitorTab(DrawContext c, Perimeter sel, int cx, int cw, int mx, int my, float delta) {
         // Card 1: Monitor status
         int c1Y = panelY + 74;
         AeternumTheme.drawCard(c, cx, c1Y, cw, 86, AeternumTheme.CARD_BG, sel.weEnabled ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
@@ -389,24 +430,25 @@ public final class PerimetersScreen extends UiScreen {
         drawPillButton(c, cx + cw - 90, c2Y + 20, 80, 22, "Matar Bots", false, mx, my);
 
         // Card 3: Dimension Target Y & Stall Timeout
-        int c3Y = panelY + 240;
-        AeternumTheme.drawCard(c, cx, c3Y, cw, 68, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
+        int c3Y = panelY + 238;
+        AeternumTheme.drawCard(c, cx, c3Y, cw, 72, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
         c.drawTextWithShadow(textRenderer, "PARÁMETROS DE ALERTA", cx + 10, c3Y + 8, AeternumTheme.TEXT_PRIMARY);
 
-        int r1Y = c3Y + 24;
-        c.drawText(textRenderer, "Capa baja (Target Y): " + sel.effectiveTargetLowY(), cx + 10, r1Y + 4, AeternumTheme.TEXT_SECONDARY, false);
-        drawPillButton(c, cx + cw - 174, r1Y, 28, 16, "-5", false, mx, my);
-        drawPillButton(c, cx + cw - 142, r1Y, 28, 16, "-1", false, mx, my);
-        drawPillButton(c, cx + cw - 110, r1Y, 28, 16, "+1", false, mx, my);
-        drawPillButton(c, cx + cw - 78, r1Y, 28, 16, "+5", false, mx, my);
-        drawPillButton(c, cx + cw - 46, r1Y, 36, 16, "Auto", false, mx, my);
+        int fieldX = cx + cw - 120;
+        int btnX = cx + cw - 58;
+        int r1Y = c3Y + 23;
+        c.drawText(textRenderer, "Capa baja (Target Y)", cx + 10, r1Y + 5, AeternumTheme.TEXT_SECONDARY, false);
+        if (targetYField != null) {
+            targetYField.renderBox(c, fieldX, r1Y, 56, 18, mx, my, delta);
+        }
+        drawPillButton(c, btnX, r1Y, 48, 18, "Auto", false, mx, my);
 
-        int r2Y = c3Y + 45;
-        c.drawText(textRenderer, "Atasco sin explosiones: " + sel.weStallSeconds + "s", cx + 10, r2Y + 4, AeternumTheme.TEXT_SECONDARY, false);
-        drawPillButton(c, cx + cw - 142, r2Y, 32, 16, "-10s", false, mx, my);
-        drawPillButton(c, cx + cw - 106, r2Y, 30, 16, "-5s", false, mx, my);
-        drawPillButton(c, cx + cw - 72, r2Y, 30, 16, "+5s", false, mx, my);
-        drawPillButton(c, cx + cw - 38, r2Y, 32, 16, "+10s", false, mx, my);
+        int r2Y = c3Y + 46;
+        c.drawText(textRenderer, "Atasco sin explosiones (s)", cx + 10, r2Y + 5, AeternumTheme.TEXT_SECONDARY, false);
+        if (stallSecField != null) {
+            stallSecField.renderBox(c, fieldX, r2Y, 56, 18, mx, my, delta);
+        }
+        drawPillButton(c, btnX, r2Y, 48, 18, "Aplicar", false, mx, my);
     }
 
     private static String formatWeStatus(String status) {
@@ -466,6 +508,7 @@ public final class PerimetersScreen extends UiScreen {
                 }
                 selectedId = p.id;
                 clusterScroll = targetClusterScroll = 0;
+                if (activeTab == TAB_MONITOR) init();
                 return true;
             }
         }
@@ -522,28 +565,45 @@ public final class PerimetersScreen extends UiScreen {
             }
         }
 
-        int c3Y = panelY + 240;
-        int r1Y = c3Y + 24;
-        if (my >= r1Y && my < r1Y + 16) {
-            int curY = sel.effectiveTargetLowY();
-            if (mx >= cx + cw - 174 && mx < cx + cw - 146) return sendWeConfig(sel, curY - 5, sel.weStallSeconds);
-            if (mx >= cx + cw - 142 && mx < cx + cw - 114) return sendWeConfig(sel, curY - 1, sel.weStallSeconds);
-            if (mx >= cx + cw - 110 && mx < cx + cw - 82) return sendWeConfig(sel, curY + 1, sel.weStallSeconds);
-            if (mx >= cx + cw - 78 && mx < cx + cw - 50) return sendWeConfig(sel, curY + 5, sel.weStallSeconds);
-            if (mx >= cx + cw - 46 && mx < cx + cw - 10) {
-                return sendWeConfig(sel, Perimeter.defaultLowYFor(sel.dimension), sel.weStallSeconds);
-            }
+        int c3Y = panelY + 238;
+        int btnX = cx + cw - 58;
+        int r1Y = c3Y + 23;
+        if (my >= r1Y && my < r1Y + 18 && mx >= btnX && mx < btnX + 48) {
+            int autoY = Perimeter.defaultLowYFor(sel.dimension);
+            int stall = Math.max(5, Math.min(600, parseIntOr(stallSecField, sel.weStallSeconds)));
+            if (targetYField != null) targetYField.setText(String.valueOf(autoY));
+            if (stallSecField != null) stallSecField.setText(String.valueOf(stall));
+            setFocused(null);
+            return sendWeConfig(sel, autoY, stall);
         }
 
-        int r2Y = c3Y + 45;
-        if (my >= r2Y && my < r2Y + 16) {
-            int curS = sel.weStallSeconds;
-            if (mx >= cx + cw - 142 && mx < cx + cw - 110) return sendWeConfig(sel, sel.effectiveTargetLowY(), curS - 10);
-            if (mx >= cx + cw - 106 && mx < cx + cw - 76) return sendWeConfig(sel, sel.effectiveTargetLowY(), curS - 5);
-            if (mx >= cx + cw - 72 && mx < cx + cw - 42) return sendWeConfig(sel, sel.effectiveTargetLowY(), curS + 5);
-            if (mx >= cx + cw - 38 && mx < cx + cw - 6) return sendWeConfig(sel, sel.effectiveTargetLowY(), curS + 10);
+        int r2Y = c3Y + 46;
+        if (my >= r2Y && my < r2Y + 18 && mx >= btnX && mx < btnX + 48) {
+            return submitWeConfig();
         }
         return false;
+    }
+
+    private int parseIntOr(UiTextField field, int fallback) {
+        if (field == null) return fallback;
+        String raw = field.getText().trim();
+        if (raw.isEmpty() || "-".equals(raw)) return fallback;
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private boolean submitWeConfig() {
+        Perimeter sel = selectedPerimeter();
+        if (sel == null) return false;
+        int y = Math.max(-64, Math.min(320, parseIntOr(targetYField, sel.effectiveTargetLowY())));
+        int s = Math.max(5, Math.min(600, parseIntOr(stallSecField, sel.weStallSeconds)));
+        if (targetYField != null) targetYField.setText(String.valueOf(y));
+        if (stallSecField != null) stallSecField.setText(String.valueOf(s));
+        setFocused(null);
+        return sendWeConfig(sel, y, s);
     }
 
     private boolean sendWeConfig(Perimeter sel, int targetY, int stallSec) {
@@ -658,6 +718,12 @@ public final class PerimetersScreen extends UiScreen {
         if (savingPreset && keyCode == 256) {
             savingPreset = false;
             init();
+            return true;
+        }
+        if (activeTab == TAB_MONITOR && (keyCode == 257 || keyCode == 335)
+                && ((targetYField != null && targetYField.isFocused())
+                    || (stallSecField != null && stallSecField.isFocused()))) {
+            submitWeConfig();
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);

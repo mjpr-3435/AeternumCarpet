@@ -8,17 +8,17 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
-import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
 /** Computes minimal-overlap chunk coverage grids and spawns/removes Carpet fake players for perimeters. */
 public final class BotGridManager {
+    private static final int BOT_SPAWN_Y = 128;
+
     private BotGridManager() {}
 
     public static String botPrefix(Perimeter p) {
@@ -38,11 +38,10 @@ public final class BotGridManager {
         List<Integer> cxList = axisCenters(minCx, maxCx, simDist);
         List<Integer> czList = axisCenters(minCz, maxCz, simDist);
 
-        int midY = Math.max(-50, Math.min(310, p.maxY));
         List<BlockPos> out = new ArrayList<>(cxList.size() * czList.size());
         for (int cx : cxList) {
             for (int cz : czList) {
-                out.add(new BlockPos((cx << 4) + 8, midY, (cz << 4) + 8));
+                out.add(new BlockPos((cx << 4) + 8, BOT_SPAWN_Y, (cz << 4) + 8));
             }
         }
         return out;
@@ -80,15 +79,12 @@ public final class BotGridManager {
         return count;
     }
 
-    public static int spawnGrid(MinecraftServer server, Perimeter p, ServerPlayerEntity requester) {
+    public static int spawnGrid(MinecraftServer server, Perimeter p) {
         Identifier dimId = Identifier.tryParse(p.dimension);
         if (dimId == null) return 0;
         RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
-        ServerWorld world = server.getWorld(dimKey);
-        if (world == null) return 0;
+        if (server.getWorld(dimKey) == null) return 0;
 
-        boolean canCreative = requester != null && requester.hasPermissionLevel(2);
-        GameMode mode = canCreative ? GameMode.CREATIVE : GameMode.SURVIVAL;
         String prefix = botPrefix(p);
         List<BlockPos> points = computeGridPositions(server, p);
 
@@ -102,15 +98,9 @@ public final class BotGridManager {
             if (server.getPlayerManager().getPlayer(name) != null) continue;
 
             BlockPos pt = points.get(i);
-            double spawnY = pt.getY() + 2.0;
-            boolean flying = canCreative;
-            if (!canCreative) {
-                int topY = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, pt.getX(), pt.getZ());
-                spawnY = Math.max(world.getBottomY() + 1, topY);
-            }
             boolean ok = EntityPlayerMPFake.createFake(
-                name, server, new Vec3d(pt.getX() + 0.5, spawnY, pt.getZ() + 0.5),
-                0.0, 0.0, dimKey, mode, flying
+                name, server, new Vec3d(pt.getX() + 0.5, pt.getY(), pt.getZ() + 0.5),
+                0.0, 0.0, dimKey, GameMode.SPECTATOR, true
             );
             if (ok) spawned++;
         }

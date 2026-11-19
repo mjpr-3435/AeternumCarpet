@@ -113,7 +113,7 @@ public final class PerimeterNetworking {
             }
             case "we_spawn_bots" -> {
                 if (p == null) return;
-                int count = BotGridManager.spawnGrid(server, p, player);
+                int count = BotGridManager.spawnGrid(server, p);
                 p.weActiveBots = BotGridManager.countActiveGridBots(server, p);
                 player.sendMessage(Text.literal("[Perimeters] Bots de grilla solicitados: " + count + ".").formatted(Formatting.AQUA), false);
                 broadcastAll(server);
