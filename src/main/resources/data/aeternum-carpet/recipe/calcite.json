@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "B": "minecraft:smooth_basalt",
+    "Q": "minecraft:quartz"
+  },
+  "pattern": [
+    "AQA",
+    "QBQ",
+    "AQA"
+  ],
+  "result": {
+    "count": 2,
+    "id": "minecraft:calcite"
+  }
+}

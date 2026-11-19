@@ -14,21 +14,31 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public final class FinderStore {
+    private static final Pattern VALID_NAME = Pattern.compile("[a-zA-Z0-9]{1,48}");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type TYPE = new TypeToken<LinkedHashMap<String, FinderPlace>>(){}.getType();
     private static final Map<String, FinderPlace> PLACES = new LinkedHashMap<>();
     private static Path file;
-    private static Path defaultFile;
-    private static String defaultPlace = "MainStorage";
     private FinderStore() { }
+    public static boolean isValidName(String name) { return name != null && VALID_NAME.matcher(name).matches(); }
     public static void load(MinecraftServer server) {
         PLACES.clear(); file = server.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_finder.json");
-        defaultFile = server.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_finder_default.txt");
-        try { if (Files.exists(defaultFile)) defaultPlace = Files.readString(defaultFile, StandardCharsets.UTF_8).trim(); } catch (IOException ignored) { }
         if (!Files.exists(file)) return;
-        try { Map<String, FinderPlace> loaded = GSON.fromJson(Files.readString(file), TYPE); if (loaded != null) { for (FinderPlace place : loaded.values()) place.containers = new java.util.ArrayList<>(); PLACES.putAll(loaded); } }
+        try {
+            Map<String, FinderPlace> loaded = GSON.fromJson(Files.readString(file), TYPE);
+            if (loaded != null) {
+                boolean dropped = false;
+                for (FinderPlace place : loaded.values()) {
+                    if (place == null || !isValidName(place.name)) { dropped = true; continue; }
+                    place.containers = new java.util.ArrayList<>();
+                    PLACES.put(place.name.toLowerCase(), place);
+                }
+                if (dropped) save();
+            }
+        }
         catch (IOException | RuntimeException e) { AeternumCarpet.LOGGER.error("Could not load Finder places", e); }
     }
     public static void save() { if (file == null) return; try { Files.createDirectories(file.getParent()); Files.writeString(file, GSON.toJson(PLACES), StandardCharsets.UTF_8); } catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save Finder places", e); } }
@@ -37,6 +47,4 @@ public final class FinderStore {
     /** Keys are case-insensitive, while the entered name remains visible to players. */
     public static void put(FinderPlace place) { PLACES.put(place.name.toLowerCase(), place); save(); }
     public static boolean remove(String name) { boolean removed = PLACES.remove(name.toLowerCase()) != null; if (removed) save(); return removed; }
-    public static String defaultName() { return defaultPlace; }
-    public static void setDefault(String name) { defaultPlace = name; try { Files.createDirectories(defaultFile.getParent()); Files.writeString(defaultFile, name, StandardCharsets.UTF_8); } catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save Finder default", e); } }
 }

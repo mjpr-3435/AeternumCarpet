@@ -67,4 +67,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandMaterials = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean craftableCalcite = false;
+
 }

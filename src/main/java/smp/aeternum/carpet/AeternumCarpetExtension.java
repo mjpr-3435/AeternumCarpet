@@ -56,7 +56,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandGuide.name", "Command Guide"),
             Map.entry("carpet.rule.commandGuide.desc", "Enables the server-side markdown guide library through /guide."),
             Map.entry("carpet.rule.commandMaterials.name", "Command Materials"),
-            Map.entry("carpet.rule.commandMaterials.desc", "Enables the /materials command for tracking project material collection.")
+            Map.entry("carpet.rule.commandMaterials.desc", "Enables the /materials command for tracking project material collection."),
+            Map.entry("carpet.rule.craftableCalcite.name", "Craftable Calcite"),
+            Map.entry("carpet.rule.craftableCalcite.desc", "Allows crafting 2 calcite using 4 amethyst shards, 4 nether quartz, and 1 smooth basalt.")
         );
     }
 }

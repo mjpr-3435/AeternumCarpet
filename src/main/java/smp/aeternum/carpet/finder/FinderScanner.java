@@ -34,6 +34,27 @@ public final class FinderScanner {
         for (int cz=Math.floorDiv(place.minZ,16);cz<=Math.floorDiv(place.maxZ,16);cz++)
             for (int cx=Math.floorDiv(place.minX,16);cx<=Math.floorDiv(place.maxX,16);cx++) scanChunk(world, place, cx, cz);
     }
+    /** Ephemeral synchronous scan around a player without force-loading chunks. */
+    public static FinderPlace scanAround(ServerWorld world, BlockPos center, int radius) {
+        FinderPlace place = new FinderPlace("near_me", world.getRegistryKey(), center.add(-radius, -radius, -radius), center.add(radius, radius, radius));
+        double maxDistSq = (double) radius * radius;
+        for (int cz = Math.floorDiv(place.minZ, 16); cz <= Math.floorDiv(place.maxZ, 16); cz++) {
+            for (int cx = Math.floorDiv(place.minX, 16); cx <= Math.floorDiv(place.maxX, 16); cx++) {
+                WorldChunk chunk = world.getChunkManager().getWorldChunk(cx, cz, false);
+                if (chunk == null) continue;
+                Set<BlockPos> seen = new HashSet<>();
+                for (BlockEntity be : chunk.getBlockEntities().values()) {
+                    if (!seen.add(be.getPos()) || !(be instanceof Inventory inventory) || be.getPos().getSquaredDistance(center) > maxDistSq) continue;
+                    String block = Registries.BLOCK.getId(be.getCachedState().getBlock()).toString();
+                    if (!isStorage(block)) continue;
+                    FinderContainer found = new FinderContainer(be.getPos().getX(), be.getPos().getY(), be.getPos().getZ(), block);
+                    for (int slot = 0; slot < inventory.size(); slot++) snapshotStack(found, inventory.getStack(slot), 1);
+                    place.containers.add(found);
+                }
+            }
+        }
+        return place;
+    }
     private static void scanChunk(ServerWorld world, FinderPlace place, int chunkX, int chunkZ) {
         WorldChunk chunk=world.getChunkManager().getWorldChunk(chunkX,chunkZ,true); Set<BlockPos> seen=new HashSet<>();
         for (BlockEntity be : chunk.getBlockEntities().values()) {
