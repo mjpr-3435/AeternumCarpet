@@ -44,8 +44,11 @@ public final class FakePlayerReloadManager {
 
     private static Path file;
     private static List<SavedBot> pendingReload = List.of();
+    private static final Map<String, SavedBot> pendingAttach = new LinkedHashMap<>();
     private static int reloadTicksRemaining;
+    private static int pendingAttachTimeoutTicks;
     private static int saveDebounceTicks;
+    private static boolean stopping;
     private static String lastSavedJson = "";
 
     private FakePlayerReloadManager() {}
@@ -64,8 +67,11 @@ public final class FakePlayerReloadManager {
     public static void load(MinecraftServer server) {
         file = server.getSavePath(WorldSavePathAccess.root()).resolve("data").resolve("aeternum_fake_players.json");
         pendingReload = List.of();
+        pendingAttach.clear();
         reloadTicksRemaining = 0;
+        pendingAttachTimeoutTicks = 0;
         saveDebounceTicks = 0;
+        stopping = false;
         lastSavedJson = "";
         if (Files.isRegularFile(file)) {
             try {
@@ -75,6 +81,7 @@ public final class FakePlayerReloadManager {
                 if (loaded != null && !loaded.isEmpty()) {
                     pendingReload = loaded;
                     reloadTicksRemaining = RELOAD_DELAY_TICKS;
+                    AeternumCarpet.LOGGER.info("Loaded {} saved fake player(s) for reload in {} ticks", loaded.size(), RELOAD_DELAY_TICKS);
                 }
             } catch (Exception e) {
                 AeternumCarpet.LOGGER.error("Could not load saved fake players", e);
@@ -83,8 +90,29 @@ public final class FakePlayerReloadManager {
     }
 
     public static void markDirty() {
-        if (AeternumCarpetSettings.reloadFakePlayers && reloadTicksRemaining <= 0) {
+        if (!stopping && AeternumCarpetSettings.reloadFakePlayers && reloadTicksRemaining <= 0) {
             saveDebounceTicks = SAVE_DEBOUNCE_TICKS;
+        }
+    }
+
+    public static void onFakePlayerJoin(EntityPlayerMPFake bot) {
+        SavedBot saved = pendingAttach.remove(bot.getName().getString().toLowerCase(java.util.Locale.ROOT));
+        if (saved != null) {
+            if (saved.selectedSlot >= 0 && saved.selectedSlot < 9) {
+                bot.getInventory().setSelectedSlot(saved.selectedSlot);
+            }
+            applyActionPack(bot, saved);
+            AeternumCarpet.LOGGER.info("Restored fake player {} ({} action(s))", bot.getName().getString(), saved.actions != null ? saved.actions.size() : 0);
+            if (pendingAttach.isEmpty()) {
+                pendingAttachTimeoutTicks = 0;
+            }
+        }
+        markDirty();
+    }
+
+    public static void onFakePlayerDisconnect(MinecraftServer server) {
+        if (!stopping && server.isRunning()) {
+            markDirty();
         }
     }
 
@@ -96,21 +124,29 @@ public final class FakePlayerReloadManager {
                 pendingReload = List.of();
                 if (AeternumCarpetSettings.reloadFakePlayers && !toSpawn.isEmpty()) {
                     respawnBots(server, toSpawn);
-                    saveDebounceTicks = SAVE_DEBOUNCE_TICKS;
                 }
             }
             return;
         }
 
+        if (pendingAttachTimeoutTicks > 0 && --pendingAttachTimeoutTicks == 0) {
+            if (!pendingAttach.isEmpty()) {
+                AeternumCarpet.LOGGER.warn("Timed out waiting for {} fake player(s) to join", pendingAttach.size());
+                pendingAttach.clear();
+                markDirty();
+            }
+        }
+
         if (saveDebounceTicks > 0 && --saveDebounceTicks == 0) {
-            if (AeternumCarpetSettings.reloadFakePlayers) {
+            if (!stopping && AeternumCarpetSettings.reloadFakePlayers && pendingAttach.isEmpty()) {
                 saveCurrentBots(server);
             }
         }
     }
 
     public static void onServerStopping(MinecraftServer server) {
-        if (AeternumCarpetSettings.reloadFakePlayers && reloadTicksRemaining <= 0) {
+        stopping = true;
+        if (AeternumCarpetSettings.reloadFakePlayers && reloadTicksRemaining <= 0 && pendingAttach.isEmpty()) {
             saveCurrentBots(server);
         }
     }
@@ -124,17 +160,28 @@ public final class FakePlayerReloadManager {
             if (server.getWorld(dimKey) == null) dimKey = World.OVERWORLD;
             GameMode mode = bot.gameMode == null ? GameMode.SURVIVAL : GameMode.byId(bot.gameMode, GameMode.SURVIVAL);
 
+            String key = bot.name.toLowerCase(java.util.Locale.ROOT);
+            pendingAttach.put(key, bot);
             boolean spawned = EntityPlayerMPFake.createFake(
                 bot.name, server, new Vec3d(bot.x, bot.y, bot.z), bot.yaw, bot.pitch, dimKey, mode, bot.flying
             );
-            if (!spawned) continue;
+            if (!spawned) {
+                pendingAttach.remove(key);
+                AeternumCarpet.LOGGER.warn("EntityPlayerMPFake.createFake returned false for {}", bot.name);
+                continue;
+            }
 
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(bot.name);
-            if (player == null) continue;
-            if (bot.selectedSlot >= 0 && bot.selectedSlot < 9) {
-                player.getInventory().setSelectedSlot(bot.selectedSlot);
+            if (player != null) {
+                pendingAttach.remove(key);
+                if (bot.selectedSlot >= 0 && bot.selectedSlot < 9) {
+                    player.getInventory().setSelectedSlot(bot.selectedSlot);
+                }
+                applyActionPack(player, bot);
             }
-            applyActionPack(player, bot);
+        }
+        if (!pendingAttach.isEmpty()) {
+            pendingAttachTimeoutTicks = 200;
         }
     }
 

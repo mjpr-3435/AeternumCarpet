@@ -17,12 +17,18 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
     private static final int HOTBAR_BTN_W = 9;
     private static final int HOTBAR_BTN_H = 12;
 
+    private static final int MODE_BTN_Y = 81;
+    private static final int MODE_BTN_H = 14;
+    private static final String[] MODE_LABELS = {"Survival", "Creativo", "Espectador"};
+    private static final int[] MODE_X = {7, 60, 113};
+    private static final int[] MODE_W = {51, 51, 56};
+
     public BotInventoryScreen(BotInventoryScreenHandler handler, PlayerInventory inventory, Text title) {
         super(handler, inventory, title);
         this.backgroundWidth = 176;
-        this.backgroundHeight = 254;
+        this.backgroundHeight = 272;
         this.playerInventoryTitleX = 8;
-        this.playerInventoryTitleY = 160;
+        this.playerInventoryTitleY = 178;
     }
 
     @Override
@@ -66,7 +72,7 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
         // Highlight active hotbar slot on bot's hotbar (handler slots 32..40)
         int selected = this.handler.getSelectedHotbarSlot();
         int activeSlotX = x + 8 + selected * 18 - 1;
-        int activeSlotY = y + 139 - 1;
+        int activeSlotY = y + 157 - 1;
         c.drawBorder(activeSlotX, activeSlotY, 18, 18, 0xFFFFCC33);
 
         // 1..9 Main-hand hotbar slot selector
@@ -80,6 +86,25 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
             c.drawBorder(bx, by, HOTBAR_BTN_W, HOTBAR_BTN_H, active ? 0xFF373737 : 0xFF555555);
             String num = String.valueOf(i + 1);
             c.drawText(this.textRenderer, num, bx + 2, by + 2, active ? 0xFF1A1A1A : 0xFFFFFFFF, false);
+        }
+
+        // Bot gamemode selector (Survival | Creativo | Espectador)
+        int activeMode = this.handler.getGameModeCode();
+        boolean canCreative = this.handler.canSetCreative();
+        for (int i = 0; i < MODE_LABELS.length; i++) {
+            int bx = x + MODE_X[i];
+            int by = y + MODE_BTN_Y;
+            int bw = MODE_W[i];
+            boolean enabled = (i != BotInventoryScreenHandler.MODE_CREATIVE) || canCreative;
+            boolean active = (i == activeMode);
+            boolean hover = enabled && mouseX >= bx && mouseX < bx + bw && mouseY >= by && mouseY < by + MODE_BTN_H;
+            int bg = !enabled ? 0xFF6B6B6B : (active ? 0xFFE0A95B : (hover ? 0xFFAFAFAF : 0xFF8B8B8B));
+            int border = !enabled ? 0xFF4A4A4A : (active ? 0xFF373737 : 0xFF555555);
+            int textColor = !enabled ? 0xFF9E9E9E : (active ? 0xFF1A1A1A : 0xFFFFFFFF);
+            c.fill(bx, by, bx + bw, by + MODE_BTN_H, bg);
+            c.drawBorder(bx, by, bw, MODE_BTN_H, border);
+            int tw = this.textRenderer.getWidth(MODE_LABELS[i]);
+            c.drawText(this.textRenderer, MODE_LABELS[i], bx + (bw - tw) / 2, by + 3, textColor, false);
         }
 
         // Live 3D bot model looking at cursor
@@ -109,6 +134,19 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
                     return true;
                 }
             }
+            int my = this.y + MODE_BTN_Y;
+            if (mouseY >= my && mouseY < my + MODE_BTN_H && this.client != null && this.client.interactionManager != null) {
+                for (int i = 0; i < MODE_LABELS.length; i++) {
+                    int bx = this.x + MODE_X[i];
+                    if (mouseX >= bx && mouseX < bx + MODE_W[i]) {
+                        if (i == BotInventoryScreenHandler.MODE_CREATIVE && !this.handler.canSetCreative()) {
+                            return true;
+                        }
+                        this.client.interactionManager.clickButton(this.handler.syncId, BotInventoryScreenHandler.MODE_BUTTON_BASE + i);
+                        return true;
+                    }
+                }
+            }
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -117,5 +155,13 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         this.drawMouseoverTooltip(context, mouseX, mouseY);
+        if (!this.handler.canSetCreative()) {
+            int cx = this.x + MODE_X[BotInventoryScreenHandler.MODE_CREATIVE];
+            int cy = this.y + MODE_BTN_Y;
+            int cw = MODE_W[BotInventoryScreenHandler.MODE_CREATIVE];
+            if (mouseX >= cx && mouseX < cx + cw && mouseY >= cy && mouseY < cy + MODE_BTN_H) {
+                context.drawTooltip(this.textRenderer, Text.literal("Solo disponible para OPs"), mouseX, mouseY);
+            }
+        }
     }
 }

@@ -35,7 +35,12 @@ public final class BotInventoryOpener {
         viewer.openHandledScreen(new ExtendedScreenHandlerFactory<BotOpenData>() {
             @Override
             public BotOpenData getScreenOpeningData(ServerPlayerEntity player) {
-                return new BotOpenData(bot.getId(), bot.getInventory().getSelectedSlot());
+                return new BotOpenData(
+                    bot.getId(),
+                    bot.getInventory().getSelectedSlot(),
+                    BotInventoryScreenHandler.toModeCode(bot.interactionManager.getGameMode()),
+                    player.hasPermissionLevel(2)
+                );
             }
 
             @Override
@@ -45,7 +50,7 @@ public final class BotInventoryOpener {
 
             @Override
             public ScreenHandler createMenu(int syncId, PlayerInventory viewerInventory, PlayerEntity playerEntity) {
-                return new BotInventoryScreenHandler(syncId, viewerInventory, bot);
+                return new BotInventoryScreenHandler(syncId, viewerInventory, bot, playerEntity.hasPermissionLevel(2));
             }
         });
     }
