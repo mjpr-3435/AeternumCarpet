@@ -57,7 +57,9 @@ import smp.aeternum.carpet.command.RulesCommand;
 import smp.aeternum.carpet.command.DimensionCommand;
 import smp.aeternum.carpet.command.CameraModeCommand;
 import smp.aeternum.carpet.command.HatCommand;
+import smp.aeternum.carpet.command.CarefulBreakCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
+import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.ModScreenHandlers;
 import smp.aeternum.carpet.materials.MaterialsStore;
@@ -92,6 +94,7 @@ public class AeternumCarpet implements ModInitializer {
 			GuideStore.load(server);
 			MaterialsStore.load(server);
 			CameraModeStore.load(server);
+			CarefulBreakStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
@@ -148,6 +151,7 @@ public class AeternumCarpet implements ModInitializer {
 			DimensionCommand.register(dispatcher);
 			CameraModeCommand.register(dispatcher);
 			HatCommand.register(dispatcher);
+			CarefulBreakCommand.register(dispatcher);
 		});
 	}
 

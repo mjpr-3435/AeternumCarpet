@@ -68,7 +68,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandCameraMode.name", "Command Camera Mode"),
             Map.entry("carpet.rule.commandCameraMode.desc", "Enables /cs survival-friendly spectator mode: off, on, or restrictive (blocks entering in danger)."),
             Map.entry("carpet.rule.commandHat.name", "Command Hat"),
-            Map.entry("carpet.rule.commandHat.desc", "Allows equipping the held item onto the head slot using /hat.")
+            Map.entry("carpet.rule.commandHat.desc", "Allows equipping the held item onto the head slot using /hat."),
+            Map.entry("carpet.rule.carefulBreak.name", "Careful Break"),
+            Map.entry("carpet.rule.carefulBreak.desc", "Enables /carefulbreak <off|sneak|always> so players can choose to collect mined block drops directly into their inventory.")
         );
     }
 }

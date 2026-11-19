@@ -85,4 +85,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandHat = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE, RuleCategory.COMMAND})
+    public static boolean carefulBreak = false;
+
 }

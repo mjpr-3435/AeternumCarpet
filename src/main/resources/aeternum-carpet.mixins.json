@@ -16,7 +16,8 @@
 		"HopperBlockEntityMixin",
 		"DecoratedPotBlockMixin",
 		"EndermanPickUpBlockGoalMixin",
-		"EndermanPlaceBlockGoalMixin"
+		"EndermanPlaceBlockGoalMixin",
+		"BlockMixin"
 	],
 	"client": [
 		"client.InGameHudMixin",
