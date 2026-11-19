@@ -79,4 +79,10 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean editBotInventory = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND}, options = {"off", "on", "restrictive"})
+    public static String commandCameraMode = "off";
+
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandHat = false;
+
 }
