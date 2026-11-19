@@ -29,7 +29,7 @@ public final class ScreenOpenNetworking {
             ServerPlayerEntity player = context.player();
             switch (payload.screen()) {
                 case "dock" -> sendDockState(player);
-                case "blockers" -> { if (AeternumCarpetSettings.commandBlockers) BlockerNetworking.sendSnapshot(player, true); }
+                case "perimeters" -> { if (AeternumCarpetSettings.commandPerimeters) PerimeterNetworking.sendSnapshot(player, true); }
                 case "guide" -> { if (AeternumCarpetSettings.commandGuide) GuideNetworking.send(player, true); }
                 case "materials", "projects" -> { if (AeternumCarpetSettings.commandProjects) MaterialsNetworking.send(player); }
                 case "exploration" -> { if (AeternumCarpetSettings.explorationManager) ExplorationMapNetworking.open(player); }
@@ -90,7 +90,7 @@ public final class ScreenOpenNetworking {
         state.projects = AeternumCarpetSettings.commandProjects;
         state.guide = AeternumCarpetSettings.commandGuide;
         state.actions = AeternumCarpetSettings.commandActions;
-        state.blockers = AeternumCarpetSettings.commandBlockers;
+        state.perimeters = AeternumCarpetSettings.commandPerimeters;
         state.exploration = AeternumCarpetSettings.explorationManager;
         ServerPlayNetworking.send(player, new DockStatePayload(GSON.toJson(state)));
     }
@@ -117,7 +117,7 @@ public final class ScreenOpenNetworking {
         public boolean projects;
         public boolean guide;
         public boolean actions;
-        public boolean blockers;
+        public boolean perimeters;
         public boolean exploration;
     }
 }

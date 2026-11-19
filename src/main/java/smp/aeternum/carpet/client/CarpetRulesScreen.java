@@ -139,7 +139,7 @@ public final class CarpetRulesScreen extends UiScreen {
         Map.entry("quickDock", "HUD & Dock"),
         Map.entry("explorationManager", "HUD & Dock"),
         Map.entry("allowPlayerExploration", "HUD & Dock"),
-        Map.entry("commandBlockers", "Comandos"),
+        Map.entry("commandPerimeters", "Comandos"),
         Map.entry("commandFinder", "Comandos"),
         Map.entry("commandProtect", "Comandos"),
         Map.entry("commandActions", "Comandos"),

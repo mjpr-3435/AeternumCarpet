@@ -50,7 +50,7 @@ public class AeternumCarpetSettings {
     public static boolean todoList = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
-    public static boolean commandBlockers = false;
+    public static boolean commandPerimeters = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandFinder = false;

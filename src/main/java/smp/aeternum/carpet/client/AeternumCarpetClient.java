@@ -5,7 +5,10 @@ import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import smp.aeternum.carpet.network.BlockerDataPayload;
+import com.google.gson.Gson;
+import smp.aeternum.carpet.network.PerimeterDataPayload;
+import smp.aeternum.carpet.network.PerimeterHudPayload;
+import smp.aeternum.carpet.network.PerimeterNetworking.DataSnapshot;
 import smp.aeternum.carpet.network.CommandPacksDataPayload;
 import smp.aeternum.carpet.network.GuideDataPayload;
 import smp.aeternum.carpet.network.ExplorationMapOpenPayload;
@@ -23,19 +26,28 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     public void onInitializeClient() {
         HandledScreens.register(ModScreenHandlers.BOT_INVENTORY, BotInventoryScreen::new);
         MaterialsHudOverlay.load();
-        BlockerGuide.register();
+        PerimeterGuide.register();
         ScreenKeybinds.register();
         // Guides and list selections belong to this connection only, never to the next /server target.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession(client, false));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession(client, false));
         ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearClientSession(client, true));
-        ClientPlayNetworking.registerGlobalReceiver(BlockerDataPayload.ID, (payload, context) ->
+        final Gson perimeterGson = new Gson();
+        ClientPlayNetworking.registerGlobalReceiver(PerimeterDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
-                BlockerGuide.reconcile(payload.json());
-                BlockerSelectionStore.reconcile(payload.json());
-                if (context.client().currentScreen instanceof BlockersScreen screen) screen.replaceData(payload.json(), payload.canDelete());
-                else if (payload.openScreen()) context.client().setScreen(new BlockersScreen(payload.json(), payload.canDelete()));
+                DataSnapshot snap = perimeterGson.fromJson(payload.json(), DataSnapshot.class);
+                if (snap != null) PerimeterGuide.reconcile(snap.perimeters);
+                if (context.client().currentScreen instanceof PerimetersScreen screen) {
+                    screen.replaceData(payload.json(), payload.canDelete());
+                } else if (context.client().currentScreen instanceof BlockPalettePickerScreen picker) {
+                    picker.onServerSnapshot(payload.json(), payload.canDelete());
+                } else if (payload.openScreen()) {
+                    context.client().setScreen(new PerimetersScreen(payload.json(), payload.canDelete()));
+                }
             })
+        );
+        ClientPlayNetworking.registerGlobalReceiver(PerimeterHudPayload.ID, (payload, context) ->
+            context.client().execute(() -> PerimeterHudOverlay.update(payload.json()))
         );
         ClientPlayNetworking.registerGlobalReceiver(CommandPacksDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
@@ -77,8 +89,8 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     }
 
     private static void clearClientSession(net.minecraft.client.MinecraftClient client, boolean refreshDock) {
-        BlockerGuide.clear();
-        BlockerSelectionStore.clearAll();
+        PerimeterGuide.clear();
+        PerimeterHudOverlay.clear();
         MaterialsHudOverlay.clear();
         if (refreshDock) AeternumDockOverlay.onWorldChange(client);
         else AeternumDockOverlay.clearState();

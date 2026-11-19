@@ -90,6 +90,13 @@ public final class MaterialsHudOverlay {
 		} catch (Exception ignored) { }
 	}
 
+	public static int topRightOccupiedHeight() {
+		MinecraftClient client = MinecraftClient.getInstance();
+		if (!hudEnabled || hudPosition != HudPos.NE || client.player == null || claimedEntries.isEmpty()) return 0;
+		int shown = Math.min(claimedEntries.size(), 7);
+		return 22 + shown * 20 + 6;
+	}
+
 	public static void render(DrawContext context) {
 		if (!hudEnabled) return;
 		MinecraftClient client = MinecraftClient.getInstance();

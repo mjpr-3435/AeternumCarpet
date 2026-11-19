@@ -21,11 +21,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import smp.aeternum.carpet.command.CommandAvailabilityRefresher;
-import smp.aeternum.carpet.command.BlockersCommand;
-import smp.aeternum.carpet.blockers.BlockerScanner;
-import smp.aeternum.carpet.blockers.BlockerScanStore;
-import smp.aeternum.carpet.blockers.BlockerBlockList;
-import smp.aeternum.carpet.network.BlockerNetworking;
+import smp.aeternum.carpet.command.PerimeterCommand;
+import smp.aeternum.carpet.perimeters.PerimeterScanner;
+import smp.aeternum.carpet.perimeters.PerimeterStore;
+import smp.aeternum.carpet.perimeters.PerimeterPresetStore;
+import smp.aeternum.carpet.perimeters.WorldEaterMonitor;
+import smp.aeternum.carpet.network.PerimeterNetworking;
 import smp.aeternum.carpet.command.ExplorationCommand;
 import smp.aeternum.carpet.command.QuickAccessCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
@@ -75,7 +76,7 @@ public class AeternumCarpet implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ModScreenHandlers.register();
-		BlockerNetworking.registerPayloads();
+		PerimeterNetworking.registerPayloads();
 		CommandPacksNetworking.registerPayloads();
 		GuideNetworking.registerPayloads();
 		ExplorationMapNetworking.registerPayloads();
@@ -88,8 +89,9 @@ public class AeternumCarpet implements ModInitializer {
 			ExplorationPregenerator.load(server);
 			TodoListStore.load(server);
 			QuickAccessSubscriptionStore.load(server);
-			BlockerScanStore.load(server);
-			BlockerBlockList.load(server);
+			PerimeterPresetStore.load(server);
+			PerimeterStore.load(server);
+			WorldEaterMonitor.clearAll();
 			FinderStore.load(server);
 			FinderItemNames.load(server);
 			ProtectedBlockStore.load(server);
@@ -112,7 +114,8 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandAvailabilityRefresher::tick);
-		ServerTickEvents.END_SERVER_TICK.register(BlockerScanner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(PerimeterScanner::tick);
+		ServerTickEvents.END_SERVER_TICK.register(WorldEaterMonitor::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderScanner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FinderHints::tick);
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
@@ -122,6 +125,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd);
+			PerimeterNetworking.sendHud(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake bot) FakePlayerReloadManager.onFakePlayerJoin(bot);
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -129,7 +133,7 @@ public class AeternumCarpet implements ModInitializer {
 			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.onFakePlayerDisconnect(server);
 		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
-			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
+			if (!world.isClient) PerimeterScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos, state);
 		});
 		PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
 			AeternumCarpetSettings.commandProtect && !player.hasPermissionLevel(2) && ProtectedBlockStore.isProtectedInventory(world, pos) ? false : true);
@@ -160,7 +164,7 @@ public class AeternumCarpet implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			ExplorationCommand.register(dispatcher);
 			QuickAccessCommand.register(dispatcher);
-			BlockersCommand.register(dispatcher);
+			PerimeterCommand.register(dispatcher);
 			FinderCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);
 			ActionsCommand.register(dispatcher);

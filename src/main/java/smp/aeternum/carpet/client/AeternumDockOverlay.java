@@ -191,7 +191,7 @@ public final class AeternumDockOverlay {
         if (s.actions) out.add(new DockAction("Acciones", "actions", new ItemStack(Items.COMPARATOR)));
         if (s.guide) out.add(new DockAction("Guías", "guide", new ItemStack(Items.BOOKSHELF)));
         if (s.projects) out.add(new DockAction("Proyectos", "projects", new ItemStack(Items.SHULKER_BOX)));
-        if (s.blockers) out.add(new DockAction("Blockers", "blockers", new ItemStack(Items.PISTON)));
+        if (s.perimeters) out.add(new DockAction("Perímetros", "perimeters", new ItemStack(Items.TNT)));
         if (s.exploration) out.add(new DockAction("Mapa", "exploration", new ItemStack(Items.FILLED_MAP)));
         if (s.isOp) out.add(new DockAction("Rules", "rules", new ItemStack(Items.COMMAND_BLOCK)));
         return out;

@@ -12,7 +12,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastExplorationGuardEnabled;
     private static boolean lastQuickShulkerEnabled;
     private static boolean lastQuickEnderChestEnabled;
-    private static boolean lastBlockersEnabled;
+    private static boolean lastPerimetersEnabled;
     private static boolean lastFinderEnabled;
     private static boolean lastProtectEnabled;
     private static boolean lastActionsEnabled;
@@ -37,7 +37,7 @@ public final class CommandAvailabilityRefresher {
         lastExplorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         lastQuickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         lastQuickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
-        lastBlockersEnabled = AeternumCarpetSettings.commandBlockers;
+        lastPerimetersEnabled = AeternumCarpetSettings.commandPerimeters;
         lastFinderEnabled = AeternumCarpetSettings.commandFinder;
         lastProtectEnabled = AeternumCarpetSettings.commandProtect;
         lastActionsEnabled = AeternumCarpetSettings.commandActions;
@@ -60,7 +60,7 @@ public final class CommandAvailabilityRefresher {
         boolean explorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         boolean quickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
         boolean quickEnderChestEnabled = AeternumCarpetSettings.openEnderChestInHand;
-        boolean blockersEnabled = AeternumCarpetSettings.commandBlockers;
+        boolean perimetersEnabled = AeternumCarpetSettings.commandPerimeters;
         boolean finderEnabled = AeternumCarpetSettings.commandFinder;
         boolean protectEnabled = AeternumCarpetSettings.commandProtect;
         boolean actionsEnabled = AeternumCarpetSettings.commandActions;
@@ -80,7 +80,7 @@ public final class CommandAvailabilityRefresher {
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled && viewInventoryEnabled == lastViewInventoryEnabled) {
+            && perimetersEnabled == lastPerimetersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled && viewInventoryEnabled == lastViewInventoryEnabled) {
             return;
         }
 
@@ -89,7 +89,7 @@ public final class CommandAvailabilityRefresher {
         lastExplorationGuardEnabled = explorationGuardEnabled;
         lastQuickShulkerEnabled = quickShulkerEnabled;
         lastQuickEnderChestEnabled = quickEnderChestEnabled;
-        lastBlockersEnabled = blockersEnabled;
+        lastPerimetersEnabled = perimetersEnabled;
         lastFinderEnabled = finderEnabled;
         lastProtectEnabled = protectEnabled;
         lastActionsEnabled = actionsEnabled;

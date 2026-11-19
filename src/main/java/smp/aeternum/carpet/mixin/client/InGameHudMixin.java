@@ -9,12 +9,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import smp.aeternum.carpet.client.AeternumDockOverlay;
 import smp.aeternum.carpet.client.MaterialsHudOverlay;
+import smp.aeternum.carpet.client.PerimeterHudOverlay;
 
 @Mixin(InGameHud.class)
 public class InGameHudMixin {
 	@Inject(method = "render", at = @At("TAIL"))
 	private void aeternum$renderMaterialsHud(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
 		MaterialsHudOverlay.render(context);
+		PerimeterHudOverlay.render(context);
 		AeternumDockOverlay.render(context, tickCounter.getDynamicDeltaTicks());
 	}
 }
