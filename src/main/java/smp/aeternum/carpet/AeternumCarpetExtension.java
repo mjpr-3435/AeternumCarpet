@@ -76,7 +76,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.playerSit.name", "Player Sit"),
             Map.entry("carpet.rule.playerSit.desc", "Allows players to sit down after 3 quick sneaks in succession and enables /sitbehaviour clean."),
             Map.entry("carpet.rule.oldFlintAndSteelBehavior.name", "Old Flint And Steel Behavior"),
-            Map.entry("carpet.rule.oldFlintAndSteelBehavior.desc", "Restores 1.12 flint and steel behavior so it can be used to update observers and BUDs.")
+            Map.entry("carpet.rule.oldFlintAndSteelBehavior.desc", "Restores 1.12 flint and steel behavior so it can be used to update observers and BUDs."),
+            Map.entry("carpet.rule.updateSuppressionCrashFix.name", "Update Suppression Crash Fix"),
+            Map.entry("carpet.rule.updateSuppressionCrashFix.desc", "Prevents update suppression crashes from stopping the server (false, true, or silence).")
         );
     }
 }

@@ -97,4 +97,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean oldFlintAndSteelBehavior = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"false", "true", "silence"})
+    public static String updateSuppressionCrashFix = "false";
+
 }
