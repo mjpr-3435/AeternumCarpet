@@ -43,8 +43,6 @@ import smp.aeternum.carpet.actions.CommandPackStore;
 import smp.aeternum.carpet.actions.CommandRunner;
 import smp.aeternum.carpet.command.ActionsCommand;
 import smp.aeternum.carpet.network.CommandPacksNetworking;
-import smp.aeternum.carpet.command.MotdCommand;
-import smp.aeternum.carpet.motd.JoinMotd;
 import smp.aeternum.carpet.motd.MotdTaskStore;
 import smp.aeternum.carpet.guides.GuideStore;
 import smp.aeternum.carpet.network.GuideNetworking;
@@ -96,10 +94,9 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
-		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			if (AeternumCarpetSettings.joinMotd) JoinMotd.send(handler.player);
-			ScreenOpenNetworking.sendDockState(handler.player);
-		});
+		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd)
+		);
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) BlockerScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos);
 		});
@@ -125,7 +122,6 @@ public class AeternumCarpet implements ModInitializer {
 			FinderCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);
 			ActionsCommand.register(dispatcher);
-			MotdCommand.register(dispatcher);
 			GuideCommand.register(dispatcher);
 			MaterialsCommand.register(dispatcher);
 			RulesCommand.register(dispatcher);

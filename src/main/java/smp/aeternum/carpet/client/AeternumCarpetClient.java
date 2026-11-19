@@ -23,9 +23,9 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         BlockerGuide.register();
         ScreenKeybinds.register();
         // Guides and list selections belong to this connection only, never to the next /server target.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession());
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession());
-        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearClientSession());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession(client, false));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession(client, false));
+        ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearClientSession(client, true));
         ClientPlayNetworking.registerGlobalReceiver(BlockerDataPayload.ID, (payload, context) ->
             context.client().execute(() -> {
                 BlockerGuide.reconcile(payload.json());
@@ -65,15 +65,19 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ProjectDownloadDataPayload.ID, (payload, context) -> context.client().execute(() ->
             LitematicaBridge.handleDownload(payload)
         ));
-        ClientPlayNetworking.registerGlobalReceiver(DockStatePayload.ID, (payload, context) -> context.client().execute(() ->
-            AeternumDockOverlay.updateState(payload.json())
-        ));
+        ClientPlayNetworking.registerGlobalReceiver(DockStatePayload.ID, (payload, context) -> context.client().execute(() -> {
+            AeternumDockOverlay.updateState(payload.json());
+            if (context.client().currentScreen instanceof MotdTasksScreen screen) {
+                screen.syncFromServer(AeternumDockOverlay.cachedTasks());
+            }
+        }));
     }
 
-    private static void clearClientSession() {
+    private static void clearClientSession(net.minecraft.client.MinecraftClient client, boolean refreshDock) {
         BlockerGuide.clear();
         BlockerSelectionStore.clearAll();
         MaterialsHudOverlay.clear();
-        AeternumDockOverlay.clearState();
+        if (refreshDock) AeternumDockOverlay.onWorldChange(client);
+        else AeternumDockOverlay.clearState();
     }
 }

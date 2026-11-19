@@ -16,6 +16,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastProtectEnabled;
     private static boolean lastActionsEnabled;
     private static boolean lastJoinMotdEnabled;
+    private static boolean lastQuickDockEnabled;
     private static boolean lastGuideEnabled;
     private static boolean lastProjectsEnabled;
 
@@ -33,6 +34,7 @@ public final class CommandAvailabilityRefresher {
         lastProtectEnabled = AeternumCarpetSettings.commandProtect;
         lastActionsEnabled = AeternumCarpetSettings.commandActions;
         lastJoinMotdEnabled = AeternumCarpetSettings.joinMotd;
+        lastQuickDockEnabled = AeternumCarpetSettings.quickDock;
         lastGuideEnabled = AeternumCarpetSettings.commandGuide;
         lastProjectsEnabled = AeternumCarpetSettings.commandProjects;
     }
@@ -48,6 +50,7 @@ public final class CommandAvailabilityRefresher {
         boolean protectEnabled = AeternumCarpetSettings.commandProtect;
         boolean actionsEnabled = AeternumCarpetSettings.commandActions;
         boolean joinMotdEnabled = AeternumCarpetSettings.joinMotd;
+        boolean quickDockEnabled = AeternumCarpetSettings.quickDock;
         boolean guideEnabled = AeternumCarpetSettings.commandGuide;
         boolean projectsEnabled = AeternumCarpetSettings.commandProjects;
         if (todoEnabled == lastTodoEnabled
@@ -55,7 +58,7 @@ public final class CommandAvailabilityRefresher {
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled) {
             return;
         }
 
@@ -69,6 +72,7 @@ public final class CommandAvailabilityRefresher {
         lastProtectEnabled = protectEnabled;
         lastActionsEnabled = actionsEnabled;
         lastJoinMotdEnabled = joinMotdEnabled;
+        lastQuickDockEnabled = quickDockEnabled;
         lastGuideEnabled = guideEnabled;
         lastProjectsEnabled = projectsEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
