@@ -42,7 +42,7 @@ public final class AeternumDockOverlay {
     private static final ItemStack CS_ICON = new ItemStack(Items.ENDER_EYE);
     private static final ItemStack CB_ICON = new ItemStack(Items.DIAMOND_PICKAXE);
     private static final DimButton[] DIMENSIONS = {
-        new DimButton("Overworld", "minecraft:overworld", "overworld", AeternumCarpet.id("textures/gui/dim_overworld.png"), 0xFF66D96B),
+        new DimButton("Overworld", "minecraft:overworld", "overworld", AeternumCarpet.id("textures/gui/dim_overworld.png"), AeternumTheme.TEXT_PRIMARY),
         new DimButton("Nether", "minecraft:the_nether", "nether", AeternumCarpet.id("textures/gui/dim_nether.png"), 0xFFD452FF),
         new DimButton("End", "minecraft:the_end", "end", AeternumCarpet.id("textures/gui/dim_end.png"), 0xFFE3E59C)
     };
@@ -221,7 +221,7 @@ public final class AeternumDockOverlay {
             String mode = cachedState.carefulBreakMode == null ? "off" : cachedState.carefulBreakMode;
             int accent = switch (mode) {
                 case "sneak" -> 0xFF47D1FF;
-                case "always" -> 0xFF5CE075;
+                case "always" -> 0xFFE8B948;
                 default -> 0;
             };
             boolean active = !"off".equals(mode);
