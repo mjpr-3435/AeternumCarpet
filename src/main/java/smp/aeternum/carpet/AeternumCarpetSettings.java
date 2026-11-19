@@ -43,8 +43,8 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "mobcap", "disable"})
     public static String phantomSpawning = "vanilla";
 
-    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
-    public static boolean commandTodoList = false;
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE, RuleCategory.COMMAND})
+    public static boolean todoList = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandBlockers = false;

@@ -20,6 +20,8 @@ public final class MaterialsHudOverlay {
 
 	public static boolean hudEnabled = true;
 	public static HudPos hudPosition = HudPos.NE;
+	public static boolean todoCollapsed = false;
+	public static boolean todoPinned = false;
 
 	private MaterialsHudOverlay() {}
 
@@ -69,6 +71,8 @@ public final class MaterialsHudOverlay {
 				if (j != null) {
 					if (j.has("enabled")) hudEnabled = j.get("enabled").getAsBoolean();
 					if (j.has("position")) hudPosition = HudPos.valueOf(j.get("position").getAsString());
+					if (j.has("todoCollapsed")) todoCollapsed = j.get("todoCollapsed").getAsBoolean();
+					if (j.has("todoPinned")) todoPinned = j.get("todoPinned").getAsBoolean();
 				}
 			}
 		} catch (Exception ignored) { }
@@ -80,6 +84,8 @@ public final class MaterialsHudOverlay {
 			JsonObject j = new JsonObject();
 			j.addProperty("enabled", hudEnabled);
 			j.addProperty("position", hudPosition.name());
+			j.addProperty("todoCollapsed", todoCollapsed);
+			j.addProperty("todoPinned", todoPinned);
 			Files.writeString(CFG, GSON.toJson(j));
 		} catch (Exception ignored) { }
 	}

@@ -14,6 +14,7 @@ import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.network.ScreenOpenNetworking;
 import smp.aeternum.carpet.todo.TodoListStore;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public final class TodoCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("todo")
-            .requires(source -> AeternumCarpetSettings.commandTodoList)
+            .requires(source -> AeternumCarpetSettings.todoList)
             .executes(TodoCommand::listNotes)
             .then(literal("list")
                 .executes(TodoCommand::listNotes))
@@ -54,6 +55,7 @@ public final class TodoCommand {
         }
 
         TodoListStore.addNote(player.getUuid(), capitalizeNote(note));
+        ScreenOpenNetworking.sendDockState(player);
         context.getSource().sendFeedback(() -> Text.literal("Añadiste una nota a tu lista.").formatted(Formatting.GRAY), false);
         sendNotesList(context.getSource(), player);
         return 1;
@@ -67,6 +69,7 @@ public final class TodoCommand {
             return 0;
         }
 
+        ScreenOpenNetworking.sendDockState(player);
         context.getSource().sendFeedback(() -> Text.literal("Eliminaste una nota de tu lista.").formatted(Formatting.GRAY), false);
         sendNotesList(context.getSource(), player);
         return 1;

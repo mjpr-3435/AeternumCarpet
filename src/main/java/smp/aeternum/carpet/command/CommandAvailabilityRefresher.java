@@ -24,7 +24,7 @@ public final class CommandAvailabilityRefresher {
     }
 
     public static void initialize() {
-        lastTodoEnabled = AeternumCarpetSettings.commandTodoList;
+        lastTodoEnabled = AeternumCarpetSettings.todoList;
         lastExplorationManagerEnabled = AeternumCarpetSettings.explorationManager;
         lastExplorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         lastQuickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;
@@ -40,7 +40,7 @@ public final class CommandAvailabilityRefresher {
     }
 
     public static void tick(MinecraftServer server) {
-        boolean todoEnabled = AeternumCarpetSettings.commandTodoList;
+        boolean todoEnabled = AeternumCarpetSettings.todoList;
         boolean explorationManagerEnabled = AeternumCarpetSettings.explorationManager;
         boolean explorationGuardEnabled = AeternumCarpetSettings.allowPlayerExploration;
         boolean quickShulkerEnabled = AeternumCarpetSettings.openShulkerInHand;

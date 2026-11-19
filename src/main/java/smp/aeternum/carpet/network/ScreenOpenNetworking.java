@@ -11,6 +11,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.motd.JoinMotd;
 import smp.aeternum.carpet.motd.MotdTaskStore;
+import smp.aeternum.carpet.todo.TodoListStore;
 
 public final class ScreenOpenNetworking {
     private static final Gson GSON = new Gson();
@@ -22,6 +23,7 @@ public final class ScreenOpenNetworking {
         PayloadTypeRegistry.playS2C().register(DockStatePayload.ID, DockStatePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ScreenOpenRequestPayload.ID, ScreenOpenRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MotdTasksSavePayload.ID, MotdTasksSavePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(TodoActionPayload.ID, TodoActionPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(ScreenOpenRequestPayload.ID, (payload, context) -> context.server().execute(() -> {
             ServerPlayerEntity player = context.player();
             switch (payload.screen()) {
@@ -44,6 +46,25 @@ public final class ScreenOpenNetworking {
             } catch (Exception ignored) {
             }
         }));
+        ServerPlayNetworking.registerGlobalReceiver(TodoActionPayload.ID, (payload, context) -> context.server().execute(() -> {
+            ServerPlayerEntity player = context.player();
+            if (!AeternumCarpetSettings.todoList) return;
+            switch (payload.action()) {
+                case "add" -> {
+                    String note = payload.text() == null ? "" : payload.text().strip();
+                    if (!note.isEmpty()) {
+                        if (note.length() > 140) note = note.substring(0, 140);
+                        String capitalized = Character.toUpperCase(note.charAt(0)) + note.substring(1);
+                        TodoListStore.addNote(player.getUuid(), capitalized);
+                    }
+                    sendDockState(player);
+                }
+                case "delete" -> {
+                    TodoListStore.removeNote(player.getUuid(), payload.index());
+                    sendDockState(player);
+                }
+            }
+        }));
     }
 
     public static void sendDockState(ServerPlayerEntity player) {
@@ -55,9 +76,11 @@ public final class ScreenOpenNetworking {
         DockState state = new DockState();
         state.activeTime = JoinMotd.activeTime();
         state.tasks = MotdTaskStore.all();
+        state.todos = AeternumCarpetSettings.todoList ? TodoListStore.getNotes(player.getUuid()) : List.of();
         state.isOp = player.hasPermissionLevel(2);
         state.joinMotd = AeternumCarpetSettings.joinMotd;
         state.quickDock = AeternumCarpetSettings.quickDock;
+        state.todoList = AeternumCarpetSettings.todoList;
         state.showJoinBanner = showJoinBanner && AeternumCarpetSettings.joinMotd;
         state.projects = AeternumCarpetSettings.commandProjects;
         state.guide = AeternumCarpetSettings.commandGuide;
@@ -76,9 +99,11 @@ public final class ScreenOpenNetworking {
     public static final class DockState {
         public String activeTime = "";
         public List<String> tasks = List.of();
+        public List<String> todos = List.of();
         public boolean isOp;
         public boolean joinMotd;
         public boolean quickDock;
+        public boolean todoList;
         public boolean showJoinBanner;
         public boolean projects;
         public boolean guide;
