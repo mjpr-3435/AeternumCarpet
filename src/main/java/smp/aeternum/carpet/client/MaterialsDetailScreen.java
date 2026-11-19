@@ -295,7 +295,9 @@ public final class MaterialsDetailScreen extends UiScreen {
 			}
 			out.add(sub);
 		}
-		out.sort(Comparator.comparing(s -> s.name, String.CASE_INSENSITIVE_ORDER));
+		out.sort(Comparator
+			.comparingInt((MaterialList.SubregionInfo s) -> "DONE".equals(s.status) ? 1 : 0)
+			.thenComparing(s -> s.name, String.CASE_INSENSITIVE_ORDER));
 		return out;
 	}
 
