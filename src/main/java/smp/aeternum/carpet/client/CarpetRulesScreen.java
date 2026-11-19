@@ -4,9 +4,11 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
@@ -28,7 +30,8 @@ public final class CarpetRulesScreen extends UiScreen {
     private static final int ROW_STRIDE = CARD_H + CARD_GAP;
 
     private List<RuleSnapshot> rules;
-    private String selectedScope = "ALL"; // ALL, MODIFIED, MGR:<id>, CAT:<name>
+    private String selectedScope = "ALL"; // ALL, MODIFIED, MGR:<id>, SUB:<id>/<folder>
+    private final Set<String> expandedManagers = new HashSet<>();
     private boolean saveDefault = true;
     private String statusMessage = "";
     private boolean statusError;
@@ -128,25 +131,101 @@ public final class CarpetRulesScreen extends UiScreen {
         init();
     }
 
+    private static final Map<String, String> AETERNUM_FOLDERS = Map.ofEntries(
+        Map.entry("reloadFakePlayers", "Bots"),
+        Map.entry("editBotInventory", "Bots"),
+        Map.entry("todoList", "HUD & Dock"),
+        Map.entry("joinMotd", "HUD & Dock"),
+        Map.entry("quickDock", "HUD & Dock"),
+        Map.entry("explorationManager", "HUD & Dock"),
+        Map.entry("allowPlayerExploration", "HUD & Dock"),
+        Map.entry("commandBlockers", "Comandos"),
+        Map.entry("commandFinder", "Comandos"),
+        Map.entry("commandProtect", "Comandos"),
+        Map.entry("commandActions", "Comandos"),
+        Map.entry("commandGuide", "Comandos"),
+        Map.entry("commandProjects", "Comandos"),
+        Map.entry("commandDimension", "Comandos"),
+        Map.entry("commandHat", "Comandos"),
+        Map.entry("phantomSpawning", "Mundo & Mecánicas"),
+        Map.entry("spectatorPortalTravel", "Mundo & Mecánicas"),
+        Map.entry("openShulkerInHand", "Mundo & Mecánicas"),
+        Map.entry("openEnderChestInHand", "Mundo & Mecánicas"),
+        Map.entry("protectedPots", "Mundo & Mecánicas"),
+        Map.entry("endermanGriefing", "Mundo & Mecánicas"),
+        Map.entry("cameraMode", "Mundo & Mecánicas"),
+        Map.entry("carefulBreak", "Mundo & Mecánicas"),
+        Map.entry("playerSit", "Mundo & Mecánicas"),
+        Map.entry("oldFlintAndSteelBehavior", "Mundo & Mecánicas"),
+        Map.entry("updateSuppressionCrashFix", "Mundo & Mecánicas")
+    );
+
+    private static String resolveSubfolder(RuleSnapshot r) {
+        if ("aeternum".equalsIgnoreCase(r.managerId) && r.name != null) {
+            String mapped = AETERNUM_FOLDERS.get(r.name);
+            if (mapped != null) return mapped;
+        }
+        if (r.categories == null || r.categories.isEmpty()) return "General";
+        String fallback = null;
+        for (String cat : r.categories) {
+            if (cat == null || cat.isBlank()) continue;
+            String low = cat.toLowerCase(Locale.ROOT);
+            if (low.equalsIgnoreCase(r.managerId) || low.equals("aeternum")) continue;
+            if (low.equals("feature") || low.equals("command") || low.equals("experimental")) {
+                if (fallback == null) fallback = formatFolderName(cat);
+                continue;
+            }
+            return formatFolderName(cat);
+        }
+        return fallback != null ? fallback : "General";
+    }
+
+    private static String formatFolderName(String raw) {
+        String low = raw.toLowerCase(Locale.ROOT);
+        if (low.equals("tnt")) return "TNT";
+        if (low.equals("hud")) return "HUD";
+        return Character.toUpperCase(low.charAt(0)) + low.substring(1);
+    }
+
     private List<ScopeItem> buildScopes() {
         List<ScopeItem> scopes = new ArrayList<>();
         long modifiedCount = rules.stream().filter(r -> !r.isDefault).count();
-        scopes.add(new ScopeItem("ALL", "Todas (" + rules.size() + ")"));
-        scopes.add(new ScopeItem("MODIFIED", "Modificadas (" + modifiedCount + ")"));
+        scopes.add(new ScopeItem("ALL", "Todas (" + rules.size() + ")", 0, false, false, null));
+        scopes.add(new ScopeItem("MODIFIED", "Modificadas (" + modifiedCount + ")", 0, false, false, null));
 
-        Set<String> managers = new LinkedHashSet<>();
-        Set<String> categories = new LinkedHashSet<>();
+        Map<String, Integer> managerTotals = new LinkedHashMap<>();
+        Map<String, Integer> managerModified = new LinkedHashMap<>();
+        Map<String, Map<String, Integer>> managerSubs = new LinkedHashMap<>();
         for (RuleSnapshot r : rules) {
-            managers.add(r.managerId);
-            if (r.categories != null) categories.addAll(r.categories);
-        }
-        if (managers.size() > 1) {
-            for (String m : managers) {
-                scopes.add(new ScopeItem("MGR:" + m, "@ " + m));
+            managerTotals.merge(r.managerId, 1, Integer::sum);
+            if (!r.isDefault) {
+                managerModified.merge(r.managerId, 1, Integer::sum);
             }
+            String sub = resolveSubfolder(r);
+            managerSubs.computeIfAbsent(r.managerId, k -> new LinkedHashMap<>()).merge(sub, 1, Integer::sum);
         }
-        for (String cat : categories) {
-            scopes.add(new ScopeItem("CAT:" + cat, cat.toUpperCase(Locale.ROOT)));
+
+        for (var entry : managerTotals.entrySet()) {
+            String mgr = entry.getKey();
+            int total = entry.getValue();
+            int mod = managerModified.getOrDefault(mgr, 0);
+            boolean expanded = expandedManagers.contains(mgr);
+            String mgrLabel = formatFolderName(mgr) + " (" + total + ")";
+            scopes.add(new ScopeItem("MGR:" + mgr, mgrLabel, 0, true, expanded, mgr));
+            if (expanded) {
+                scopes.add(new ScopeItem("MGR:" + mgr, "Todas (" + total + ")", 1, false, false, mgr));
+                scopes.add(new ScopeItem("MGR_MOD:" + mgr, "Modificadas (" + mod + ")", 1, false, false, mgr));
+                Map<String, Integer> subs = managerSubs.getOrDefault(mgr, Map.of());
+                List<String> sortedSubs = new ArrayList<>(subs.keySet());
+                sortedSubs.sort((a, b) -> {
+                    if (a.equals("General")) return 1;
+                    if (b.equals("General")) return -1;
+                    return a.compareToIgnoreCase(b);
+                });
+                for (String sub : sortedSubs) {
+                    scopes.add(new ScopeItem("SUB:" + mgr + "/" + sub, sub + " (" + subs.get(sub) + ")", 1, false, false, mgr));
+                }
+            }
         }
         return scopes;
     }
@@ -157,7 +236,16 @@ public final class CarpetRulesScreen extends UiScreen {
         for (RuleSnapshot r : rules) {
             if ("MODIFIED".equals(selectedScope) && r.isDefault) continue;
             if (selectedScope.startsWith("MGR:") && !r.managerId.equals(selectedScope.substring(4))) continue;
-            if (selectedScope.startsWith("CAT:") && (r.categories == null || !r.categories.contains(selectedScope.substring(4)))) continue;
+            if (selectedScope.startsWith("MGR_MOD:") && (r.isDefault || !r.managerId.equals(selectedScope.substring(8)))) continue;
+            if (selectedScope.startsWith("SUB:")) {
+                String rest = selectedScope.substring(4);
+                int slash = rest.indexOf('/');
+                if (slash > 0) {
+                    String mgr = rest.substring(0, slash);
+                    String sub = rest.substring(slash + 1);
+                    if (!r.managerId.equals(mgr) || !resolveSubfolder(r).equals(sub)) continue;
+                }
+            }
 
             if (!q.isEmpty()) {
                 String n = r.name != null ? r.name.toLowerCase(Locale.ROOT) : "";
@@ -214,7 +302,7 @@ public final class CarpetRulesScreen extends UiScreen {
             int ry = sTop + i * SIDEBAR_ROW_H - (int) Math.round(sidebarScroll);
             if (ry + SIDEBAR_ROW_H < sTop || ry > sBottom) continue;
 
-            boolean isSel = item.id.equals(selectedScope);
+            boolean isSel = !item.isManager && item.id.equals(selectedScope);
             boolean hover = my >= sTop && my < sBottom && mx >= panelX + 4 && mx < panelX + SIDEBAR_W - 4 && my >= ry && my < ry + SIDEBAR_ROW_H - 2;
             if (isSel) {
                 c.fill(panelX + 4, ry, panelX + SIDEBAR_W - 4, ry + SIDEBAR_ROW_H - 2, AeternumTheme.CARD_SELECTED);
@@ -222,9 +310,19 @@ public final class CarpetRulesScreen extends UiScreen {
             } else if (hover) {
                 c.fill(panelX + 4, ry, panelX + SIDEBAR_W - 4, ry + SIDEBAR_ROW_H - 2, AeternumTheme.CARD_HOVER);
             }
-            String lbl = AeternumTheme.ellipsize(textRenderer, item.label, SIDEBAR_W - 18);
-            c.drawTextWithShadow(textRenderer, lbl, panelX + 11, ry + 5,
-                isSel ? AeternumTheme.TEXT_PRIMARY : (item.id.startsWith("MGR:") ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY));
+            int indent = item.depth * 10;
+            if (item.depth > 0) {
+                c.fill(panelX + 10, ry, panelX + 11, ry + SIDEBAR_ROW_H - 2, AeternumTheme.BORDER_SUBTLE);
+            }
+            int textX = panelX + 10 + indent;
+            if (item.isManager) {
+                String arrow = item.expanded ? "\u25BE" : "\u25B8";
+                c.drawText(textRenderer, arrow, textX, ry + 5, AeternumTheme.TEXT_SECONDARY, false);
+                textX += 10;
+            }
+            String lbl = AeternumTheme.ellipsize(textRenderer, item.label, panelX + SIDEBAR_W - 8 - textX);
+            c.drawTextWithShadow(textRenderer, lbl, textX, ry + 5,
+                isSel ? AeternumTheme.TEXT_PRIMARY : (item.isManager ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY));
         }
         c.disableScissor();
 
@@ -366,7 +464,17 @@ public final class CarpetRulesScreen extends UiScreen {
             List<ScopeItem> scopes = buildScopes();
             int row = (int) ((my - sTop + sidebarScroll) / SIDEBAR_ROW_H);
             if (row >= 0 && row < scopes.size()) {
-                selectedScope = scopes.get(row).id;
+                ScopeItem clicked = scopes.get(row);
+                if (clicked.isManager) {
+                    if (mx < panelX + 22 || clicked.id.equals(selectedScope)) {
+                        if (!expandedManagers.remove(clicked.managerId)) {
+                            expandedManagers.add(clicked.managerId);
+                        }
+                    } else {
+                        expandedManagers.add(clicked.managerId);
+                    }
+                }
+                selectedScope = clicked.id;
                 targetListScroll = 0;
                 listScroll = 0;
                 return true;
@@ -479,7 +587,7 @@ public final class CarpetRulesScreen extends UiScreen {
         listScroll = targetListScroll;
     }
 
-    private record ScopeItem(String id, String label) {}
+    private record ScopeItem(String id, String label, int depth, boolean isManager, boolean expanded, String managerId) {}
 
     private static List<RuleSnapshot> decode(String json) {
         List<RuleSnapshot> res = GSON.fromJson(json, TYPE);
