@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.inventory.Inventory;
@@ -23,6 +24,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.chunk.WorldChunk;
 import smp.aeternum.carpet.AeternumCarpet;
 import smp.aeternum.carpet.network.MaterialsNetworking;
 
@@ -30,15 +32,17 @@ public final class MaterialsStore {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Type CLAIMS_TYPE = new TypeToken<Map<String, Map<String, String>>>() {}.getType();
 	private static final Type REGIONS_TYPE = new TypeToken<Map<String, List<StorageRegion>>>() {}.getType();
+	private static final Type STORAGE_CACHE_TYPE = new TypeToken<Map<String, Map<String, Map<String, Integer>>>>() {}.getType();
 	private static final long SCAN_INTERVAL_MS = 1_000;
 	private static final int WORLD_BLOCKS_PER_TICK = 2_048;
 
 	private static Path dataDir, projectsDir;
-	private static Path claimsFile, regionsFile;
+	private static Path claimsFile, regionsFile, storageCacheFile;
 	private static final Map<String, MaterialList> lists = new LinkedHashMap<>();
 	private static final Map<String, LitematicParser.ParsedSchematic> schematics = new LinkedHashMap<>();
 	private static Map<String, Map<String, String>> claims = new LinkedHashMap<>();
 	private static Map<String, List<StorageRegion>> regions = new LinkedHashMap<>();
+	private static Map<String, Map<String, Map<String, Integer>>> storageCache = new LinkedHashMap<>();
 	private static long lastTickTime;
 	private static boolean pendingWorldBroadcast;
 	private static MinecraftServer server;
@@ -51,6 +55,7 @@ public final class MaterialsStore {
 		projectsDir = srv.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_projects");
 		claimsFile = dataDir.resolve("claims.json");
 		regionsFile = dataDir.resolve("regions.json");
+		storageCacheFile = dataDir.resolve("storage-cache.json");
 		reload();
 	}
 
@@ -60,7 +65,9 @@ public final class MaterialsStore {
 		loadProjects();
 		loadClaims();
 		loadRegions();
+		loadStorageCache();
 		mergeClaims();
+		recomputeAllAvailable();
 		lastTickTime = System.currentTimeMillis();
 	}
 
@@ -70,20 +77,20 @@ public final class MaterialsStore {
 		if (System.currentTimeMillis() - lastTickTime < SCAN_INTERVAL_MS) return;
 		lastTickTime = System.currentTimeMillis();
 
-		boolean scanned = pendingWorldBroadcast;
+		boolean shouldBroadcast = pendingWorldBroadcast;
 		pendingWorldBroadcast = false;
+		boolean cacheDirty = false;
 		for (var entry : regions.entrySet()) {
 			String listName = entry.getKey();
 			MaterialList list = lists.get(listName);
 			if (list == null) continue;
-			for (StorageRegion region : entry.getValue()) {
-				ServerWorld world = findWorld(region.dimension);
-				if (world == null) continue;
-				scan(world, listName, region.pos1(), region.pos2());
-				scanned = true;
+			if (scanListStorage(listName, entry.getValue())) {
+				cacheDirty = true;
+				shouldBroadcast = true;
 			}
 		}
-		if (scanned) MaterialsNetworking.broadcast(server);
+		if (cacheDirty) saveStorageCache();
+		if (shouldBroadcast) MaterialsNetworking.broadcast(server);
 	}
 
 	private static boolean stepWorldVerification() {
@@ -380,33 +387,147 @@ public final class MaterialsStore {
 		}
 	}
 
-	public static void scan(ServerWorld world, String listName, BlockPos pos1, BlockPos pos2) {
-		MaterialList list = lists.get(listName);
-		if (list == null) return;
-		Map<String, Integer> counts = new HashMap<>();
-		int minX = Math.min(pos1.getX(), pos2.getX()), maxX = Math.max(pos1.getX(), pos2.getX());
-		int minY = Math.min(pos1.getY(), pos2.getY()), maxY = Math.max(pos1.getY(), pos2.getY());
-		int minZ = Math.min(pos1.getZ(), pos2.getZ()), maxZ = Math.max(pos1.getZ(), pos2.getZ());
-		int minCX = minX >> 4, maxCX = maxX >> 4, minCZ = minZ >> 4, maxCZ = maxZ >> 4;
-		for (int cx = minCX; cx <= maxCX; cx++)
-			for (int cz = minCZ; cz <= maxCZ; cz++) {
-				if (!world.isChunkLoaded(cx, cz)) continue;
-				int bx0 = Math.max(minX, cx << 4), bx1 = Math.min(maxX, (cx << 4) + 15);
-				int bz0 = Math.max(minZ, cz << 4), bz1 = Math.min(maxZ, (cz << 4) + 15);
-				for (int x = bx0; x <= bx1; x++)
-					for (int y = minY; y <= maxY; y++)
-						for (int z = bz0; z <= bz1; z++) {
-							if (!(world.getBlockEntity(new BlockPos(x, y, z)) instanceof Inventory inv)) continue;
-							for (int s = 0; s < inv.size(); s++) countStack(inv.getStack(s), counts);
-						}
-			}
-		for (MaterialEntry entry : list.entries) entry.available = counts.getOrDefault(entry.itemId, 0);
-		if (list.subregions != null) {
-			for (var sub : list.subregions) {
-				for (MaterialEntry entry : sub.entries) entry.available = counts.getOrDefault(entry.itemId, 0);
+	private static boolean scanListStorage(String listName, List<StorageRegion> listRegions) {
+		if (listRegions == null || listRegions.isEmpty()) return false;
+		Map<String, List<StorageRegion>> byDimension = new LinkedHashMap<>();
+		for (StorageRegion region : listRegions) {
+			if (region.dimension != null) {
+				byDimension.computeIfAbsent(region.dimension, k -> new ArrayList<>()).add(region);
 			}
 		}
-		list.scannedAvailable = counts.values().stream().mapToInt(Integer::intValue).sum();
+		Map<String, Map<String, Integer>> listCache = storageCache.computeIfAbsent(listName, k -> new LinkedHashMap<>());
+		boolean changed = false;
+
+		for (var dimEntry : byDimension.entrySet()) {
+			String dim = dimEntry.getKey();
+			ServerWorld world = findWorld(dim);
+			if (world == null) continue;
+			List<StorageRegion> dimRegions = dimEntry.getValue();
+
+			// Collect unique chunk coords covered by any storage region in this dimension.
+			Map<Long, int[]> coveredChunks = new LinkedHashMap<>();
+			for (StorageRegion region : dimRegions) {
+				int minCX = Math.min(region.x1, region.x2) >> 4;
+				int maxCX = Math.max(region.x1, region.x2) >> 4;
+				int minCZ = Math.min(region.z1, region.z2) >> 4;
+				int maxCZ = Math.max(region.z1, region.z2) >> 4;
+				for (int cx = minCX; cx <= maxCX; cx++) {
+					for (int cz = minCZ; cz <= maxCZ; cz++) {
+						long key = (((long) cx) << 32) ^ (cz & 0xffffffffL);
+						coveredChunks.putIfAbsent(key, new int[]{cx, cz});
+					}
+				}
+			}
+
+			for (int[] coords : coveredChunks.values()) {
+				int cx = coords[0], cz = coords[1];
+				// Keep cached counts intact when a chunk is unloaded so HUD doesn't reset to 0.
+				if (!world.isChunkLoaded(cx, cz)) continue;
+				WorldChunk chunk = world.getChunk(cx, cz);
+				Map<String, Integer> fresh = new LinkedHashMap<>();
+				for (BlockEntity be : chunk.getBlockEntities().values()) {
+					if (!(be instanceof Inventory inv)) continue;
+					BlockPos pos = be.getPos();
+					if (!isInsideAny(pos, dimRegions)) continue;
+					for (int s = 0; s < inv.size(); s++) countStack(inv.getStack(s), fresh);
+				}
+				String cKey = chunkKey(dim, cx, cz);
+				Map<String, Integer> prev = listCache.get(cKey);
+				if (fresh.isEmpty()) {
+					if (prev != null) {
+						listCache.remove(cKey);
+						changed = true;
+					}
+				} else if (!fresh.equals(prev)) {
+					listCache.put(cKey, fresh);
+					changed = true;
+				}
+			}
+		}
+
+		if (changed) recomputeAvailable(listName);
+		return changed;
+	}
+
+	private static boolean isInsideAny(BlockPos pos, List<StorageRegion> dimRegions) {
+		int x = pos.getX(), y = pos.getY(), z = pos.getZ();
+		for (StorageRegion r : dimRegions) {
+			int minX = Math.min(r.x1, r.x2), maxX = Math.max(r.x1, r.x2);
+			int minY = Math.min(r.y1, r.y2), maxY = Math.max(r.y1, r.y2);
+			int minZ = Math.min(r.z1, r.z2), maxZ = Math.max(r.z1, r.z2);
+			if (x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static String chunkKey(String dim, int cx, int cz) {
+		return dim + "|" + cx + "|" + cz;
+	}
+
+	private static void pruneStorageCache(String listName) {
+		List<StorageRegion> listRegions = regions.get(listName);
+		if (listRegions == null || listRegions.isEmpty()) {
+			storageCache.remove(listName);
+			return;
+		}
+		Map<String, Map<String, Integer>> listCache = storageCache.get(listName);
+		if (listCache == null) return;
+		var it = listCache.keySet().iterator();
+		while (it.hasNext()) {
+			String key = it.next();
+			if (!isChunkKeyCovered(key, listRegions)) it.remove();
+		}
+		if (listCache.isEmpty()) storageCache.remove(listName);
+	}
+
+	private static boolean isChunkKeyCovered(String key, List<StorageRegion> listRegions) {
+		int first = key.indexOf('|');
+		int second = first < 0 ? -1 : key.indexOf('|', first + 1);
+		if (first < 0 || second < 0) return false;
+		String dim = key.substring(0, first);
+		int cx, cz;
+		try {
+			cx = Integer.parseInt(key.substring(first + 1, second));
+			cz = Integer.parseInt(key.substring(second + 1));
+		} catch (NumberFormatException e) {
+			return false;
+		}
+		for (StorageRegion r : listRegions) {
+			if (!dim.equals(r.dimension)) continue;
+			int minCX = Math.min(r.x1, r.x2) >> 4, maxCX = Math.max(r.x1, r.x2) >> 4;
+			int minCZ = Math.min(r.z1, r.z2) >> 4, maxCZ = Math.max(r.z1, r.z2) >> 4;
+			if (cx >= minCX && cx <= maxCX && cz >= minCZ && cz <= maxCZ) return true;
+		}
+		return false;
+	}
+
+	private static void recomputeAllAvailable() {
+		for (String listName : lists.keySet()) {
+			recomputeAvailable(listName);
+		}
+	}
+
+	private static void recomputeAvailable(String listName) {
+		MaterialList list = lists.get(listName);
+		if (list == null) return;
+		Map<String, Integer> totals = new HashMap<>();
+		Map<String, Map<String, Integer>> listCache = storageCache.get(listName);
+		if (listCache != null) {
+			for (Map<String, Integer> chunkCounts : listCache.values()) {
+				for (var e : chunkCounts.entrySet()) {
+					totals.merge(e.getKey(), e.getValue(), Integer::sum);
+				}
+			}
+		}
+		for (MaterialEntry entry : list.entries) entry.available = totals.getOrDefault(entry.itemId, 0);
+		if (list.subregions != null) {
+			for (var sub : list.subregions) {
+				for (MaterialEntry entry : sub.entries) entry.available = totals.getOrDefault(entry.itemId, 0);
+			}
+		}
+		list.scannedAvailable = totals.values().stream().mapToInt(Integer::intValue).sum();
 	}
 
 	private static void countStack(ItemStack stack, Map<String, Integer> counts) {
@@ -420,6 +541,8 @@ public final class MaterialsStore {
 	public static void addStorageRegion(String listName, String dimension, BlockPos pos1, BlockPos pos2) {
 		regions.computeIfAbsent(listName, k -> new ArrayList<>()).add(new StorageRegion(dimension, pos1, pos2));
 		saveRegions();
+		if (scanListStorage(listName, regions.get(listName))) saveStorageCache();
+		if (server != null) MaterialsNetworking.broadcast(server);
 	}
 
 	public static void removeStorageRegion(String listName, int index) {
@@ -428,6 +551,11 @@ public final class MaterialsStore {
 			listRegions.remove(index);
 			if (listRegions.isEmpty()) regions.remove(listName);
 			saveRegions();
+			pruneStorageCache(listName);
+			if (regions.containsKey(listName)) scanListStorage(listName, regions.get(listName));
+			recomputeAvailable(listName);
+			saveStorageCache();
+			if (server != null) MaterialsNetworking.broadcast(server);
 		}
 	}
 
@@ -465,12 +593,14 @@ public final class MaterialsStore {
 		schematics.remove(listName);
 		claims.remove(listName);
 		regions.remove(listName);
+		storageCache.remove(listName);
 		if (projectsDir != null) {
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".litematic")); } catch (IOException ignored) {}
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".meta.json")); } catch (IOException ignored) {}
 		}
 		saveClaims();
 		saveRegions();
+		saveStorageCache();
 	}
 
 	private static ProjectMeta loadMeta(Path metaPath) {
@@ -514,6 +644,22 @@ public final class MaterialsStore {
 	private static void saveRegions() {
 		try { Files.createDirectories(dataDir); Files.writeString(regionsFile, GSON.toJson(regions)); }
 		catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save material regions", e); }
+	}
+
+	private static void loadStorageCache() {
+		if (storageCacheFile == null || !Files.isRegularFile(storageCacheFile)) { storageCache = new LinkedHashMap<>(); return; }
+		try {
+			Map<String, Map<String, Map<String, Integer>>> loaded = GSON.fromJson(Files.readString(storageCacheFile), STORAGE_CACHE_TYPE);
+			storageCache = loaded != null ? new LinkedHashMap<>(loaded) : new LinkedHashMap<>();
+		} catch (Exception e) {
+			storageCache = new LinkedHashMap<>();
+		}
+	}
+
+	private static void saveStorageCache() {
+		if (storageCacheFile == null) return;
+		try { Files.createDirectories(dataDir); Files.writeString(storageCacheFile, GSON.toJson(storageCache)); }
+		catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save storage cache", e); }
 	}
 
 	public static class ProjectMeta {
