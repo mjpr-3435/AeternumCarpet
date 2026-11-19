@@ -43,7 +43,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "mobcap", "disable"})
     public static String phantomSpawning = "vanilla";
 
-    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE, RuleCategory.COMMAND})
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean todoList = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
@@ -72,5 +72,8 @@ public class AeternumCarpetSettings {
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandDimension = false;
+
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
+    public static boolean editBotInventory = false;
 
 }

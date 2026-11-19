@@ -20,6 +20,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastGuideEnabled;
     private static boolean lastProjectsEnabled;
     private static boolean lastDimensionEnabled;
+    private static boolean lastBotInventoryEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -39,6 +40,7 @@ public final class CommandAvailabilityRefresher {
         lastGuideEnabled = AeternumCarpetSettings.commandGuide;
         lastProjectsEnabled = AeternumCarpetSettings.commandProjects;
         lastDimensionEnabled = AeternumCarpetSettings.commandDimension;
+        lastBotInventoryEnabled = AeternumCarpetSettings.editBotInventory;
     }
 
     public static void tick(MinecraftServer server) {
@@ -56,12 +58,13 @@ public final class CommandAvailabilityRefresher {
         boolean guideEnabled = AeternumCarpetSettings.commandGuide;
         boolean projectsEnabled = AeternumCarpetSettings.commandProjects;
         boolean dimensionEnabled = AeternumCarpetSettings.commandDimension;
+        boolean botInventoryEnabled = AeternumCarpetSettings.editBotInventory;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled) {
+            && blockersEnabled == lastBlockersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled) {
             return;
         }
 
@@ -79,6 +82,7 @@ public final class CommandAvailabilityRefresher {
         lastGuideEnabled = guideEnabled;
         lastProjectsEnabled = projectsEnabled;
         lastDimensionEnabled = dimensionEnabled;
+        lastBotInventoryEnabled = botInventoryEnabled;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             server.getPlayerManager().sendCommandTree(player);
         }

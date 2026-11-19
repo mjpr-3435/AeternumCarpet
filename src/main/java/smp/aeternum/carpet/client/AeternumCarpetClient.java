@@ -1,6 +1,7 @@
 package smp.aeternum.carpet.client;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -15,10 +16,12 @@ import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
 import smp.aeternum.carpet.network.CarpetRulesDataPayload;
 import smp.aeternum.carpet.network.DockStatePayload;
+import smp.aeternum.carpet.bot.ModScreenHandlers;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        HandledScreens.register(ModScreenHandlers.BOT_INVENTORY, BotInventoryScreen::new);
         MaterialsHudOverlay.load();
         BlockerGuide.register();
         ScreenKeybinds.register();

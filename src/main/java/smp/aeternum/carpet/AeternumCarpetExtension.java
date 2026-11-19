@@ -42,7 +42,7 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
             Map.entry("carpet.rule.todoList.name", "Todo List"),
-            Map.entry("carpet.rule.todoList.desc", "Enables personal todo notes through /todo and the compact Alt overlay widget."),
+            Map.entry("carpet.rule.todoList.desc", "Enables personal todo notes in the compact dock overlay widget and HUD pin."),
             Map.entry("carpet.rule.commandBlockers.name", "Command Blockers"),
             Map.entry("carpet.rule.commandBlockers.desc", "Enables /blockers scans for blocks that can stop piston machines."),
             Map.entry("carpet.rule.commandFinder.name", "Command Finder"),
@@ -52,15 +52,17 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandActions.name", "Command Actions"),
             Map.entry("carpet.rule.commandActions.desc", "Enables the in-game /actions editor for persistent server command automation."),
             Map.entry("carpet.rule.joinMotd.name", "Join MOTD"),
-            Map.entry("carpet.rule.joinMotd.desc", "Shows the Aeternum Network MOTD banner on player join (5s) and in the hold-Alt overlay."),
+            Map.entry("carpet.rule.joinMotd.desc", "Shows the Aeternum Network MOTD banner on player join (5s) and in the dock overlay."),
             Map.entry("carpet.rule.quickDock.name", "Quick Dock"),
-            Map.entry("carpet.rule.quickDock.desc", "Enables the hold-Alt quick access dock bar above the hotbar."),
+            Map.entry("carpet.rule.quickDock.desc", "Enables the quick access dock bar above the hotbar when holding the Aeternum Dock key."),
             Map.entry("carpet.rule.commandGuide.name", "Command Guide"),
             Map.entry("carpet.rule.commandGuide.desc", "Enables the server-side markdown guide library through /guide."),
             Map.entry("carpet.rule.commandProjects.name", "Command Projects"),
             Map.entry("carpet.rule.commandProjects.desc", "Enables the /projects command for schematics, subregions, and project material collection."),
             Map.entry("carpet.rule.commandDimension.name", "Command Dimension"),
-            Map.entry("carpet.rule.commandDimension.desc", "Enables /nether, /overworld, and /end dimension teleports strictly in Creative or Spectator mode.")
+            Map.entry("carpet.rule.commandDimension.desc", "Enables /nether, /overworld, and /end dimension teleports strictly in Creative or Spectator mode."),
+            Map.entry("carpet.rule.editBotInventory.name", "Edit Bot Inventory"),
+            Map.entry("carpet.rule.editBotInventory.desc", "Allows opening and editing Carpet fake player inventories, armor, and hands by right-clicking them.")
         );
     }
 }

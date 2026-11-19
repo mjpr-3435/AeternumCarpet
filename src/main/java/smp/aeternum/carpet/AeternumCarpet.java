@@ -1,6 +1,7 @@
 package smp.aeternum.carpet;
 
 import carpet.CarpetServer;
+import carpet.patches.EntityPlayerMPFake;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -8,6 +9,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 
 import net.minecraft.block.ChestBlock;
@@ -26,7 +28,6 @@ import smp.aeternum.carpet.blockers.BlockerBlockList;
 import smp.aeternum.carpet.network.BlockerNetworking;
 import smp.aeternum.carpet.command.ExplorationCommand;
 import smp.aeternum.carpet.command.QuickAccessCommand;
-import smp.aeternum.carpet.command.TodoCommand;
 import smp.aeternum.carpet.config.AeternumCarpetConfig;
 import smp.aeternum.carpet.exploration.PlayerExplorationGuard;
 import smp.aeternum.carpet.exploration.ExplorationPregenerator;
@@ -54,6 +55,8 @@ import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.command.RulesCommand;
 import smp.aeternum.carpet.command.DimensionCommand;
+import smp.aeternum.carpet.bot.BotInventoryOpener;
+import smp.aeternum.carpet.bot.ModScreenHandlers;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
 public class AeternumCarpet implements ModInitializer {
@@ -62,6 +65,7 @@ public class AeternumCarpet implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		ModScreenHandlers.register();
 		BlockerNetworking.registerPayloads();
 		CommandPacksNetworking.registerPayloads();
 		GuideNetworking.registerPayloads();
@@ -115,10 +119,21 @@ public class AeternumCarpet implements ModInitializer {
 			}
 			return ActionResult.PASS;
 		});
+		UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+			if (!world.isClient
+				&& AeternumCarpetSettings.editBotInventory
+				&& hand == net.minecraft.util.Hand.MAIN_HAND
+				&& !player.isSpectator()
+				&& entity instanceof EntityPlayerMPFake bot
+				&& player instanceof net.minecraft.server.network.ServerPlayerEntity viewer) {
+				BotInventoryOpener.open(viewer, bot);
+				return ActionResult.SUCCESS;
+			}
+			return ActionResult.PASS;
+		});
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			ExplorationCommand.register(dispatcher);
 			QuickAccessCommand.register(dispatcher);
-			TodoCommand.register(dispatcher);
 			BlockersCommand.register(dispatcher);
 			FinderCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);

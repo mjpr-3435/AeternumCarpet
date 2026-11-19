@@ -170,9 +170,9 @@ public final class AeternumDockOverlay {
     private static List<DockAction> buildActions() {
         List<DockAction> out = new ArrayList<>();
         DockState s = cachedState;
-        if (s.projects) out.add(new DockAction("Proyectos", "projects", new ItemStack(Items.SHULKER_BOX), "Proyectos, subregiones y materiales"));
-        if (s.guide) out.add(new DockAction("Guías", "guide", new ItemStack(Items.BOOKSHELF), "Biblioteca de guías del servidor"));
         if (s.actions) out.add(new DockAction("Acciones", "actions", new ItemStack(Items.COMPARATOR), "Paquetes de comandos"));
+        if (s.guide) out.add(new DockAction("Guías", "guide", new ItemStack(Items.BOOKSHELF), "Biblioteca de guías del servidor"));
+        if (s.projects) out.add(new DockAction("Proyectos", "projects", new ItemStack(Items.SHULKER_BOX), "Proyectos, subregiones y materiales"));
         if (s.blockers) out.add(new DockAction("Blockers", "blockers", new ItemStack(Items.PISTON), "Escáner de bloqueadores"));
         if (s.exploration) out.add(new DockAction("Mapa", "exploration", new ItemStack(Items.FILLED_MAP), "Mapa topográfico y regiones"));
         if (s.isOp) out.add(new DockAction("Rules", "rules", new ItemStack(Items.COMMAND_BLOCK), "Editor universal de reglas Carpet"));
@@ -487,7 +487,7 @@ public final class AeternumDockOverlay {
             over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
         if (over) {
             hoveredTooltip = todos.isEmpty()
-                ? "Añadir nota rápida (/todo)"
+                ? "Añadir nota rápida"
                 : ("Expandir tus notas (" + todos.size() + ")");
         }
         return hoveredTooltip;
@@ -526,7 +526,7 @@ public final class AeternumDockOverlay {
             AeternumTheme.drawCard(c, minX, btnY, 15, 13, overMin ? 0xFF2C2C36 : 0xFF17171D,
                 overMin ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
             c.drawTextWithShadow(tr, "-", minX + 5, btnY + 3, overMin ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-            if (overMin) hoveredTooltip = "Minimizar notas en Alt";
+            if (overMin) hoveredTooltip = "Minimizar notas";
         }
 
         int sepY = y + 21;
@@ -557,7 +557,7 @@ public final class AeternumDockOverlay {
         }
         if (todoLayout.extraCount > 0) {
             WrappedTodo last = todoLayout.rows.get(todoLayout.rows.size() - 1);
-            c.drawText(tr, "+" + todoLayout.extraCount + " más (/todo)", x + 8, listTop + last.yOffset + last.height, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(tr, "+" + todoLayout.extraCount + " más", x + 8, listTop + last.yOffset + last.height, AeternumTheme.TEXT_MUTED, false);
         }
         return hoveredTooltip;
     }

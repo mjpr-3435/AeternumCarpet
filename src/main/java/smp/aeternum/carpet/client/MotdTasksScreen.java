@@ -204,7 +204,7 @@ public final class MotdTasksScreen extends UiScreen {
         if (saveButton != null) saveButton.active = canEdit && dirty;
 
         renderBackground(c, mx, my, d);
-        drawWindowFrame(c, "Tareas del MOTD", "Se muestran en el banner de bienvenida y el overlay de Alt  ·  Top 3 visibles arriba");
+        drawWindowFrame(c, "Tareas del MOTD", "Se muestran en el banner de bienvenida y el overlay del dock  ·  Top 3 visibles arriba");
         drawCloseButton(c, mx, my);
 
         int listTop = panelY + LIST_TOP_OFFSET;
