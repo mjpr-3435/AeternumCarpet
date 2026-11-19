@@ -14,7 +14,9 @@
 		"ExplosionImplMixin",
 		"PistonHandlerMixin",
 		"HopperBlockEntityMixin",
-		"DecoratedPotBlockMixin"
+		"DecoratedPotBlockMixin",
+		"EndermanPickUpBlockGoalMixin",
+		"EndermanPlaceBlockGoalMixin"
 	],
 	"client": [
 		"client.InGameHudMixin",

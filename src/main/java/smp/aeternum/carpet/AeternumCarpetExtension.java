@@ -41,6 +41,8 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.protectedPots.desc", "Prevents decorated pots from being broken by anything except explicit player mining."),
             Map.entry("carpet.rule.phantomSpawning.name", "Phantom Spawning"),
             Map.entry("carpet.rule.phantomSpawning.desc", "Controls phantom spawning behavior: vanilla, mobcap, or disable."),
+            Map.entry("carpet.rule.endermanGriefing.name", "Enderman Griefing"),
+            Map.entry("carpet.rule.endermanGriefing.desc", "Controls enderman block behavior: vanilla, farm_only (no placing; only picks up farm crops), or disable."),
             Map.entry("carpet.rule.todoList.name", "Todo List"),
             Map.entry("carpet.rule.todoList.desc", "Enables personal todo notes in the compact dock overlay widget and HUD pin."),
             Map.entry("carpet.rule.commandBlockers.name", "Command Blockers"),

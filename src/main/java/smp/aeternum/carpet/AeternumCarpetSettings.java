@@ -43,6 +43,9 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "mobcap", "disable"})
     public static String phantomSpawning = "vanilla";
 
+    @Rule(categories = {"AETERNUM", RuleCategory.FEATURE}, options = {"vanilla", "farm_only", "disable"})
+    public static String endermanGriefing = "vanilla";
+
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
     public static boolean todoList = false;
 
