@@ -70,4 +70,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandProjects = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandDimension = false;
+
 }

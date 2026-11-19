@@ -53,6 +53,7 @@ import smp.aeternum.carpet.network.CarpetRulesNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.command.RulesCommand;
+import smp.aeternum.carpet.command.DimensionCommand;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
 public class AeternumCarpet implements ModInitializer {
@@ -125,6 +126,7 @@ public class AeternumCarpet implements ModInitializer {
 			GuideCommand.register(dispatcher);
 			MaterialsCommand.register(dispatcher);
 			RulesCommand.register(dispatcher);
+			DimensionCommand.register(dispatcher);
 		});
 	}
 

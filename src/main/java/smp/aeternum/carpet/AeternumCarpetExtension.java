@@ -58,7 +58,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandGuide.name", "Command Guide"),
             Map.entry("carpet.rule.commandGuide.desc", "Enables the server-side markdown guide library through /guide."),
             Map.entry("carpet.rule.commandProjects.name", "Command Projects"),
-            Map.entry("carpet.rule.commandProjects.desc", "Enables the /projects command for schematics, subregions, and project material collection.")
+            Map.entry("carpet.rule.commandProjects.desc", "Enables the /projects command for schematics, subregions, and project material collection."),
+            Map.entry("carpet.rule.commandDimension.name", "Command Dimension"),
+            Map.entry("carpet.rule.commandDimension.desc", "Enables /nether, /overworld, and /end dimension teleports strictly in Creative or Spectator mode.")
         );
     }
 }
