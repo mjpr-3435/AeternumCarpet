@@ -34,6 +34,7 @@ public final class FakePlayerReloadManager {
     private static final Type LIST_TYPE = new TypeToken<List<SavedBot>>() {}.getType();
     private static final int RELOAD_DELAY_TICKS = 20;
     private static final int SAVE_DEBOUNCE_TICKS = 10;
+    private static final int SAVE_INTERVAL_TICKS = 100;
 
     private static final Field ACTIONS_FIELD = field(EntityPlayerActionPack.class, "actions");
     private static final Field SNEAKING_FIELD = field(EntityPlayerActionPack.class, "sneaking");
@@ -48,6 +49,7 @@ public final class FakePlayerReloadManager {
     private static int reloadTicksRemaining;
     private static int pendingAttachTimeoutTicks;
     private static int saveDebounceTicks;
+    private static int saveLoopTicks;
     private static boolean stopping;
     private static String lastSavedJson = "";
 
@@ -71,6 +73,7 @@ public final class FakePlayerReloadManager {
         reloadTicksRemaining = 0;
         pendingAttachTimeoutTicks = 0;
         saveDebounceTicks = 0;
+        saveLoopTicks = 0;
         stopping = false;
         lastSavedJson = "";
         if (Files.isRegularFile(file)) {
@@ -137,8 +140,10 @@ public final class FakePlayerReloadManager {
             }
         }
 
-        if (saveDebounceTicks > 0 && --saveDebounceTicks == 0) {
-            if (!stopping && AeternumCarpetSettings.reloadFakePlayers && pendingAttach.isEmpty()) {
+        if (!stopping && AeternumCarpetSettings.reloadFakePlayers && pendingAttach.isEmpty()) {
+            if ((saveDebounceTicks > 0 && --saveDebounceTicks == 0) || ++saveLoopTicks >= SAVE_INTERVAL_TICKS) {
+                saveDebounceTicks = 0;
+                saveLoopTicks = 0;
                 saveCurrentBots(server, false);
             }
         }
