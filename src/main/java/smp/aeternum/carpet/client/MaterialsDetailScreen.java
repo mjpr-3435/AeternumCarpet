@@ -8,7 +8,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
 import smp.aeternum.carpet.client.ui.AeternumTheme;
 import smp.aeternum.carpet.client.ui.UiButton;
 import smp.aeternum.carpet.client.ui.UiScreen;
@@ -16,19 +15,15 @@ import smp.aeternum.carpet.client.ui.UiTextField;
 import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 import smp.aeternum.carpet.network.MaterialsActionPayload;
-import smp.aeternum.carpet.network.ProjectDownloadRequestPayload;
-import smp.aeternum.carpet.network.ProjectPlacementPayload;
 import smp.aeternum.carpet.network.ProjectSubregionActionPayload;
 
 public final class MaterialsDetailScreen extends UiScreen {
-	private enum MainTab { MATERIALS, SUBREGIONS, SYNC }
+	private enum MainTab { MATERIALS, SUBREGIONS }
 	private enum MatFilter { ALL, MISSING, MINE, DONE }
 	private enum SubFilter { ALL, FREE, CLAIMED, DONE }
 
 	private static final int MAT_ROW_H = 30, MAT_GAP = 3, MAT_STRIDE = MAT_ROW_H + MAT_GAP;
 	private static final int SUB_ROW_H = 40, SUB_GAP = 4, SUB_STRIDE = SUB_ROW_H + SUB_GAP;
-	private static final String[] ROTATIONS = {"NONE", "CLOCKWISE_90", "CLOCKWISE_180", "COUNTERCLOCKWISE_90"};
-	private static final String[] MIRRORS = {"NONE", "LEFT_RIGHT", "FRONT_BACK"};
 
 	private final Screen parent;
 	private MaterialList list;
@@ -37,15 +32,8 @@ public final class MaterialsDetailScreen extends UiScreen {
 	private SubFilter subFilter = SubFilter.ALL;
 
 	private UiTextField searchField;
-	private UiButton tabMatBtn, tabSubBtn, tabSyncBtn;
+	private UiButton tabMatBtn, tabSubBtn;
 	private UiButton f1Btn, f2Btn, f3Btn, f4Btn;
-
-	// Sync tab widgets
-	private UiTextField xField, yField, zField;
-	private UiButton usePosBtn, rotBtn, mirrorBtn, savePlacementBtn;
-	private UiButton loadLitematicaBtn, downloadBtn;
-	private int editRotIdx, editMirrorIdx;
-	private String editDim;
 
 	private double scroll;
 	private double targetScroll;
@@ -56,12 +44,10 @@ public final class MaterialsDetailScreen extends UiScreen {
 		this.parent = parent;
 		this.list = list;
 		this.activeTab = list.hasSchematic ? MainTab.SUBREGIONS : MainTab.MATERIALS;
-		syncPlacementFieldsFromList();
 	}
 
 	public void replaceData(MaterialList updated) {
 		this.list = updated;
-		syncPlacementFieldsFromList();
 	}
 
 	public void replaceFromJson(String json) {
@@ -73,18 +59,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 		}
 	}
 
-	private void syncPlacementFieldsFromList() {
-		MaterialList.PlacementInfo pl = list.placement != null ? list.placement : new MaterialList.PlacementInfo();
-		editDim = pl.dimension != null ? pl.dimension : "minecraft:overworld";
-		editRotIdx = indexOf(ROTATIONS, pl.rotation);
-		editMirrorIdx = indexOf(MIRRORS, pl.mirror);
-	}
-
-	private static int indexOf(String[] arr, String val) {
-		for (int i = 0; i < arr.length; i++) if (arr[i].equals(val)) return i;
-		return 0;
-	}
-
 	@Override
 	protected void init() {
 		String prevQuery = searchField != null ? searchField.getText() : "";
@@ -94,127 +68,44 @@ public final class MaterialsDetailScreen extends UiScreen {
 		addDrawableChild(UiButton.ghost(panelX + 10, panelY + 10, 24, 24, "\u2190", b -> close()));
 
 		if (list.hasSchematic) {
-			int tx = panelX + panelW - 300;
+			int tx = panelX + panelW - 210;
 			tabSubBtn = UiButton.secondary(tx, panelY + 11, 86, 22, "Subregiones", b -> switchTab(MainTab.SUBREGIONS));
 			tabMatBtn = UiButton.secondary(tx + 90, panelY + 11, 82, 22, "Materiales", b -> switchTab(MainTab.MATERIALS));
-			tabSyncBtn = UiButton.secondary(tx + 176, panelY + 11, 84, 22, "Plano / Sync", b -> switchTab(MainTab.SYNC));
 			tabSubBtn.setVariant(activeTab == MainTab.SUBREGIONS ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			tabMatBtn.setVariant(activeTab == MainTab.MATERIALS ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
-			tabSyncBtn.setVariant(activeTab == MainTab.SYNC ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			addDrawableChild(tabSubBtn);
 			addDrawableChild(tabMatBtn);
-			addDrawableChild(tabSyncBtn);
 		} else {
 			tabSubBtn = null;
 			tabMatBtn = null;
-			tabSyncBtn = null;
 		}
 
-		if (activeTab == MainTab.MATERIALS || activeTab == MainTab.SUBREGIONS) {
-			int barY = panelY + 52;
-			int searchW = Math.max(140, panelW - 294);
-			String ph = activeTab == MainTab.MATERIALS ? "Buscar ítem…" : "Buscar subregión…";
-			searchField = new UiTextField(textRenderer, panelX + 12, barY, searchW, 20, ph);
-			searchField.setMaxLength(80);
-			searchField.setText(prevQuery);
-			searchField.setChangedListener(s -> { targetScroll = 0; scroll = 0; });
-			addDrawableChild(searchField);
+		int barY = panelY + 52;
+		int searchW = Math.max(140, panelW - 294);
+		String ph = activeTab == MainTab.MATERIALS ? "Buscar ítem…" : "Buscar subregión…";
+		searchField = new UiTextField(textRenderer, panelX + 12, barY, searchW, 20, ph);
+		searchField.setMaxLength(80);
+		searchField.setText(prevQuery);
+		searchField.setChangedListener(s -> { targetScroll = 0; scroll = 0; });
+		addDrawableChild(searchField);
 
-			int tabX = panelX + panelW - 270;
-			if (activeTab == MainTab.MATERIALS) {
-				f1Btn = UiButton.secondary(tabX, barY, 54, 20, "Todos", b -> setMatFilter(MatFilter.ALL));
-				f2Btn = UiButton.secondary(tabX + 58, barY, 64, 20, "Faltan", b -> setMatFilter(MatFilter.MISSING));
-				f3Btn = UiButton.secondary(tabX + 126, barY, 70, 20, "Míos", b -> setMatFilter(MatFilter.MINE));
-				f4Btn = UiButton.secondary(tabX + 200, barY, 58, 20, "Listos", b -> setMatFilter(MatFilter.DONE));
-			} else {
-				f1Btn = UiButton.secondary(tabX, barY, 54, 20, "Todas", b -> setSubFilter(SubFilter.ALL));
-				f2Btn = UiButton.secondary(tabX + 58, barY, 64, 20, "Libres", b -> setSubFilter(SubFilter.FREE));
-				f3Btn = UiButton.secondary(tabX + 126, barY, 70, 20, "En obra", b -> setSubFilter(SubFilter.CLAIMED));
-				f4Btn = UiButton.secondary(tabX + 200, barY, 58, 20, "Listas", b -> setSubFilter(SubFilter.DONE));
-			}
-			addDrawableChild(f1Btn);
-			addDrawableChild(f2Btn);
-			addDrawableChild(f3Btn);
-			addDrawableChild(f4Btn);
-			updateFilterStyles();
-
-			xField = null; yField = null; zField = null;
-			usePosBtn = null; rotBtn = null; mirrorBtn = null; savePlacementBtn = null;
-			loadLitematicaBtn = null; downloadBtn = null;
+		int tabX = panelX + panelW - 270;
+		if (activeTab == MainTab.MATERIALS) {
+			f1Btn = UiButton.secondary(tabX, barY, 54, 20, "Todos", b -> setMatFilter(MatFilter.ALL));
+			f2Btn = UiButton.secondary(tabX + 58, barY, 64, 20, "Faltan", b -> setMatFilter(MatFilter.MISSING));
+			f3Btn = UiButton.secondary(tabX + 126, barY, 70, 20, "Míos", b -> setMatFilter(MatFilter.MINE));
+			f4Btn = UiButton.secondary(tabX + 200, barY, 58, 20, "Listos", b -> setMatFilter(MatFilter.DONE));
 		} else {
-			searchField = null; f1Btn = null; f2Btn = null; f3Btn = null; f4Btn = null;
-			initSyncTab();
+			f1Btn = UiButton.secondary(tabX, barY, 54, 20, "Todas", b -> setSubFilter(SubFilter.ALL));
+			f2Btn = UiButton.secondary(tabX + 58, barY, 64, 20, "Libres", b -> setSubFilter(SubFilter.FREE));
+			f3Btn = UiButton.secondary(tabX + 126, barY, 70, 20, "En obra", b -> setSubFilter(SubFilter.CLAIMED));
+			f4Btn = UiButton.secondary(tabX + 200, barY, 58, 20, "Listas", b -> setSubFilter(SubFilter.DONE));
 		}
-	}
-
-	private void initSyncTab() {
-		int cx = panelX + 20;
-		int y = panelY + 64;
-		loadLitematicaBtn = UiButton.primary(cx, y, 210, 24, "Cargar en Litematica (Auto)",
-			b -> ClientPlayNetworking.send(new ProjectDownloadRequestPayload(list.name, true)));
-		downloadBtn = UiButton.secondary(cx + 220, y, 160, 24, "Descargar .litematic",
-			b -> ClientPlayNetworking.send(new ProjectDownloadRequestPayload(list.name, false)));
-		addDrawableChild(loadLitematicaBtn);
-		addDrawableChild(downloadBtn);
-
-		MaterialList.PlacementInfo pl = list.placement != null ? list.placement : new MaterialList.PlacementInfo();
-		boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
-
-		int fy = panelY + 178;
-		xField = new UiTextField(textRenderer, cx, fy, 84, 20, "X");
-		xField.setText(String.valueOf(pl.x));
-		xField.setEditable(isOp);
-		yField = new UiTextField(textRenderer, cx + 92, fy, 84, 20, "Y");
-		yField.setText(String.valueOf(pl.y));
-		yField.setEditable(isOp);
-		zField = new UiTextField(textRenderer, cx + 184, fy, 84, 20, "Z");
-		zField.setText(String.valueOf(pl.z));
-		zField.setEditable(isOp);
-		addDrawableChild(xField);
-		addDrawableChild(yField);
-		addDrawableChild(zField);
-
-		usePosBtn = UiButton.secondary(cx + 278, fy, 130, 20, "Usar mi posición", b -> {
-			if (client.player == null || client.world == null) return;
-			BlockPos pos = client.player.getBlockPos();
-			editDim = client.world.getRegistryKey().getValue().toString();
-			xField.setText(String.valueOf(pos.getX()));
-			yField.setText(String.valueOf(pos.getY()));
-			zField.setText(String.valueOf(pos.getZ()));
-		});
-		usePosBtn.active = isOp;
-		addDrawableChild(usePosBtn);
-
-		int ry = panelY + 214;
-		rotBtn = UiButton.secondary(cx, ry, 132, 20, "Rotación: " + rotLabel(ROTATIONS[editRotIdx]), b -> {
-			editRotIdx = (editRotIdx + 1) % ROTATIONS.length;
-			b.setLabel("Rotación: " + rotLabel(ROTATIONS[editRotIdx]));
-		});
-		rotBtn.active = isOp;
-
-		mirrorBtn = UiButton.secondary(cx + 140, ry, 140, 20, "Espejo: " + MIRRORS[editMirrorIdx], b -> {
-			editMirrorIdx = (editMirrorIdx + 1) % MIRRORS.length;
-			b.setLabel("Espejo: " + MIRRORS[editMirrorIdx]);
-		});
-		mirrorBtn.active = isOp;
-
-		savePlacementBtn = UiButton.primary(cx + 288, ry, 136, 20, "Guardar Placement", b -> {
-			int px = parseCoord(xField.getText(), pl.x);
-			int py = parseCoord(yField.getText(), pl.y);
-			int pz = parseCoord(zField.getText(), pl.z);
-			String dim = editDim != null ? editDim : "minecraft:overworld";
-			ClientPlayNetworking.send(new ProjectPlacementPayload(
-				list.name, dim, px, py, pz, ROTATIONS[editRotIdx], MIRRORS[editMirrorIdx]
-			));
-		});
-		savePlacementBtn.active = isOp;
-		addDrawableChild(rotBtn);
-		addDrawableChild(mirrorBtn);
-		addDrawableChild(savePlacementBtn);
-	}
-
-	private static int parseCoord(String text, int fallback) {
-		try { return Integer.parseInt(text.trim()); } catch (NumberFormatException e) { return fallback; }
+		addDrawableChild(f1Btn);
+		addDrawableChild(f2Btn);
+		addDrawableChild(f3Btn);
+		addDrawableChild(f4Btn);
+		updateFilterStyles();
 	}
 
 	private void switchTab(MainTab tab) {
@@ -245,7 +136,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 			f2Btn.setVariant(matFilter == MatFilter.MISSING ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			f3Btn.setVariant(matFilter == MatFilter.MINE ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			f4Btn.setVariant(matFilter == MatFilter.DONE ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
-		} else if (activeTab == MainTab.SUBREGIONS) {
+		} else {
 			f1Btn.setVariant(subFilter == SubFilter.ALL ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			f2Btn.setVariant(subFilter == SubFilter.FREE ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
 			f3Btn.setVariant(subFilter == SubFilter.CLAIMED ? UiButton.Variant.PRIMARY : UiButton.Variant.SECONDARY);
@@ -320,7 +211,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 		AeternumTheme.drawHeader(c, panelX, panelY, panelW, 44);
 		c.fill(panelX + 1, panelY + 1, panelX + 4, panelY + 43, AeternumTheme.ACCENT_GOLD);
 
-		String titleShown = AeternumTheme.ellipsize(textRenderer, list.name, panelW - (list.hasSchematic ? 350 : 90));
+		String titleShown = AeternumTheme.ellipsize(textRenderer, list.name, panelW - (list.hasSchematic ? 260 : 90));
 		c.drawTextWithShadow(textRenderer, titleShown, panelX + 38, panelY + 10, AeternumTheme.TEXT_PRIMARY);
 		String sub = list.hasSchematic
 			? (list.subregions.size() + " subregiones · " + list.totalBlocks + " bloques")
@@ -329,13 +220,49 @@ public final class MaterialsDetailScreen extends UiScreen {
 		drawCloseButton(c, mx, my);
 
 		if (activeTab == MainTab.MATERIALS) renderMaterialsTab(c, mx, my, d);
-		else if (activeTab == MainTab.SUBREGIONS) renderSubregionsTab(c, mx, my, d);
-		else renderSyncTab(c, mx, my, d);
+		else renderSubregionsTab(c, mx, my, d);
 
 		if (searchField != null) {
 			searchField.renderBox(c, panelX + 12, panelY + 52, Math.max(140, panelW - 294), 20, mx, my, d);
 		}
 		super.render(c, mx, my, d);
+
+		if (activeTab == MainTab.MATERIALS) renderMaterialTooltip(c, mx, my);
+		else if (isCloseButtonHit(mx, my)) c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+	}
+
+	private void renderMaterialTooltip(DrawContext c, int mx, int my) {
+		if (isCloseButtonHit(mx, my)) {
+			c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+			return;
+		}
+		String player = MinecraftClient.getInstance().player != null ? MinecraftClient.getInstance().player.getName().getString() : "";
+		List<MaterialEntry> entries = filteredMaterials(player);
+		int lTop = matListTop(), lBottom = listBottom();
+		int rowX = panelX + 12, rowW = panelW - 30;
+		if (my < lTop || my >= lBottom || mx < rowX || mx >= rowX + rowW) return;
+
+		int relY = (int) (my - lTop + scroll);
+		int idx = relY / MAT_STRIDE;
+		if (idx < 0 || idx >= entries.size() || (relY % MAT_STRIDE) >= MAT_ROW_H) return;
+
+		MaterialEntry entry = entries.get(idx);
+		int missing = entry.missing();
+		List<Text> tip = new ArrayList<>();
+		tip.add(Text.literal("\u00A7f" + entry.itemName + " \u00A78(" + entry.itemId + ")"));
+		tip.add(Text.literal("\u00A77Total: \u00A7f" + formatCount(entry.total) + " ítems \u00A78(" + formatVerbose(entry.total) + ")"));
+		if (entry.placed > 0 || entry.available > 0) {
+			tip.add(Text.literal("\u00A77En obra: \u00A7f" + formatCount(entry.placed) + " \u00A78· \u00A77Almacén: \u00A7f" + formatCount(entry.available)));
+		}
+		if (missing > 0) {
+			tip.add(Text.literal("\u00A77Falta: \u00A7f" + formatCount(missing) + " ítems \u00A78(" + formatVerbose(missing) + ")"));
+		} else {
+			tip.add(Text.literal("\u00A7f\u2713 Material completo"));
+		}
+		if (entry.total >= 1728) {
+			tip.add(Text.literal("\u00A78SB = shulker (1.728) · SDC = cofre doble de shulkers (54 SB)"));
+		}
+		c.drawTooltip(textRenderer, tip, mx, my);
 	}
 
 	private void renderMaterialsTab(DrawContext c, int mx, int my, float d) {
@@ -466,7 +393,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 			int barW = Math.max(40, claimBtnX - barX - 10);
 			AeternumTheme.drawProgressBar(c, barX, ry + 26, barW, 4, ratio, AeternumTheme.ACCENT_CYAN);
 
-			// Button 1: Claim / Soltar
 			boolean canUnclaim = hasClaimer && (isMine || isOp);
 			boolean claimActive = !hasClaimer || canUnclaim;
 			String claimLabel = !hasClaimer ? "Claim" : (canUnclaim ? "Soltar" : "Ocupada");
@@ -477,7 +403,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 			AeternumTheme.drawCard(c, claimBtnX, btnY, 56, 20, cBg, cBorder);
 			c.drawTextWithShadow(textRenderer, claimLabel, claimBtnX + (56 - textRenderer.getWidth(claimLabel)) / 2, btnY + 6, cFg);
 
-			// Button 2: Listo / Reabrir
 			String doneLabel = isDone ? "Reabrir" : "Listo \u2713";
 			boolean overDone = my >= lTop && my < lBottom && mx >= doneBtnX && mx < doneBtnX + 56 && my >= btnY && my < btnY + 20;
 			int dBg = overDone ? 0xFF2E2E38 : (isDone ? 0xFF262630 : 0xFF1D1D24);
@@ -491,27 +416,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 			subs.size() * SUB_STRIDE - SUB_GAP, viewH, scroll, draggingScrollbar);
 	}
 
-	private void renderSyncTab(DrawContext c, int mx, int my, float d) {
-		int cx = panelX + 20;
-		c.drawTextWithShadow(textRenderer, "SINCRONIZACIÓN CON LITEMATICA", cx, panelY + 50, AeternumTheme.TEXT_PRIMARY);
-
-		MaterialList.PlacementInfo pl = list.placement != null ? list.placement : new MaterialList.PlacementInfo();
-		int cardY = panelY + 98;
-		AeternumTheme.drawCard(c, cx, cardY, panelW - 40, 52, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
-		String uploader = list.uploadedBy != null && !list.uploadedBy.isEmpty() ? list.uploadedBy : "Servidor";
-		c.drawText(textRenderer, "Subido por: " + uploader + "   ·   Bloques colocados: " + list.placedBlocks + " / " + list.totalBlocks,
-			cx + 12, cardY + 10, AeternumTheme.TEXT_SECONDARY, false);
-		String plText = pl.configured
-			? ("Placement: " + pl.dimension + " @ " + pl.x + ", " + pl.y + ", " + pl.z + "  (" + rotLabel(pl.rotation) + ", " + pl.mirror + ")")
-			: "Placement sin configurar todavía";
-		c.drawTextWithShadow(textRenderer, plText, cx + 12, cardY + 29, AeternumTheme.TEXT_PRIMARY);
-
-		c.drawText(textRenderer, "CONFIGURAR PLACEMENT (SOLO OP) · Dimensión: " + (editDim != null ? editDim : ""), cx, panelY + 164, AeternumTheme.TEXT_MUTED, false);
-		if (xField != null) xField.renderBox(c, cx, panelY + 178, 84, 20, mx, my, d);
-		if (yField != null) yField.renderBox(c, cx + 92, panelY + 178, 84, 20, mx, my, d);
-		if (zField != null) zField.renderBox(c, cx + 184, panelY + 178, 84, 20, mx, my, d);
-	}
-
 	@Override
 	public boolean mouseClicked(double mx, double my, int b) {
 		if (b == 0 && isCloseButtonHit(mx, my)) {
@@ -519,7 +423,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 			return true;
 		}
 		if (super.mouseClicked(mx, my, b)) return true;
-		if ((b != 0 && b != 1) || activeTab == MainTab.SYNC) return false;
+		if (b != 0) return false;
 
 		int lTop = activeTab == MainTab.MATERIALS ? matListTop() : subListTop();
 		int lBottom = listBottom();
@@ -571,12 +475,12 @@ public final class MaterialsDetailScreen extends UiScreen {
 					int doneBtnX = rowX + rowW - 64;
 					int claimBtnX = doneBtnX - 62;
 					int btnY = ry + 10;
-					if (b == 0 && mx >= doneBtnX && mx < doneBtnX + 56 && my >= btnY && my < btnY + 20) {
+					if (mx >= doneBtnX && mx < doneBtnX + 56 && my >= btnY && my < btnY + 20) {
 						String nextAction = "DONE".equals(sub.status) ? "reopen" : "done";
 						ClientPlayNetworking.send(new ProjectSubregionActionPayload(list.name, sub.name, nextAction));
 						return true;
 					}
-					if (b == 0 && mx >= claimBtnX && mx < claimBtnX + 56 && my >= btnY && my < btnY + 20) {
+					if (mx >= claimBtnX && mx < claimBtnX + 56 && my >= btnY && my < btnY + 20) {
 						String player = MinecraftClient.getInstance().player != null ? MinecraftClient.getInstance().player.getName().getString() : "";
 						boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
 						boolean hasClaimer = sub.claimedBy != null && !sub.claimedBy.isEmpty();
@@ -595,7 +499,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 
 	@Override
 	public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-		if (draggingScrollbar && button == 0 && activeTab != MainTab.SYNC) {
+		if (draggingScrollbar && button == 0) {
 			int lTop = activeTab == MainTab.MATERIALS ? matListTop() : subListTop();
 			int stride = activeTab == MainTab.MATERIALS ? MAT_STRIDE : SUB_STRIDE;
 			int gap = activeTab == MainTab.MATERIALS ? MAT_GAP : SUB_GAP;
@@ -624,7 +528,7 @@ public final class MaterialsDetailScreen extends UiScreen {
 
 	@Override
 	public boolean mouseScrolled(double mx, double my, double h, double v) {
-		if (v != 0 && activeTab != MainTab.SYNC) {
+		if (v != 0) {
 			int lTop = activeTab == MainTab.MATERIALS ? matListTop() : subListTop();
 			int stride = activeTab == MainTab.MATERIALS ? MAT_STRIDE : SUB_STRIDE;
 			int gap = activeTab == MainTab.MATERIALS ? MAT_GAP : SUB_GAP;
@@ -635,15 +539,6 @@ public final class MaterialsDetailScreen extends UiScreen {
 			return true;
 		}
 		return super.mouseScrolled(mx, my, h, v);
-	}
-
-	private static String rotLabel(String rot) {
-		return switch (rot) {
-			case "CLOCKWISE_90" -> "90°";
-			case "CLOCKWISE_180" -> "180°";
-			case "COUNTERCLOCKWISE_90" -> "270°";
-			default -> "0°";
-		};
 	}
 
 	@Override
@@ -657,5 +552,26 @@ public final class MaterialsDetailScreen extends UiScreen {
 		int stacks = n / 64, singles = n % 64;
 		if (stacks > 0) return singles == 0 ? "64 x " + stacks : "64 x " + stacks + " + " + singles;
 		return String.valueOf(n);
+	}
+
+	private static String formatCount(int n) {
+		return String.format(java.util.Locale.GERMAN, "%,d", n);
+	}
+
+	private static String formatVerbose(int n) {
+		if (n <= 0) return "0";
+		int sdc = n / 93312;
+		int rem = n % 93312;
+		int sb = rem / 1728;
+		rem %= 1728;
+		int stacks = rem / 64;
+		int singles = rem % 64;
+
+		List<String> parts = new ArrayList<>();
+		if (sdc > 0) parts.add(sdc + (sdc == 1 ? " cofre doble de shulkers" : " cofres dobles de shulkers"));
+		if (sb > 0) parts.add(sb + (sb == 1 ? " shulker" : " shulkers"));
+		if (stacks > 0) parts.add(stacks + (stacks == 1 ? " stack" : " stacks"));
+		if (singles > 0 || parts.isEmpty()) parts.add(String.valueOf(singles));
+		return String.join(", ", parts);
 	}
 }

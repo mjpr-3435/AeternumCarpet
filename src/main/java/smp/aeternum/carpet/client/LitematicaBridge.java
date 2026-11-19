@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
@@ -17,11 +20,118 @@ import smp.aeternum.carpet.materials.LitematicParser;
 import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
 
 public final class LitematicaBridge {
+    public record ActivePlacement(
+        String name,
+        Path schematicFile,
+        BlockPos origin,
+        String rotation,
+        String mirror,
+        String dimension
+    ) {}
+
     private LitematicaBridge() {
+    }
+
+    public static boolean isLitematicaLoaded() {
+        return FabricLoader.getInstance().isModLoaded("litematica");
     }
 
     public static Path schematicsRoot() {
         return FabricLoader.getInstance().getGameDir().resolve("schematics");
+    }
+
+    public static List<ActivePlacement> getActivePlacements() {
+        List<ActivePlacement> result = new ArrayList<>();
+        if (!isLitematicaLoaded()) return result;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        String fallbackDim = client.world != null ? client.world.getRegistryKey().getValue().toString() : "minecraft:overworld";
+
+        try {
+            Class<?> dataManagerCls = Class.forName("fi.dy.masa.litematica.data.DataManager");
+            Object placementManager = dataManagerCls.getMethod("getSchematicPlacementManager").invoke(null);
+            Collection<?> placements = invokeGetAllPlacements(placementManager);
+            if (placements == null) return result;
+
+            for (Object p : placements) {
+                if (p == null) continue;
+                Path file = extractSchematicPath(p);
+                if (file == null || !Files.isRegularFile(file)) continue;
+
+                String name = invokeString(p, "getName");
+                if (name == null || name.isBlank()) name = file.getFileName().toString();
+
+                BlockPos origin = invokeTyped(p, "getOrigin", BlockPos.class);
+                if (origin == null) origin = BlockPos.ORIGIN;
+
+                BlockRotation rot = invokeTyped(p, "getRotation", BlockRotation.class);
+                BlockMirror mirror = invokeTyped(p, "getMirror", BlockMirror.class);
+
+                result.add(new ActivePlacement(
+                    name,
+                    file,
+                    origin,
+                    rot != null ? rot.name() : "NONE",
+                    mirror != null ? mirror.name() : "NONE",
+                    fallbackDim
+                ));
+            }
+        } catch (Throwable t) {
+            AeternumCarpet.LOGGER.warn("Could not read active Litematica placements", t);
+        }
+        return result;
+    }
+
+    private static Collection<?> invokeGetAllPlacements(Object placementManager) throws Exception {
+        for (String name : new String[]{"getAllSchematicsPlacements", "getAllSchematicPlacements"}) {
+            try {
+                Object res = placementManager.getClass().getMethod(name).invoke(placementManager);
+                if (res instanceof Collection<?> col) return col;
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        return null;
+    }
+
+    private static Path extractSchematicPath(Object placement) {
+        Path direct = invokeAsPath(placement, "getSchematicFile");
+        if (direct != null) return direct;
+        try {
+            Object schematic = placement.getClass().getMethod("getSchematic").invoke(placement);
+            if (schematic != null) {
+                return invokeAsPath(schematic, "getFile");
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static Path invokeAsPath(Object target, String methodName) {
+        try {
+            Object res = target.getClass().getMethod(methodName).invoke(target);
+            if (res instanceof Path p) return p;
+            if (res instanceof File f) return f.toPath();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static String invokeString(Object target, String methodName) {
+        try {
+            Object res = target.getClass().getMethod(methodName).invoke(target);
+            return res != null ? res.toString() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static <T> T invokeTyped(Object target, String methodName, Class<T> type) {
+        try {
+            Object res = target.getClass().getMethod(methodName).invoke(target);
+            if (type.isInstance(res)) return type.cast(res);
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     public static void handleDownload(ProjectDownloadDataPayload payload) {
@@ -42,7 +152,7 @@ public final class LitematicaBridge {
             return;
         }
 
-        if (!FabricLoader.getInstance().isModLoaded("litematica")) {
+        if (!isLitematicaLoaded()) {
             notifyPlayer(client, "[Proyectos] Guardado en schematics/aeternum/" + payload.projectName() + ".litematic (Litematica no instalado).", Formatting.YELLOW);
             return;
         }

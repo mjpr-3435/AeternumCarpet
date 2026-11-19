@@ -3,6 +3,7 @@ package smp.aeternum.carpet.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.ClickEvent;
@@ -28,8 +29,11 @@ public final class MaterialsCommand {
 			.then(literal("storage")
 				.requires(s -> s.hasPermissionLevel(2))
 				.then(literal("list").executes(MaterialsCommand::listRegions))
-				.then(literal("del").then(argument("name", StringArgumentType.word()).then(argument("index", IntegerArgumentType.integer(1)).executes(MaterialsCommand::deleteRegion))))
+				.then(literal("del").then(argument("name", StringArgumentType.word())
+					.suggests((c, b) -> CommandSource.suggestMatching(MaterialsStore.all().stream().filter(l -> !MaterialsStore.getRegions(l.name).isEmpty()).map(l -> l.name), b))
+					.then(argument("index", IntegerArgumentType.integer(1)).executes(MaterialsCommand::deleteRegion))))
 				.then(literal("add").then(argument("name", StringArgumentType.word())
+					.suggests((c, b) -> CommandSource.suggestMatching(MaterialsStore.all().stream().map(l -> l.name), b))
 					.then(argument("pos1", BlockPosArgumentType.blockPos())
 						.then(argument("pos2", BlockPosArgumentType.blockPos())
 							.executes(MaterialsCommand::addRegion)))))));

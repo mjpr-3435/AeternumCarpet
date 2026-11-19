@@ -307,5 +307,20 @@ public final class LitematicParser {
         }
     }
 
-    public record ParsedSchematic(int totalBlocks, List<MaterialEntry> entries, List<ParsedSubregion> subregions) {}
+    public static final class ParsedSchematic {
+        private final int totalBlocks;
+        private final List<MaterialEntry> entries;
+        private final List<ParsedSubregion> subregions;
+        public int subregionCursor;
+
+        public ParsedSchematic(int totalBlocks, List<MaterialEntry> entries, List<ParsedSubregion> subregions) {
+            this.totalBlocks = totalBlocks;
+            this.entries = entries;
+            this.subregions = subregions;
+        }
+
+        public int totalBlocks() { return totalBlocks; }
+        public List<MaterialEntry> entries() { return entries; }
+        public List<ParsedSubregion> subregions() { return subregions; }
+    }
 }

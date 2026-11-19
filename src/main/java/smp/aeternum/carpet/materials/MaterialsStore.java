@@ -3,7 +3,6 @@ package smp.aeternum.carpet.materials;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -34,13 +33,14 @@ public final class MaterialsStore {
 	private static final long SCAN_INTERVAL_MS = 1_000;
 	private static final int WORLD_BLOCKS_PER_TICK = 2_048;
 
-	private static Path csvDir, dataDir, projectsDir;
+	private static Path dataDir, projectsDir;
 	private static Path claimsFile, regionsFile;
 	private static final Map<String, MaterialList> lists = new LinkedHashMap<>();
 	private static final Map<String, LitematicParser.ParsedSchematic> schematics = new LinkedHashMap<>();
 	private static Map<String, Map<String, String>> claims = new LinkedHashMap<>();
 	private static Map<String, List<StorageRegion>> regions = new LinkedHashMap<>();
 	private static long lastTickTime;
+	private static boolean pendingWorldBroadcast;
 	private static MinecraftServer server;
 
 	private MaterialsStore() {}
@@ -49,7 +49,6 @@ public final class MaterialsStore {
 		server = srv;
 		dataDir = srv.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_materials");
 		projectsDir = srv.getSavePath(WorldSavePath.ROOT).resolve("data").resolve("aeternum_projects");
-		csvDir = dataDir;
 		claimsFile = dataDir.resolve("claims.json");
 		regionsFile = dataDir.resolve("regions.json");
 		reload();
@@ -58,7 +57,6 @@ public final class MaterialsStore {
 	public static void reload() {
 		lists.clear();
 		schematics.clear();
-		loadCsvs();
 		loadProjects();
 		loadClaims();
 		loadRegions();
@@ -68,11 +66,12 @@ public final class MaterialsStore {
 
 	public static void tick() {
 		if (server == null) return;
-		boolean worldDirty = stepWorldVerification();
+		if (stepWorldVerification()) pendingWorldBroadcast = true;
 		if (System.currentTimeMillis() - lastTickTime < SCAN_INTERVAL_MS) return;
 		lastTickTime = System.currentTimeMillis();
 
-		boolean scanned = worldDirty;
+		boolean scanned = pendingWorldBroadcast;
+		pendingWorldBroadcast = false;
 		for (var entry : regions.entrySet()) {
 			String listName = entry.getKey();
 			MaterialList list = lists.get(listName);
@@ -95,19 +94,26 @@ public final class MaterialsStore {
 			MaterialList list = entry.getValue();
 			if (!list.hasSchematic || list.placement == null || !list.placement.configured) continue;
 			LitematicParser.ParsedSchematic parsed = schematics.get(list.name);
-			if (parsed == null) continue;
+			if (parsed == null || parsed.subregions().isEmpty()) continue;
 			ServerWorld world = findWorld(list.placement.dimension);
 			if (world == null) continue;
 
 			boolean projectChanged = false;
-			for (LitematicParser.ParsedSubregion sub : parsed.subregions()) {
-				if (budget <= 0) break;
+			int subCount = parsed.subregions().size();
+			int visitedSubs = 0;
+			while (budget > 0 && visitedSubs < subCount) {
+				if (parsed.subregionCursor >= subCount) parsed.subregionCursor = 0;
+				LitematicParser.ParsedSubregion sub = parsed.subregions().get(parsed.subregionCursor);
 				int size = sub.templateBlocks.size();
-				if (size == 0) continue;
-				int checks = Math.min(budget, size);
+				if (size == 0) {
+					parsed.subregionCursor = (parsed.subregionCursor + 1) % subCount;
+					visitedSubs++;
+					continue;
+				}
+				int remainingInSub = size - sub.cursor;
+				int checks = Math.min(budget, remainingInSub);
 				for (int i = 0; i < checks; i++) {
-					int idx = sub.cursor;
-					sub.cursor = (idx + 1) % size;
+					int idx = sub.cursor++;
 					LitematicParser.TemplateBlock tb = sub.templateBlocks.get(idx);
 					BlockPos worldPos = LitematicParser.transform(tb.relX(), tb.relY(), tb.relZ(), list.placement);
 					if (!world.isChunkLoaded(worldPos.getX() >> 4, worldPos.getZ() >> 4)) continue;
@@ -118,6 +124,11 @@ public final class MaterialsStore {
 					}
 				}
 				budget -= checks;
+				if (sub.cursor >= size) {
+					sub.cursor = 0;
+					parsed.subregionCursor = (parsed.subregionCursor + 1) % subCount;
+					visitedSubs++;
+				}
 			}
 			if (projectChanged) {
 				recomputePlacedCounts(list, parsed);
@@ -209,6 +220,7 @@ public final class MaterialsStore {
 		}
 		LitematicParser.ParsedSchematic parsed = schematics.get(projectName);
 		if (parsed != null) {
+			parsed.subregionCursor = 0;
 			for (var sub : parsed.subregions()) sub.resetMatchState();
 		}
 		ProjectMeta meta = loadMeta(projectsDir.resolve(projectName + ".meta.json"));
@@ -325,58 +337,6 @@ public final class MaterialsStore {
 		if (raw == null) return "";
 		String s = raw.trim().replaceAll("(?i)\\.litematic$", "");
 		return s.replaceAll("[^a-zA-Z0-9_-]", "_").replaceAll("^_+|_+$", "");
-	}
-
-	private static void loadCsvs() {
-		try { Files.createDirectories(csvDir); } catch (IOException e) { return; }
-		try (var files = Files.list(csvDir)) {
-			files.filter(p -> p.getFileName().toString().toLowerCase().endsWith(".csv")).forEach(p -> {
-				String name = p.getFileName().toString().replace(".csv", "");
-				if (lists.containsKey(name)) return;
-				List<MaterialEntry> entries = parseCsv(p);
-				if (!entries.isEmpty()) lists.put(name, new MaterialList(name, entries));
-			});
-		} catch (IOException e) { AeternumCarpet.LOGGER.error("Could not load material CSVs", e); }
-	}
-
-	private static List<MaterialEntry> parseCsv(Path file) {
-		List<MaterialEntry> entries = new ArrayList<>();
-		try (BufferedReader reader = Files.newBufferedReader(file)) {
-			String line = reader.readLine(); if (line == null) return entries;
-			while ((line = reader.readLine()) != null) {
-				line = line.trim(); if (line.isEmpty()) continue;
-				String[] parts = parseCsvLine(line);
-				if (parts.length < 4) continue;
-				String itemName = unquote(parts[0]);
-				int total = parseInt(parts[1]);
-				String itemId = resolveItemId(itemName);
-				entries.add(new MaterialEntry(itemName, itemId, total, 0));
-			}
-		} catch (IOException e) { AeternumCarpet.LOGGER.error("Could not parse CSV {}", file, e); }
-		return entries;
-	}
-
-	private static String[] parseCsvLine(String line) {
-		List<String> parts = new ArrayList<>();
-		boolean inQuotes = false; StringBuilder current = new StringBuilder();
-		for (int i = 0; i < line.length(); i++) {
-			char c = line.charAt(i);
-			if (c == '"') { inQuotes = !inQuotes; }
-			else if (c == ',' && !inQuotes) { parts.add(current.toString().trim()); current.setLength(0); }
-			else current.append(c);
-		}
-		parts.add(current.toString().trim());
-		return parts.toArray(new String[0]);
-	}
-
-	private static String unquote(String s) { return s.startsWith("\"") && s.endsWith("\"") ? s.substring(1, s.length() - 1) : s; }
-	private static int parseInt(String s) { try { return Integer.parseInt(unquote(s).trim()); } catch (NumberFormatException e) { return 0; } }
-
-	private static String resolveItemId(String name) {
-		String resolved = MaterialItemResolver.resolve(name);
-		if (resolved != null) return resolved;
-		String key = name.toLowerCase().replace(' ', '_').replaceAll("[^a-z0-9/._-]", "");
-		return "minecraft:" + key;
 	}
 
 	public static MaterialList get(String name) { return lists.get(name); }
@@ -505,7 +465,6 @@ public final class MaterialsStore {
 		schematics.remove(listName);
 		claims.remove(listName);
 		regions.remove(listName);
-		try { Files.deleteIfExists(dataDir.resolve(listName + ".csv")); } catch (IOException ignored) {}
 		if (projectsDir != null) {
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".litematic")); } catch (IOException ignored) {}
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".meta.json")); } catch (IOException ignored) {}

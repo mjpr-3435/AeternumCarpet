@@ -13,6 +13,7 @@ import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 import smp.aeternum.carpet.network.MaterialsDeletePayload;
 import smp.aeternum.carpet.network.MaterialsRefreshPayload;
+import smp.aeternum.carpet.network.ProjectDownloadRequestPayload;
 
 public final class MaterialsScreen extends UiScreen {
 	private static final Gson GSON = new Gson();
@@ -31,7 +32,7 @@ public final class MaterialsScreen extends UiScreen {
 	private boolean draggingScrollbar;
 
 	public MaterialsScreen(String json) {
-		super(Text.literal("Proyectos y Materiales"));
+		super(Text.literal("Proyectos"));
 		lists = decode(json);
 	}
 
@@ -64,7 +65,7 @@ public final class MaterialsScreen extends UiScreen {
 		addDrawableChild(hudPosButton);
 
 		boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
-		uploadButton = UiButton.primary(panelX + panelW - 224, footerY, 128, 20, "+ Subir .litematic",
+		uploadButton = UiButton.primary(panelX + panelW - 224, footerY, 128, 20, "+ Subir Proyecto",
 			b -> client.setScreen(new LitematicPickerScreen(this)));
 		uploadButton.active = isOp;
 		addDrawableChild(uploadButton);
@@ -100,7 +101,7 @@ public final class MaterialsScreen extends UiScreen {
 		clampScroll();
 
 		renderBackground(c, mx, my, d);
-		drawWindowFrame(c, "PROYECTOS Y MATERIALES", lists.size() + (lists.size() == 1 ? " proyecto registrado" : " proyectos registrados"));
+		drawWindowFrame(c, "PROYECTOS", lists.size() + (lists.size() == 1 ? " proyecto registrado" : " proyectos registrados"));
 		drawCloseButton(c, mx, my);
 
 		int lTop = listTop();
@@ -110,8 +111,8 @@ public final class MaterialsScreen extends UiScreen {
 		int cardW = panelW - 30;
 
 		if (lists.isEmpty()) {
-			c.drawCenteredTextWithShadow(textRenderer, "No hay proyectos ni listas registradas.", width / 2, lTop + viewH / 2 - 12, AeternumTheme.TEXT_SECONDARY);
-			c.drawCenteredTextWithShadow(textRenderer, "Sube un .litematic con '+ Subir .litematic' o pon .csv en aeternum_materials.", width / 2, lTop + viewH / 2 + 4, AeternumTheme.TEXT_MUTED);
+			c.drawCenteredTextWithShadow(textRenderer, "No hay proyectos registrados.", width / 2, lTop + viewH / 2 - 12, AeternumTheme.TEXT_SECONDARY);
+			c.drawCenteredTextWithShadow(textRenderer, "Coloca un plano en Litematica y súbelo con '+ Subir Proyecto'.", width / 2, lTop + viewH / 2 + 4, AeternumTheme.TEXT_MUTED);
 		} else {
 			c.enableScissor(panelX + 6, lTop, panelX + panelW - 10, lBottom);
 			for (int i = 0; i < lists.size(); i++) {
@@ -120,35 +121,32 @@ public final class MaterialsScreen extends UiScreen {
 
 				MaterialList list = lists.get(i);
 				int delX = cardX + cardW - 34;
-				int delY = cardY + (CARD_H - 20) / 2;
+				int loadX = delX - 60;
+				int btnY = cardY + (CARD_H - 20) / 2;
 				boolean inListArea = my >= lTop && my < lBottom;
 				boolean overCard = inListArea && mx >= cardX && mx < cardX + cardW && my >= cardY && my < cardY + CARD_H;
-				boolean overDelete = inListArea && mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20;
+				boolean overDelete = inListArea && mx >= delX && mx < delX + 26 && my >= btnY && my < btnY + 20;
+				boolean overLoad = list.hasSchematic && inListArea && mx >= loadX && mx < loadX + 54 && my >= btnY && my < btnY + 20;
 
-				int bg = (overCard && !overDelete) ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG;
-				int border = (overCard && !overDelete) ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE;
+				int bg = (overCard && !overDelete && !overLoad) ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG;
+				int border = (overCard && !overDelete && !overLoad) ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE;
 				AeternumTheme.drawCard(c, cardX, cardY, cardW, CARD_H, bg, border);
 
 				ProgressStats matStats = computeMaterialStats(list);
 				int matPct = Math.round(matStats.ratio * 100f);
 
-				String title = AeternumTheme.ellipsize(textRenderer, list.name, cardW - 280);
+				int rightBound = list.hasSchematic ? loadX : delX;
+				String title = AeternumTheme.ellipsize(textRenderer, list.name, rightBound - cardX - 130);
 				c.drawTextWithShadow(textRenderer, title, cardX + 12, cardY + 7, AeternumTheme.TEXT_PRIMARY);
 
 				int badgeX = cardX + 16 + textRenderer.getWidth(title);
 				if (list.hasSchematic) {
 					int subCount = list.subregions != null ? list.subregions.size() : 0;
-					badgeX += AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, "LITEMATIC · " + subCount + " sec", 0xFF202028, AeternumTheme.TEXT_PRIMARY) + 4;
-					if (list.placement != null && list.placement.configured) {
-						String coords = list.placement.x + ", " + list.placement.y + ", " + list.placement.z;
-						c.drawText(textRenderer, coords, badgeX + 2, cardY + 8, AeternumTheme.TEXT_MUTED, false);
-					}
-				} else {
-					AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, list.entries.size() + " ítems", 0xFF1A1A20, AeternumTheme.TEXT_SECONDARY);
+					AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, subCount + " sec", 0xFF202028, AeternumTheme.TEXT_PRIMARY);
 				}
 
 				if (list.hasSchematic && list.totalBlocks > 0) {
-					int halfW = (delX - cardX - 30) / 2;
+					int halfW = (rightBound - cardX - 28) / 2;
 					float buildRatio = Math.min(1f, (float) list.placedBlocks / (float) list.totalBlocks);
 					int buildPct = Math.round(buildRatio * 100f);
 
@@ -156,13 +154,18 @@ public final class MaterialsScreen extends UiScreen {
 					AeternumTheme.drawProgressBar(c, cardX + 12, cardY + 33, halfW, 4, matStats.ratio, AeternumTheme.ACCENT_GOLD);
 
 					int buildX = cardX + 18 + halfW;
-					c.drawText(textRenderer, "Obra " + buildPct + "% (" + list.placedBlocks + "/" + list.totalBlocks + ")", buildX, cardY + 22, AeternumTheme.TEXT_SECONDARY, false);
+					c.drawText(textRenderer, "Obra " + buildPct + "%", buildX, cardY + 22, AeternumTheme.TEXT_SECONDARY, false);
 					AeternumTheme.drawProgressBar(c, buildX, cardY + 33, halfW, 4, buildRatio, AeternumTheme.ACCENT_CYAN);
 				} else {
 					String pctLabel = matPct + "%  (" + matStats.completed + "/" + list.entries.size() + " completos)";
 					int pctW = textRenderer.getWidth(pctLabel);
-					c.drawText(textRenderer, pctLabel, delX - pctW - 12, cardY + 9, AeternumTheme.TEXT_SECONDARY, false);
-					AeternumTheme.drawProgressBar(c, cardX + 12, cardY + 29, delX - cardX - 24, 5, matStats.ratio, AeternumTheme.ACCENT_GOLD);
+					c.drawText(textRenderer, pctLabel, rightBound - pctW - 12, cardY + 9, AeternumTheme.TEXT_SECONDARY, false);
+					AeternumTheme.drawProgressBar(c, cardX + 12, cardY + 29, rightBound - cardX - 24, 5, matStats.ratio, AeternumTheme.ACCENT_GOLD);
+				}
+
+				if (list.hasSchematic) {
+					AeternumTheme.drawCard(c, loadX, btnY, 54, 20, overLoad ? 0xFF2E2E38 : 0xFF1D1D24, 0xFFD0D0DC);
+					c.drawTextWithShadow(textRenderer, "Cargar", loadX + (54 - textRenderer.getWidth("Cargar")) / 2, btnY + 6, AeternumTheme.TEXT_PRIMARY);
 				}
 
 				boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
@@ -170,8 +173,8 @@ public final class MaterialsScreen extends UiScreen {
 				int delBg = overDelete ? (shift ? 0xFF3A2024 : 0xFF212128) : (shift ? 0xFF2B181B : 0xFF141418);
 				int delBorder = shift ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE;
 				int delFg = shift ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_MUTED;
-				AeternumTheme.drawCard(c, delX, delY, 26, 20, delBg, delBorder);
-				c.drawTextWithShadow(textRenderer, "\u00D7", delX + 10, delY + 6, delFg);
+				AeternumTheme.drawCard(c, delX, btnY, 26, 20, delBg, delBorder);
+				c.drawTextWithShadow(textRenderer, "\u00D7", delX + 10, btnY + 6, delFg);
 			}
 			c.disableScissor();
 
@@ -189,17 +192,23 @@ public final class MaterialsScreen extends UiScreen {
 			c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
 		} else if (uploadButton != null && uploadButton.isMouseOver(mx, my)) {
 			boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
-			c.drawTooltip(textRenderer, Text.literal(isOp ? "Importar .litematic como proyecto compartido" : "Solo operadores pueden subir proyectos"), mx, my);
+			c.drawTooltip(textRenderer, Text.literal(isOp ? "Subir desde un placement activo de Litematica" : "Solo operadores pueden subir proyectos"), mx, my);
 		} else if (refreshButton != null && refreshButton.isMouseOver(mx, my)) {
-			c.drawTooltip(textRenderer, Text.literal("Recargar proyectos y listas desde disco"), mx, my);
+			c.drawTooltip(textRenderer, Text.literal("Recargar proyectos desde el servidor"), mx, my);
 		} else if (hudPosButton != null && hudPosButton.isMouseOver(mx, my)) {
 			c.drawTooltip(textRenderer, Text.literal("Cambiar posición del HUD en pantalla"), mx, my);
 		} else if (!lists.isEmpty() && my >= lTop && my < lBottom) {
 			for (int i = 0; i < lists.size(); i++) {
 				int cardY = lTop + i * ROW_STRIDE - (int) Math.round(scroll);
 				int delX = cardX + cardW - 34;
-				int delY = cardY + (CARD_H - 20) / 2;
-				if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+				int loadX = delX - 60;
+				int btnY = cardY + (CARD_H - 20) / 2;
+				MaterialList item = lists.get(i);
+				if (item.hasSchematic && mx >= loadX && mx < loadX + 54 && my >= btnY && my < btnY + 20) {
+					c.drawTooltip(textRenderer, Text.literal("Cargar y alinear plano en Litematica"), mx, my);
+					break;
+				}
+				if (mx >= delX && mx < delX + 26 && my >= btnY && my < btnY + 20) {
 					boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
 					c.drawTooltip(textRenderer, Text.literal(isOp ? (hasShiftDown() ? "Eliminar proyecto" : "Mantén Shift para eliminar") : "Solo operadores"), mx, my);
 					break;
@@ -235,15 +244,21 @@ public final class MaterialsScreen extends UiScreen {
 			if (idx >= 0 && idx < lists.size() && (relY % ROW_STRIDE) < CARD_H) {
 				int cardY = lTop + idx * ROW_STRIDE - (int) Math.round(scroll);
 				int delX = cardX + cardW - 34;
-				int delY = cardY + (CARD_H - 20) / 2;
-				if (mx >= delX && mx < delX + 26 && my >= delY && my < delY + 20) {
+				int loadX = delX - 60;
+				int btnY = cardY + (CARD_H - 20) / 2;
+				MaterialList target = lists.get(idx);
+				if (target.hasSchematic && mx >= loadX && mx < loadX + 54 && my >= btnY && my < btnY + 20) {
+					ClientPlayNetworking.send(new ProjectDownloadRequestPayload(target.name, true));
+					return true;
+				}
+				if (mx >= delX && mx < delX + 26 && my >= btnY && my < btnY + 20) {
 					boolean isOp = client.player != null && client.player.hasPermissionLevel(2);
 					if (isOp && hasShiftDown()) {
-						ClientPlayNetworking.send(new MaterialsDeletePayload(lists.get(idx).name));
+						ClientPlayNetworking.send(new MaterialsDeletePayload(target.name));
 					}
 					return true;
 				}
-				client.setScreen(new MaterialsDetailScreen(this, lists.get(idx)));
+				client.setScreen(new MaterialsDetailScreen(this, target));
 				return true;
 			}
 		}
