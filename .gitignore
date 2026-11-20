@@ -40,3 +40,18 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# scripts / batch
+
+*.bat
+!gradlew.bat
+
+# logs
+
+logs/
+*.log
+
+# ai agents
+
+.agents/
+.codex/
