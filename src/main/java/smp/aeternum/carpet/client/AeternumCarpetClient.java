@@ -25,7 +25,12 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     private static int pendingBotSyncId = -1;
     private static BotOpenData pendingBotData;
 
-    public static BotOpenData consumePendingBotOpen(int syncId) {
+    public static synchronized void setPendingBotOpen(int syncId, BotOpenData data) {
+        pendingBotSyncId = syncId;
+        pendingBotData = data;
+    }
+
+    public static synchronized BotOpenData consumePendingBotOpen(int syncId) {
         if (pendingBotSyncId == syncId && pendingBotData != null) {
             BotOpenData data = pendingBotData;
             pendingBotSyncId = -1;
@@ -38,10 +43,7 @@ public final class AeternumCarpetClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientPlayNetworking.registerGlobalReceiver(BotOpenPayload.ID, (payload, context) ->
-            context.client().execute(() -> {
-                pendingBotSyncId = payload.syncId();
-                pendingBotData = payload.data();
-            })
+            setPendingBotOpen(payload.syncId(), payload.data())
         );
         MaterialsHudOverlay.load();
         PerimeterGuide.register();
