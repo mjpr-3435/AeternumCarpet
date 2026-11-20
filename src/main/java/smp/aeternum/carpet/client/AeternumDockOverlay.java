@@ -53,6 +53,7 @@ public final class AeternumDockOverlay {
     private static float openAnim;
     private static long joinBannerStartedMs;
     private static long joinBannerUntilMs;
+    private static double todoScroll;
 
     private AeternumDockOverlay() {}
 
@@ -338,29 +339,20 @@ public final class AeternumDockOverlay {
             return new TodoLayout(List.of(), 0, 24 + 18);
         }
         List<WrappedTodo> rows = new ArrayList<>();
-        int usedBodyH = 0;
         int yCursor = 0;
-        int shown = 0;
-        for (int i = 0; i < todos.size() && shown < MAX_VISIBLE_TODOS; i++) {
+        for (int i = 0; i < todos.size(); i++) {
             String note = todos.get(i);
             String prefix = (i + 1) + ".";
             int prefixW = tr.getWidth(prefix) + 4;
-            int maxTextW = Math.max(60, w - (interactive ? 36 : 18) - prefixW);
+            int maxTextW = Math.max(60, w - (interactive ? 40 : 18) - prefixW);
             List<OrderedText> lines = tr.wrapLines(Text.literal(note), maxTextW);
             if (lines.isEmpty()) lines = List.of(OrderedText.EMPTY);
             int rowH = Math.max(12, lines.size() * TODO_LINE_H) + TODO_ITEM_GAP;
-            int extraFooterReserve = (i + 1 < todos.size()) ? 12 : 0;
-            if (!rows.isEmpty() && 28 + yCursor + rowH + extraFooterReserve > maxHeight) {
-                break;
-            }
             rows.add(new WrappedTodo(i, prefix, prefixW, lines, yCursor, rowH));
             yCursor += rowH;
-            usedBodyH = yCursor;
-            shown++;
         }
-        int extra = Math.max(0, todos.size() - rows.size());
-        int totalH = 26 + usedBodyH + (extra > 0 ? 12 : 2);
-        return new TodoLayout(rows, extra, totalH);
+        int totalH = Math.min(maxHeight, 26 + yCursor + 2);
+        return new TodoLayout(rows, yCursor, totalH);
     }
 
     public static void render(DrawContext c, float tickDelta) {
@@ -601,25 +593,41 @@ public final class AeternumDockOverlay {
         }
 
         int listTop = sepY + 4;
+        int listBottom = y + h - 4;
+        int viewH = Math.max(1, listBottom - listTop);
+        int maxScroll = Math.max(0, todoLayout.contentHeight - viewH);
+        int scroll = 0;
+        if (interactive) {
+            todoScroll = Math.max(0.0, Math.min(maxScroll, todoScroll));
+            scroll = (int) Math.round(todoScroll);
+        }
+
+        c.enableScissor(x + 2, listTop, x + w - 2, listBottom);
         for (WrappedTodo row : todoLayout.rows) {
-            int ry = listTop + row.yOffset;
+            int ry = listTop + row.yOffset - scroll;
+            if (ry + row.height < listTop || ry > listBottom) continue;
             c.drawText(tr, row.prefix, x + 8, ry + 1, AeternumTheme.TEXT_MUTED, false);
             for (int li = 0; li < row.lines.size(); li++) {
                 c.drawText(tr, row.lines.get(li), x + 8 + row.prefixW, ry + 1 + li * TODO_LINE_H, AeternumTheme.TEXT_PRIMARY, false);
             }
 
             if (interactive) {
-                int delX = x + w - 20;
-                boolean overDel = mx >= delX && mx < delX + 12 && my >= ry && my < ry + 12;
+                int delX = x + w - 22;
+                boolean overDel = my >= listTop && my < listBottom && mx >= delX && mx < delX + 12 && my >= ry && my < ry + 12;
                 if (overDel) {
                     c.fill(delX, ry, delX + 12, ry + 12, 0x45E55353);
                 }
                 c.drawText(tr, "\u00D7", delX + 3, ry + 1, overDel ? AeternumTheme.ACCENT_RED : AeternumTheme.TEXT_MUTED, false);
             }
         }
-        if (todoLayout.extraCount > 0) {
-            WrappedTodo last = todoLayout.rows.get(todoLayout.rows.size() - 1);
-            c.drawText(tr, "+" + todoLayout.extraCount + " más", x + 8, listTop + last.yOffset + last.height, AeternumTheme.TEXT_MUTED, false);
+        c.disableScissor();
+
+        if (interactive && maxScroll > 0) {
+            int trackX = x + w - 4;
+            c.fill(trackX, listTop, trackX + 2, listBottom, AeternumTheme.BORDER_SUBTLE);
+            int thumbH = Math.max(12, Math.round(viewH * (viewH / (float) todoLayout.contentHeight)));
+            int thumbY = listTop + Math.round((viewH - thumbH) * (scroll / (float) maxScroll));
+            c.fill(trackX, thumbY, trackX + 2, thumbY + thumbH, AeternumTheme.TEXT_MUTED);
         }
     }
 
@@ -750,16 +758,40 @@ public final class AeternumDockOverlay {
                     return;
                 }
                 int listTop = l.todoY + 25;
-                int delX = l.todoX + l.todoW - 20;
-                for (WrappedTodo row : l.todoLayout.rows) {
-                    int ry = listTop + row.yOffset;
-                    if (mx >= delX && mx < delX + 12 && my >= ry && my < ry + 12) {
-                        ClientPlayNetworking.send(new TodoActionPayload("delete", row.index, ""));
-                        return;
+                int listBottom = l.todoY + l.todoH - 4;
+                int viewH = Math.max(1, listBottom - listTop);
+                int maxScroll = Math.max(0, l.todoLayout.contentHeight - viewH);
+                int scroll = (int) Math.round(Math.max(0.0, Math.min(maxScroll, todoScroll)));
+                int delX = l.todoX + l.todoW - 22;
+                if (my >= listTop && my < listBottom) {
+                    for (WrappedTodo row : l.todoLayout.rows) {
+                        int ry = listTop + row.yOffset - scroll;
+                        if (mx >= delX && mx < delX + 12 && my >= ry && my < ry + 12) {
+                            ClientPlayNetworking.send(new TodoActionPayload("delete", row.index, ""));
+                            return;
+                        }
                     }
                 }
             }
         }
+    }
+
+    public static void handleScroll(double mx, double my, double vertical) {
+        if (!isVisible() || !cachedState.todoList) return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        int width = client.getWindow().getScaledWidth();
+        int height = client.getWindow().getScaledHeight();
+        List<MicroItem> microItems = buildMicroToolbar(client);
+        List<DockAction> actions = cachedState.quickDock ? buildActions() : List.of();
+        Layout l = resolveLayout(client.textRenderer, width, height, microItems, cachedState.joinMotd, cachedState.quickDock, true, 0, actions);
+        if (l.todoCompact) return;
+        if (mx < l.todoX || mx >= l.todoX + l.todoW || my < l.todoY || my >= l.todoY + l.todoH) return;
+
+        int listTop = l.todoY + 25;
+        int listBottom = l.todoY + l.todoH - 4;
+        int viewH = Math.max(1, listBottom - listTop);
+        int maxScroll = Math.max(0, l.todoLayout.contentHeight - viewH);
+        todoScroll = Math.max(0.0, Math.min(maxScroll, todoScroll - vertical * 16.0));
     }
 
     public static List<String> cachedTasks() {
@@ -783,7 +815,7 @@ public final class AeternumDockOverlay {
 
     private record WrappedTodo(int index, String prefix, int prefixW, List<OrderedText> lines, int yOffset, int height) {}
 
-    private record TodoLayout(List<WrappedTodo> rows, int extraCount, int height) {
+    private record TodoLayout(List<WrappedTodo> rows, int contentHeight, int height) {
         static final TodoLayout EMPTY = new TodoLayout(List.of(), 0, 0);
     }
 

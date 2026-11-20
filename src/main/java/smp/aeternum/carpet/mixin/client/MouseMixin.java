@@ -33,4 +33,16 @@ public abstract class MouseMixin {
         }
         ci.cancel();
     }
+
+    @Inject(method = "onMouseScroll", at = @At("HEAD"), cancellable = true)
+    private void aeternum$handleDockMouseScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
+        if (!AeternumDockOverlay.isVisible()) return;
+        if (window == this.client.getWindow().getHandle() && vertical != 0.0) {
+            Mouse self = (Mouse) (Object) this;
+            double mx = self.getScaledX(this.client.getWindow());
+            double my = self.getScaledY(this.client.getWindow());
+            AeternumDockOverlay.handleScroll(mx, my, vertical);
+        }
+        ci.cancel();
+    }
 }
