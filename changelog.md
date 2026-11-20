@@ -1,6 +1,38 @@
 # Changelog · AeternumCarpet (1.21.6)
 
-## Cambios recientes
+## Versión 2.0.0
+
+### Aeternum Dock y Tareas MOTD
+- **Aeternum Dock (`quickDock`)**: barra de acceso rápido y estado con selector de dimensión, acceso a pantallas del mod y gestiones rápidas.
+- **Tareas MOTD**: pantalla de gestión de tareas del banner de bienvenida (`TodoQuickInputScreen`) y sincronización por red.
+- **Navegación rápida entre dimensiones (`commandDimension`)**: comandos `/nether`, `/overworld` y `/end` para alternar dimensión conservando posición relativa (Creativo / Espectador).
+
+### Perímetros y World Eater (`commandPerimeters`)
+- Nuevo sistema de gestión de perímetros con `/perimeter` (`PerimetersScreen`), estado y alertas configurables (Y objetivo y timeout de estancamiento).
+- **`BotGridManager`**: generación y limpieza automática de grilla de bots espectadores en `Y=128` para cargar/supervisar perímetros.
+
+### Proyectos y Materiales (`commandProjects`)
+- Gestión de proyectos (`/projects`), selector de `.litematic` (`LitematicPickerScreen`) y refactorización de `MaterialsScreen` / `MaterialsDetailScreen`.
+- Caché de almacenamiento y escaneo de regiones mejorado en `MaterialsStore`, además de mejoras de colocación en `LitematicaBridge`.
+
+### Bots, Fake Players y Utilidades
+- **`editBotInventory`**: edición del inventario de fake players y selector de modo de juego en `BotInventoryScreen`.
+- **`reloadFakePlayers`**: guardado y restauración automática de fake players entre reinicios del servidor.
+- **`cameraMode`**: comando `/cs` con modos `off`, `on` y `restrictive` (validación de peligro antes de entrar).
+- **`carefulBreak`**: comando `/carefulbreak <off|sneak|always>` para enviar ítems minados directamente al inventario.
+- **`commandHat`**: comando `/hat` para equipar en la cabeza el ítem de la mano.
+- **`playerSit`**: sentarse al agacharse y limpieza de armor stands huérfanos con `/sitbehaviour clean armor_stands`.
+- **`commandViewInventory`**: comando `/viewinv` para inspeccionar inventarios de jugadores online y offline.
+
+### Estabilidad, Mecánicas y `/rules`
+- **`updateSuppressionCrashFix`** (`false` / `true` / `silence`): evita que excepciones de update suppression tumben el servidor.
+- **`endermanGriefing`** (`vanilla` / `farm_only` / `disable`): control granular del griefing de endermen.
+- **`oldFlintAndSteelBehavior`**: restaura el comportamiento clásico del mechero.
+- **`CarpetRulesScreen` (`/rules`)**: resolución de subcarpetas y mejor manejo de scopes en `carpet.conf`.
+
+---
+
+## Cambios anteriores (1.6.0)
 
 ### Regla `craftableCalcite`
 - Añadida la regla de Carpet `craftableCalcite` (apagada por defecto, categorías `AETERNUM` y `FEATURE`).

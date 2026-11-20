@@ -259,7 +259,7 @@ public final class AeternumDockOverlay {
         int microW = microToolbarWidth(microItems);
 
         int dockRowW = actions.isEmpty() ? 220 : actions.size() * TILE_W + (actions.size() - 1) * TILE_GAP;
-        int dockBoxW = showDock ? Math.max(380, dockRowW + 20) : 0;
+        int dockBoxW = showDock ? (dockRowW + 20) : 0;
         int dockBoxH = showDock ? TILE_H + 14 : 0;
 
         List<String> tasks = cachedState.tasks != null ? cachedState.tasks : List.of();
@@ -524,7 +524,7 @@ public final class AeternumDockOverlay {
         c.fill(l.dockX + 1, l.dockY + 1, l.dockX + l.dockBoxW - 1, l.dockY + 2, AeternumTheme.TOP_HIGHLIGHT);
 
         if (actions.isEmpty()) {
-            c.drawCenteredTextWithShadow(tr, "Sin módulos activos en el servidor.", width / 2, l.dockY + (l.dockBoxH - 8) / 2, AeternumTheme.TEXT_MUTED);
+            c.drawCenteredTextWithShadow(tr, "Sin módulos activos en el servidor.", l.dockX + l.dockBoxW / 2, l.dockY + (l.dockBoxH - 8) / 2, AeternumTheme.TEXT_MUTED);
             return;
         }
 

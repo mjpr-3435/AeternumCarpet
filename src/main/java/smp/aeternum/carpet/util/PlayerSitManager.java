@@ -61,7 +61,7 @@ public final class PlayerSitManager {
     private static void sit(ServerPlayerEntity player) {
         ServerWorld world = player.getWorld();
         ArmorStandEntity stand = new ArmorStandEntity(EntityType.ARMOR_STAND, world);
-        stand.refreshPositionAndAngles(player.getX(), player.getY() - 0.16, player.getZ(), player.getYaw(), 0f);
+        stand.refreshPositionAndAngles(player.getX(), player.getY() + 0.05, player.getZ(), player.getYaw(), 0f);
         stand.setInvisible(true);
         stand.setInvulnerable(true);
         stand.setNoGravity(true);
