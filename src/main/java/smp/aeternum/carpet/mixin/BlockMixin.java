@@ -38,8 +38,12 @@ public abstract class BlockMixin {
             && entity instanceof ServerPlayerEntity player
             && CarefulBreakStore.shouldCollect(player)) {
             for (ItemStack drop : Block.getDroppedStacks(state, serverWorld, pos, blockEntity, player, tool)) {
-                player.getInventory().offerOrDrop(drop);
+                player.getInventory().insertStack(drop);
+                if (!drop.isEmpty()) {
+                    Block.dropStack(serverWorld, pos, drop);
+                }
             }
+            player.playerScreenHandler.sendContentUpdates();
             state.onStacksDropped(serverWorld, pos, tool, true);
             return;
         }
