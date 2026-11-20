@@ -30,7 +30,7 @@ public final class AeternumDockOverlay {
     private static final int TILE_GAP = 6;
     private static final int EDIT_BTN_W = 48;
     private static final int EDIT_BTN_H = 18;
-    private static final int MAX_VISIBLE_TODOS = 8;
+    private static final int TODO_MAX_H = 220;
     private static final int TODO_LINE_H = 10;
     private static final int TODO_ITEM_GAP = 4;
     private static final int TODO_PILL_H = 18;
@@ -310,8 +310,8 @@ public final class AeternumDockOverlay {
         int dimY = dimAnchorBottom - (showMicro ? DIM_TILE_H : 0);
 
         int stackTop = showMicro ? dimY : (showMotd ? motdY : dockY);
-        int maxTodoH = todoOnSide ? Math.max(64, height - 64)
-            : (centerActive ? Math.max(64, stackTop - 16) : Math.max(64, height - 64));
+        int maxTodoH = todoOnSide ? Math.min(TODO_MAX_H, Math.max(64, height - 64))
+            : (centerActive ? Math.min(TODO_MAX_H, Math.max(64, stackTop - 16)) : Math.min(TODO_MAX_H, Math.max(64, height - 64)));
         TodoLayout todoLayout = (!showTodo || todoCompact)
             ? TodoLayout.EMPTY
             : measureTodos(tr, todos, todoW, true, maxTodoH);
