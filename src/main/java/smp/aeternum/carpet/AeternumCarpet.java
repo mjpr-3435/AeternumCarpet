@@ -63,10 +63,11 @@ import smp.aeternum.carpet.command.HatCommand;
 import smp.aeternum.carpet.command.CarefulBreakCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.FakePlayerReloadManager;
 import smp.aeternum.carpet.util.PlayerSitManager;
-import smp.aeternum.carpet.bot.ModScreenHandlers;
+import smp.aeternum.carpet.network.BotOpenPayload;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
 public class AeternumCarpet implements ModInitializer {
@@ -75,7 +76,7 @@ public class AeternumCarpet implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		ModScreenHandlers.register();
+		PayloadTypeRegistry.playS2C().register(BotOpenPayload.ID, BotOpenPayload.CODEC);
 		PerimeterNetworking.registerPayloads();
 		CommandPacksNetworking.registerPayloads();
 		GuideNetworking.registerPayloads();
@@ -110,6 +111,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			FakePlayerReloadManager.onServerStopping(server);
 			PlayerSitManager.onServerStopping();
+			MaterialsStore.onServerStopping();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);

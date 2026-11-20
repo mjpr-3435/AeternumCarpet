@@ -112,6 +112,7 @@ public final class WorldEaterMonitor {
             }
 
             if (sawExplosion) {
+                boolean firstExplosion = !st.hasSeenExplosion;
                 st.hasSeenExplosion = true;
                 st.ticksSinceExplosion = 0;
                 st.lastTntPos = lastPos;
@@ -122,6 +123,14 @@ public final class WorldEaterMonitor {
                     st.stalledNotified = false;
                     p.weStatus = lowestTntY <= p.effectiveTargetLowY() ? "LOW_Y" : "RUNNING";
                     emitLog("resumed", p);
+                    anyTransition = true;
+                } else if (firstExplosion) {
+                    p.weStatus = lowestTntY <= p.effectiveTargetLowY() ? "LOW_Y" : "RUNNING";
+                    emitLog("active", p);
+                    if (lowestTntY <= p.effectiveTargetLowY() && !st.lowYNotified) {
+                        st.lowYNotified = true;
+                        emitLog("low_y", p);
+                    }
                     anyTransition = true;
                 } else if (lowestTntY <= p.effectiveTargetLowY()) {
                     if (!"LOW_Y".equals(p.weStatus)) {

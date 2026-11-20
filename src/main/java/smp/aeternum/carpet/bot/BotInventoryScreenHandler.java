@@ -12,6 +12,7 @@ import net.minecraft.screen.ArrayPropertyDelegate;
 import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.PropertyDelegate;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
@@ -111,7 +112,7 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
         PropertyDelegate properties,
         String statusLabel
     ) {
-        super(ModScreenHandlers.BOT_INVENTORY, syncId);
+        super(ScreenHandlerType.GENERIC_9X6, syncId);
         this.targetInventory = targetInventory;
         this.serverTarget = serverTarget;
         this.offlineSession = offlineSession;

@@ -8,11 +8,15 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ContainerComponent;
@@ -34,16 +38,19 @@ public final class MaterialsStore {
 	private static final Type REGIONS_TYPE = new TypeToken<Map<String, List<StorageRegion>>>() {}.getType();
 	private static final Type STORAGE_CACHE_TYPE = new TypeToken<Map<String, Map<String, Map<String, Integer>>>>() {}.getType();
 	private static final long SCAN_INTERVAL_MS = 1_000;
+	private static final long PROGRESS_SAVE_INTERVAL_MS = 5_000;
 	private static final int WORLD_BLOCKS_PER_TICK = 2_048;
 
 	private static Path dataDir, projectsDir;
 	private static Path claimsFile, regionsFile, storageCacheFile;
 	private static final Map<String, MaterialList> lists = new LinkedHashMap<>();
 	private static final Map<String, LitematicParser.ParsedSchematic> schematics = new LinkedHashMap<>();
+	private static final Set<String> dirtyProgressProjects = new LinkedHashSet<>();
 	private static Map<String, Map<String, String>> claims = new LinkedHashMap<>();
 	private static Map<String, List<StorageRegion>> regions = new LinkedHashMap<>();
 	private static Map<String, Map<String, Map<String, Integer>>> storageCache = new LinkedHashMap<>();
 	private static long lastTickTime;
+	private static long lastProgressSaveTime;
 	private static boolean pendingWorldBroadcast;
 	private static MinecraftServer server;
 
@@ -90,6 +97,11 @@ public final class MaterialsStore {
 			}
 		}
 		if (cacheDirty) saveStorageCache();
+		long now = System.currentTimeMillis();
+		if (!dirtyProgressProjects.isEmpty() && now - lastProgressSaveTime >= PROGRESS_SAVE_INTERVAL_MS) {
+			flushDirtyProgress();
+			lastProgressSaveTime = now;
+		}
 		if (shouldBroadcast) MaterialsNetworking.broadcast(server);
 	}
 
@@ -139,6 +151,7 @@ public final class MaterialsStore {
 			}
 			if (projectChanged) {
 				recomputePlacedCounts(list, parsed);
+				dirtyProgressProjects.add(list.name);
 				updatedAny = true;
 			}
 		}
@@ -233,6 +246,10 @@ public final class MaterialsStore {
 		ProjectMeta meta = loadMeta(projectsDir.resolve(projectName + ".meta.json"));
 		meta.placement = placement;
 		saveMeta(projectsDir.resolve(projectName + ".meta.json"), meta);
+		dirtyProgressProjects.remove(projectName);
+		if (projectsDir != null) {
+			try { Files.deleteIfExists(projectsDir.resolve(projectName + ".progress.json")); } catch (IOException ignored) {}
+		}
 		return true;
 	}
 
@@ -299,7 +316,9 @@ public final class MaterialsStore {
 				try {
 					LitematicParser.ParsedSchematic parsed = LitematicParser.parse(p);
 					ProjectMeta meta = loadMeta(projectsDir.resolve(name + ".meta.json"));
-					lists.put(name, buildProjectList(name, parsed, meta));
+					MaterialList list = buildProjectList(name, parsed, meta);
+					loadProgressCache(name, list, parsed);
+					lists.put(name, list);
 					schematics.put(name, parsed);
 				} catch (Exception e) {
 					AeternumCarpet.LOGGER.error("Could not load project schematic {}", p, e);
@@ -594,9 +613,11 @@ public final class MaterialsStore {
 		claims.remove(listName);
 		regions.remove(listName);
 		storageCache.remove(listName);
+		dirtyProgressProjects.remove(listName);
 		if (projectsDir != null) {
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".litematic")); } catch (IOException ignored) {}
 			try { Files.deleteIfExists(projectsDir.resolve(listName + ".meta.json")); } catch (IOException ignored) {}
+			try { Files.deleteIfExists(projectsDir.resolve(listName + ".progress.json")); } catch (IOException ignored) {}
 		}
 		saveClaims();
 		saveRegions();
@@ -646,6 +667,73 @@ public final class MaterialsStore {
 		catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save material regions", e); }
 	}
 
+	public static void onServerStopping() {
+		flushDirtyProgress();
+	}
+
+	private static void flushDirtyProgress() {
+		if (dirtyProgressProjects.isEmpty()) return;
+		List<String> copy = new ArrayList<>(dirtyProgressProjects);
+		dirtyProgressProjects.clear();
+		for (String name : copy) {
+			saveProgressCache(name);
+		}
+	}
+
+	private static String placementKey(MaterialList.PlacementInfo p) {
+		if (p == null || !p.configured) return "";
+		return p.dimension + "|" + p.x + "," + p.y + "," + p.z + "|" + p.rotation + "|" + p.mirror;
+	}
+
+	private static void loadProgressCache(String name, MaterialList list, LitematicParser.ParsedSchematic parsed) {
+		if (projectsDir == null) return;
+		Path progressPath = projectsDir.resolve(name + ".progress.json");
+		if (!Files.isRegularFile(progressPath)) return;
+		try {
+			ProgressCache cache = GSON.fromJson(Files.readString(progressPath), ProgressCache.class);
+			if (cache == null || !placementKey(list.placement).equals(cache.placementKey) || cache.subregions == null) {
+				return;
+			}
+			boolean restoredAny = false;
+			for (LitematicParser.ParsedSubregion pSub : parsed.subregions()) {
+				SubProgress sp = cache.subregions.get(pSub.name);
+				if (sp == null || sp.size != pSub.templateBlocks.size() || sp.bitsBase64 == null || sp.bitsBase64.isEmpty()) {
+					continue;
+				}
+				byte[] raw = Base64.getDecoder().decode(sp.bitsBase64);
+				pSub.matchedBits.clear();
+				pSub.matchedBits.or(BitSet.valueOf(raw));
+				restoredAny = true;
+			}
+			if (restoredAny) {
+				recomputePlacedCounts(list, parsed);
+			}
+		} catch (Exception e) {
+			AeternumCarpet.LOGGER.warn("Could not read progress cache {}", progressPath, e);
+		}
+	}
+
+	private static void saveProgressCache(String name) {
+		if (projectsDir == null) return;
+		MaterialList list = lists.get(name);
+		LitematicParser.ParsedSchematic parsed = schematics.get(name);
+		if (list == null || parsed == null) return;
+		ProgressCache cache = new ProgressCache();
+		cache.placementKey = placementKey(list.placement);
+		for (LitematicParser.ParsedSubregion pSub : parsed.subregions()) {
+			SubProgress sp = new SubProgress();
+			sp.size = pSub.templateBlocks.size();
+			sp.bitsBase64 = Base64.getEncoder().encodeToString(pSub.matchedBits.toByteArray());
+			cache.subregions.put(pSub.name, sp);
+		}
+		try {
+			Files.createDirectories(projectsDir);
+			Files.writeString(projectsDir.resolve(name + ".progress.json"), GSON.toJson(cache));
+		} catch (IOException e) {
+			AeternumCarpet.LOGGER.error("Could not save progress cache for {}", name, e);
+		}
+	}
+
 	private static void loadStorageCache() {
 		if (storageCacheFile == null || !Files.isRegularFile(storageCacheFile)) { storageCache = new LinkedHashMap<>(); return; }
 		try {
@@ -660,6 +748,16 @@ public final class MaterialsStore {
 		if (storageCacheFile == null) return;
 		try { Files.createDirectories(dataDir); Files.writeString(storageCacheFile, GSON.toJson(storageCache)); }
 		catch (IOException e) { AeternumCarpet.LOGGER.error("Could not save storage cache", e); }
+	}
+
+	private static final class ProgressCache {
+		String placementKey = "";
+		Map<String, SubProgress> subregions = new LinkedHashMap<>();
+	}
+
+	private static final class SubProgress {
+		int size;
+		String bitsBase64 = "";
 	}
 
 	public static class ProjectMeta {

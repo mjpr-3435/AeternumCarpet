@@ -25,6 +25,7 @@
 		"MinecraftServerMixin"
 	],
 	"client": [
+		"client.ClientPlayNetworkHandlerMixin",
 		"client.InGameHudMixin",
 		"client.MouseMixin"
 	],

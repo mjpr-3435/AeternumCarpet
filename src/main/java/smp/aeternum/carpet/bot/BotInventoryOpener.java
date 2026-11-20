@@ -2,7 +2,6 @@ package smp.aeternum.carpet.bot;
 
 import carpet.patches.EntityPlayerMPFake;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
@@ -18,6 +17,7 @@ import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import smp.aeternum.carpet.network.BotOpenPayload;
 import smp.aeternum.carpet.network.DockStatePayload;
 
 public final class BotInventoryOpener {
@@ -42,18 +42,7 @@ public final class BotInventoryOpener {
             viewer.sendMessage(Text.literal("Necesitas el mod cliente AeternumCarpet para usar /viewinv."), false);
             return;
         }
-        viewer.openHandledScreen(new ExtendedScreenHandlerFactory<BotOpenData>() {
-            @Override
-            public BotOpenData getScreenOpeningData(ServerPlayerEntity player) {
-                return new BotOpenData(
-                    -1,
-                    session.selectedSlot,
-                    BotInventoryScreenHandler.toModeCode(session.gameMode),
-                    player.hasPermissionLevel(2),
-                    "Offline"
-                );
-            }
-
+        viewer.openHandledScreen(new NamedScreenHandlerFactory() {
             @Override
             public Text getDisplayName() {
                 return Text.literal(targetName);
@@ -61,6 +50,14 @@ public final class BotInventoryOpener {
 
             @Override
             public ScreenHandler createMenu(int syncId, PlayerInventory viewerInventory, PlayerEntity playerEntity) {
+                BotOpenData data = new BotOpenData(
+                    -1,
+                    session.selectedSlot,
+                    BotInventoryScreenHandler.toModeCode(session.gameMode),
+                    viewer.hasPermissionLevel(2),
+                    "Offline"
+                );
+                ServerPlayNetworking.send(viewer, new BotOpenPayload(syncId, data));
                 return new BotInventoryScreenHandler(syncId, viewerInventory, session, playerEntity.hasPermissionLevel(2));
             }
         });
@@ -68,18 +65,7 @@ public final class BotInventoryOpener {
 
     private static void openPlayerStyleOnline(ServerPlayerEntity viewer, ServerPlayerEntity target) {
         String statusLabel = target instanceof EntityPlayerMPFake ? "Bot" : "Online";
-        viewer.openHandledScreen(new ExtendedScreenHandlerFactory<BotOpenData>() {
-            @Override
-            public BotOpenData getScreenOpeningData(ServerPlayerEntity player) {
-                return new BotOpenData(
-                    target.getId(),
-                    target.getInventory().getSelectedSlot(),
-                    BotInventoryScreenHandler.toModeCode(target.interactionManager.getGameMode()),
-                    player.hasPermissionLevel(2),
-                    statusLabel
-                );
-            }
-
+        viewer.openHandledScreen(new NamedScreenHandlerFactory() {
             @Override
             public Text getDisplayName() {
                 return Text.literal(target.getName().getString());
@@ -87,6 +73,14 @@ public final class BotInventoryOpener {
 
             @Override
             public ScreenHandler createMenu(int syncId, PlayerInventory viewerInventory, PlayerEntity playerEntity) {
+                BotOpenData data = new BotOpenData(
+                    target.getId(),
+                    target.getInventory().getSelectedSlot(),
+                    BotInventoryScreenHandler.toModeCode(target.interactionManager.getGameMode()),
+                    viewer.hasPermissionLevel(2),
+                    statusLabel
+                );
+                ServerPlayNetworking.send(viewer, new BotOpenPayload(syncId, data));
                 return new BotInventoryScreenHandler(syncId, viewerInventory, target, playerEntity.hasPermissionLevel(2));
             }
         });
