@@ -50,11 +50,17 @@ public final class PerimeterNetworking {
                     player.sendMessage(Text.literal("[Perimeters] No se pudo iniciar el escaneo (dimensión inválida o paleta vacía).").formatted(Formatting.RED), false);
                 }
             }
+            case "cancel" -> {
+                if (p == null) return;
+                PerimeterScanner.cancel(p.id);
+                broadcastAll(server);
+            }
             case "add_palette" -> {
                 if (p == null || payload.arg1().isBlank()) return;
                 String item = payload.arg1().trim();
                 if (!p.palette.contains(item)) {
                     p.palette.add(item);
+                    PerimeterScanner.invalidateDirty(p.id);
                     PerimeterStore.save();
                     broadcastSnapshot(server);
                 }
@@ -62,6 +68,7 @@ public final class PerimeterNetworking {
             case "remove_palette" -> {
                 if (p == null || payload.arg1().isBlank()) return;
                 if (p.palette.remove(payload.arg1())) {
+                    PerimeterScanner.invalidateDirty(p.id);
                     PerimeterStore.save();
                     broadcastSnapshot(server);
                 }
@@ -69,6 +76,7 @@ public final class PerimeterNetworking {
             case "clear_palette" -> {
                 if (p == null) return;
                 p.palette.clear();
+                PerimeterScanner.invalidateDirty(p.id);
                 PerimeterStore.save();
                 broadcastSnapshot(server);
             }
@@ -77,6 +85,7 @@ public final class PerimeterNetworking {
                 List<String> preset = PerimeterPresetStore.get(payload.arg1());
                 if (preset == null) return;
                 p.palette = new ArrayList<>(preset);
+                PerimeterScanner.invalidateDirty(p.id);
                 PerimeterStore.save();
                 broadcastSnapshot(server);
             }
@@ -138,6 +147,49 @@ public final class PerimeterNetworking {
                     PerimeterStore.save();
                     broadcastAll(server);
                 } catch (NumberFormatException ignored) {}
+            }
+            case "set_bounds" -> {
+                if (p == null || !player.hasPermissionLevel(2)) return;
+                String[] parts = payload.arg1().split(",");
+                if (parts.length != 6) return;
+                try {
+                    int x1 = Integer.parseInt(parts[0].trim());
+                    int y1 = Math.max(-64, Math.min(320, Integer.parseInt(parts[1].trim())));
+                    int z1 = Integer.parseInt(parts[2].trim());
+                    int x2 = Integer.parseInt(parts[3].trim());
+                    int y2 = Math.max(-64, Math.min(320, Integer.parseInt(parts[4].trim())));
+                    int z2 = Integer.parseInt(parts[5].trim());
+                    long area = (long) (Math.abs(x2 - x1) + 1) * (long) (Math.abs(z2 - z1) + 1);
+                    if (area > 200_000_000L) {
+                        player.sendMessage(Text.literal("[Perimeters] El área supera el límite de 200.000.000 bloques.").formatted(Formatting.RED), false);
+                        return;
+                    }
+                    p.ensureOrigBounds();
+                    p.minX = Math.min(x1, x2);
+                    p.minY = Math.min(y1, y2);
+                    p.minZ = Math.min(z1, z2);
+                    p.maxX = Math.max(x1, x2);
+                    p.maxY = Math.max(y1, y2);
+                    p.maxZ = Math.max(z1, z2);
+                    p.recomputeChunks();
+                    PerimeterScanner.invalidateDirty(p.id);
+                    PerimeterStore.save();
+                    broadcastAll(server);
+                } catch (NumberFormatException ignored) {}
+            }
+            case "reset_bounds" -> {
+                if (p == null || !player.hasPermissionLevel(2)) return;
+                p.ensureOrigBounds();
+                p.minX = p.origMinX;
+                p.minY = p.origMinY;
+                p.minZ = p.origMinZ;
+                p.maxX = p.origMaxX;
+                p.maxY = p.origMaxY;
+                p.maxZ = p.origMaxZ;
+                p.recomputeChunks();
+                PerimeterScanner.invalidateDirty(p.id);
+                PerimeterStore.save();
+                broadcastAll(server);
             }
         }
     }
@@ -235,6 +287,7 @@ public final class PerimeterNetworking {
     }
 
     private static Perimeter copyHeader(MinecraftServer server, Perimeter o) {
+        o.ensureOrigBounds();
         Perimeter c = new Perimeter();
         c.id = o.id;
         c.name = o.name;
@@ -245,6 +298,15 @@ public final class PerimeterNetworking {
         c.maxX = o.maxX;
         c.maxY = o.maxY;
         c.maxZ = o.maxZ;
+        c.origMinX = o.origMinX;
+        c.origMinY = o.origMinY;
+        c.origMinZ = o.origMinZ;
+        c.origMaxX = o.origMaxX;
+        c.origMaxY = o.origMaxY;
+        c.origMaxZ = o.origMaxZ;
+        c.hasOrigBounds = o.hasOrigBounds;
+        c.scanning = PerimeterScanner.isScanning(o.id);
+        c.dirtyChunkCount = PerimeterScanner.dirtyChunkCount(o.id);
         c.palette = new ArrayList<>(o.palette);
         c.scannedChunks = o.scannedChunks;
         c.totalChunks = o.totalChunks;

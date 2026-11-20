@@ -30,9 +30,11 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
 import smp.aeternum.carpet.AeternumCarpet;
+import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.network.PerimeterNetworking;
 
 /** Distributed tick-based perimeter scanner with 3D BFS cluster grouping. */
@@ -41,6 +43,7 @@ public final class PerimeterScanner {
     private static final int MAX_RAW_POSITIONS = 200_000;
     private static final int MAX_CLUSTERS = 1500;
     private static final Queue<Job> JOBS = new ArrayDeque<>();
+    private static final Map<String, Set<ChunkPos>> DIRTY_CHUNKS = new HashMap<>();
 
     private PerimeterScanner() {}
 
@@ -54,6 +57,21 @@ public final class PerimeterScanner {
         if (world == null) return false;
 
         cancel(perimeter.id);
+        Set<ChunkPos> dirty = DIRTY_CHUNKS.remove(perimeter.id);
+        boolean canIncremental = dirty != null && !dirty.isEmpty() && perimeter.complete && !perimeter.resultsTruncated
+            && perimeter.clusters.stream().allMatch(c -> c.positions != null);
+
+        if (canIncremental) {
+            List<ChunkPos> targets = new ArrayList<>(dirty);
+            perimeter.recomputeChunks();
+            if (requesterUuid != null) {
+                perimeter.requestedBy = requesterUuid;
+            }
+            JOBS.add(new Job(world, perimeter, targets));
+            PerimeterNetworking.broadcastAll(server);
+            return true;
+        }
+
         perimeter.scannedChunks = 0;
         perimeter.complete = false;
         perimeter.totalMatchedBlocks = 0;
@@ -64,7 +82,7 @@ public final class PerimeterScanner {
             perimeter.requestedBy = requesterUuid;
         }
         PerimeterStore.save();
-        JOBS.add(new Job(world, perimeter));
+        JOBS.add(new Job(world, perimeter, null));
         PerimeterNetworking.broadcastAll(server);
         return true;
     }
@@ -72,6 +90,33 @@ public final class PerimeterScanner {
     public static void cancel(String perimeterId) {
         if (perimeterId == null) return;
         JOBS.removeIf(job -> job.perimeter.id.equalsIgnoreCase(perimeterId));
+    }
+
+    public static void invalidateDirty(String perimeterId) {
+        if (perimeterId != null) {
+            DIRTY_CHUNKS.remove(perimeterId);
+        }
+    }
+
+    public static int dirtyChunkCount(String perimeterId) {
+        Set<ChunkPos> set = DIRTY_CHUNKS.get(perimeterId);
+        return set == null ? 0 : set.size();
+    }
+
+    public static void onBlockStateChange(ServerWorld world, BlockPos pos, BlockState oldState, BlockState newState) {
+        if (!AeternumCarpetSettings.commandPerimeters) return;
+        if (PerimeterStore.all().isEmpty()) return;
+        int px = pos.getX(), py = pos.getY(), pz = pos.getZ();
+        ChunkPos cp = null;
+        for (Perimeter p : PerimeterStore.all()) {
+            if (!p.complete || p.palette == null || p.palette.isEmpty() || !p.belongsTo(world)) continue;
+            if (px < p.minX || px > p.maxX || py < p.minY || py > p.maxY || pz < p.minZ || pz > p.maxZ) continue;
+            PaletteMatcher m = new PaletteMatcher(p.palette);
+            if (m.matches(oldState) || m.matches(newState)) {
+                if (cp == null) cp = new ChunkPos(px >> 4, pz >> 4);
+                DIRTY_CHUNKS.computeIfAbsent(p.id, k -> new HashSet<>()).add(cp);
+            }
+        }
     }
 
     public static boolean isScanning(String perimeterId) {
@@ -205,6 +250,8 @@ public final class PerimeterScanner {
         private final PaletteMatcher matcher;
         private final Map<String, LongOpenHashSet> matchedByBlock = new HashMap<>();
         private final BlockPos.Mutable cursor = new BlockPos.Mutable();
+        private final List<ChunkPos> incrementalChunks;
+        private int incIdx;
         private final int minChunkX, maxChunkX, minChunkZ, maxChunkZ;
         private int chunkX, chunkZ, x, y, z;
         private boolean chunkStarted;
@@ -212,22 +259,58 @@ public final class PerimeterScanner {
         private int lastProgressChunks = -1;
         private long lastProgressAt;
 
-        private Job(ServerWorld world, Perimeter perimeter) {
+        private Job(ServerWorld world, Perimeter perimeter, List<ChunkPos> incrementalChunks) {
             this.world = world;
             this.perimeter = perimeter;
+            this.incrementalChunks = incrementalChunks;
             this.matcher = new PaletteMatcher(perimeter.palette);
-            this.minChunkX = Math.floorDiv(perimeter.minX, 16);
-            this.maxChunkX = Math.floorDiv(perimeter.maxX, 16);
-            this.minChunkZ = Math.floorDiv(perimeter.minZ, 16);
-            this.maxChunkZ = Math.floorDiv(perimeter.maxZ, 16);
-            this.chunkX = minChunkX;
-            this.chunkZ = minChunkZ;
+            if (incrementalChunks != null) {
+                Set<Long> dirtyKeys = new HashSet<>(incrementalChunks.size());
+                for (ChunkPos cp : incrementalChunks) {
+                    dirtyKeys.add(ChunkPos.toLong(cp.x, cp.z));
+                }
+                int kept = 0;
+                for (BlockCluster c : perimeter.clusters) {
+                    if (c.positions == null) continue;
+                    LongOpenHashSet bucket = matchedByBlock.computeIfAbsent(c.blockId, k -> new LongOpenHashSet());
+                    for (long packed : c.positions) {
+                        int bx = BlockPos.unpackLongX(packed);
+                        int bz = BlockPos.unpackLongZ(packed);
+                        if (!dirtyKeys.contains(ChunkPos.toLong(bx >> 4, bz >> 4))) {
+                            bucket.add(packed);
+                            kept++;
+                        }
+                    }
+                }
+                this.rawCaptured = kept;
+                perimeter.totalMatchedBlocks = kept;
+                perimeter.resultsTruncated = false;
+                this.minChunkX = 0;
+                this.maxChunkX = 0;
+                this.minChunkZ = 0;
+                this.maxChunkZ = 0;
+                if (!incrementalChunks.isEmpty()) {
+                    this.chunkX = incrementalChunks.get(0).x;
+                    this.chunkZ = incrementalChunks.get(0).z;
+                }
+            } else {
+                this.minChunkX = Math.floorDiv(perimeter.minX, 16);
+                this.maxChunkX = Math.floorDiv(perimeter.maxX, 16);
+                this.minChunkZ = Math.floorDiv(perimeter.minZ, 16);
+                this.maxChunkZ = Math.floorDiv(perimeter.maxZ, 16);
+                this.chunkX = minChunkX;
+                this.chunkZ = minChunkZ;
+            }
         }
 
         private boolean tick() {
             int budget = BLOCKS_PER_TICK;
             while (budget-- > 0) {
-                if (chunkZ > maxChunkZ) return true;
+                if (incrementalChunks != null) {
+                    if (incIdx >= incrementalChunks.size()) return true;
+                } else if (chunkZ > maxChunkZ) {
+                    return true;
+                }
                 if (!chunkStarted) beginChunk();
                 cursor.set(x, y, z);
                 BlockState state = world.getBlockState(cursor);
@@ -260,8 +343,17 @@ public final class PerimeterScanner {
             if (++z <= Math.min(perimeter.maxZ, (chunkZ << 4) + 15)) return;
             z = Math.max(perimeter.minZ, chunkZ << 4);
             if (++y <= perimeter.maxY) return;
-            perimeter.scannedChunks++;
             chunkStarted = false;
+            if (incrementalChunks != null) {
+                incIdx++;
+                if (incIdx < incrementalChunks.size()) {
+                    ChunkPos next = incrementalChunks.get(incIdx);
+                    chunkX = next.x;
+                    chunkZ = next.z;
+                }
+                return;
+            }
+            perimeter.scannedChunks++;
             if (++chunkX <= maxChunkX) return;
             chunkX = minChunkX;
             chunkZ++;

@@ -17,6 +17,13 @@ public final class Perimeter {
     public int maxX;
     public int maxY;
     public int maxZ;
+    public int origMinX;
+    public int origMinY;
+    public int origMinZ;
+    public int origMaxX;
+    public int origMaxY;
+    public int origMaxZ;
+    public boolean hasOrigBounds;
     public List<String> palette = new ArrayList<>();
     public int scannedChunks;
     public int totalChunks;
@@ -38,6 +45,8 @@ public final class Perimeter {
     public int weActiveBots;
     public int wePreviewBots;
     public String weHint = "";
+    public boolean scanning;
+    public int dirtyChunkCount;
 
     public Perimeter() {}
 
@@ -67,10 +76,31 @@ public final class Perimeter {
         this.maxX = Math.max(first.getX(), second.getX());
         this.maxY = Math.max(first.getY(), second.getY());
         this.maxZ = Math.max(first.getZ(), second.getZ());
+        if (!this.hasOrigBounds) {
+            this.origMinX = this.minX;
+            this.origMinY = this.minY;
+            this.origMinZ = this.minZ;
+            this.origMaxX = this.maxX;
+            this.origMaxY = this.maxY;
+            this.origMaxZ = this.maxZ;
+            this.hasOrigBounds = true;
+        }
         if (this.weTargetLowY == Integer.MIN_VALUE) {
             this.weTargetLowY = defaultLowYFor(this.dimension);
         }
         recomputeChunks();
+    }
+
+    public void ensureOrigBounds() {
+        if (!this.hasOrigBounds) {
+            this.origMinX = this.minX;
+            this.origMinY = this.minY;
+            this.origMinZ = this.minZ;
+            this.origMaxX = this.maxX;
+            this.origMaxY = this.maxY;
+            this.origMaxZ = this.maxZ;
+            this.hasOrigBounds = true;
+        }
     }
 
     public void recomputeChunks() {

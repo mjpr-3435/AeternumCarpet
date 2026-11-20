@@ -3,12 +3,13 @@
 ## Versión 2.0.0
 
 ### Aeternum Dock y Tareas MOTD
-- **Aeternum Dock (`quickDock`)**: barra de acceso rápido y estado con selector de dimensión, acceso a pantallas del mod y gestiones rápidas.
-- **Tareas MOTD**: pantalla de gestión de tareas del banner de bienvenida (`TodoQuickInputScreen`) y sincronización por red.
+- **Aeternum Dock (`quickDock`)**: barra de acceso rápido y estado con selector de dimensión, caja de módulos adaptable según reglas activas, panel de **Notas** con scroll y tope de altura (`220` px), tareas MOTD (`TodoQuickInputScreen`) y sincronización por red.
 - **Navegación rápida entre dimensiones (`commandDimension`)**: comandos `/nether`, `/overworld` y `/end` para alternar dimensión conservando posición relativa (Creativo / Espectador).
 
 ### Perímetros y World Eater (`commandPerimeters`)
 - Nuevo sistema de gestión de perímetros con `/perimeter` (`PerimetersScreen`), estado y alertas configurables (Y objetivo y timeout de estancamiento).
+- **Editor de región (`Región`)**: edición numérica de `P1`/`P2` conservando la referencia inicial (`Ref inicial`) y botón **Restaurar**.
+- **Escaneo incremental y cancelación**: botón **Cancelar** durante escaneos activos y tracking en vivo por `dirtyChunks` (`Update (N)`) para re-escanear únicamente los chunks donde cambiaron bloques de la paleta.
 - **`BotGridManager`**: generación y limpieza automática de grilla de bots espectadores en `Y=128` para cargar/supervisar perímetros.
 
 ### Proyectos y Materiales (`commandProjects`)
@@ -16,19 +17,20 @@
 - Caché de almacenamiento y escaneo de regiones mejorado en `MaterialsStore`, además de mejoras de colocación en `LitematicaBridge`.
 
 ### Bots, Fake Players y Utilidades
-- **`editBotInventory`**: edición del inventario de fake players y selector de modo de juego en `BotInventoryScreen`.
+- **`editBotInventory`**: edición del inventario de fake players y selector de modo de juego en `BotInventoryScreen` (con compensación de altura `+0.20` al salir de `Spectator` por `MC-146582`).
 - **`reloadFakePlayers`**: guardado y restauración automática de fake players entre reinicios del servidor.
 - **`cameraMode`**: comando `/cs` con modos `off`, `on` y `restrictive` (validación de peligro antes de entrar).
 - **`carefulBreak`**: comando `/carefulbreak <off|sneak|always>` para enviar ítems minados directamente al inventario.
 - **`commandHat`**: comando `/hat` para equipar en la cabeza el ítem de la mano.
-- **`playerSit`**: sentarse al agacharse y limpieza de armor stands huérfanos con `/sitbehaviour clean armor_stands`.
+- **`playerSit`**: sentarse al agacharse (altura ajustada `+0.05`) y limpieza de armor stands huérfanos con `/sitbehaviour clean armor_stands`.
 - **`commandViewInventory`**: comando `/viewinv` para inspeccionar inventarios de jugadores online y offline.
 
 ### Estabilidad, Mecánicas y `/rules`
 - **`updateSuppressionCrashFix`** (`false` / `true` / `silence`): evita que excepciones de update suppression tumben el servidor.
 - **`endermanGriefing`** (`vanilla` / `farm_only` / `disable`): control granular del griefing de endermen.
 - **`oldFlintAndSteelBehavior`**: restaura el comportamiento clásico del mechero.
-- **`CarpetRulesScreen` (`/rules`)**: resolución de subcarpetas y mejor manejo de scopes en `carpet.conf`.
+- **`CarpetRulesScreen` (`/rules`)**: resolución de subcarpetas/scopes en `carpet.conf`, títulos limpios con el nombre de la regla e indicador de Carpet de origen en scopes globales (`ALL` / `MODIFIED`).
+- Eliminada la receta residual `calcite.json`.
 
 ---
 

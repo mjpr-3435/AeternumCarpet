@@ -37,8 +37,10 @@ public final class PerimetersScreen extends UiScreen {
     private int activeTab = TAB_ANALYSIS;
     private boolean showPresetsBar;
     private boolean savingPreset;
+    private boolean editingBounds;
     private String lastPresetName = "";
     private UiTextField presetNameField;
+    private final UiTextField[] boundFields = new UiTextField[6];
     private UiTextField targetYField;
     private UiTextField stallSecField;
     private String syncedMonitorPerimeterId;
@@ -115,6 +117,39 @@ public final class PerimetersScreen extends UiScreen {
             presetNameField = null;
         }
 
+        Perimeter selForBounds = selectedPerimeter();
+        if (activeTab == TAB_ANALYSIS && editingBounds && selForBounds != null) {
+            int cx = contentX();
+            int cw = contentW();
+            int by = panelY + 94;
+            int[] vals = {
+                selForBounds.minX, selForBounds.minY, selForBounds.minZ,
+                selForBounds.maxX, selForBounds.maxY, selForBounds.maxZ
+            };
+            String[] ph = {"X1", "Y1", "Z1", "X2", "Y2", "Z2"};
+            for (int i = 0; i < 6; i++) {
+                int row = i / 3;
+                int col = i % 3;
+                int fx = cx + 28 + col * 64;
+                int fy = by + 18 + row * 21;
+                UiTextField tf = new UiTextField(textRenderer, fx, fy, 58, 17, ph[i]);
+                tf.setMaxLength(9);
+                tf.setTextPredicate(s -> s.isEmpty() || s.matches("-?\\d{0,8}"));
+                tf.setText(String.valueOf(vals[i]));
+                addDrawableChild(tf);
+                boundFields[i] = tf;
+            }
+            int btnX = cx + cw - 134;
+            addDrawableChild(UiButton.primary(btnX, by + 17, 64, 18, "Aplicar", b -> submitBounds()));
+            addDrawableChild(UiButton.secondary(btnX + 68, by + 17, 62, 18, "Restaurar", b -> resetBounds()));
+            addDrawableChild(UiButton.secondary(btnX, by + 39, 130, 18, "Cancelar", b -> {
+                editingBounds = false;
+                init();
+            }));
+        } else {
+            for (int i = 0; i < 6; i++) boundFields[i] = null;
+        }
+
         if (activeTab == TAB_MONITOR && selectedPerimeter() != null) {
             int cx = contentX();
             int cw = contentW();
@@ -171,7 +206,7 @@ public final class PerimetersScreen extends UiScreen {
     private int sidebarBottom() { return panelY + panelH - 38; }
 
     private int paletteBoxY() {
-        return panelY + 94 + (showPresetsBar && !savingPreset ? 22 : 0) + (savingPreset ? 26 : 0);
+        return panelY + 94 + (showPresetsBar && !savingPreset ? 22 : 0) + (savingPreset ? 26 : 0) + (editingBounds ? 66 : 0);
     }
 
     private int clusterHeaderY() { return paletteBoxY() + 62; }
@@ -282,7 +317,13 @@ public final class PerimetersScreen extends UiScreen {
         int actY = panelY + 70;
         drawPillButton(c, cx, actY, 68, 18, "+ Bloques", false, mx, my);
         drawPillButton(c, cx + 72, actY, 56, 18, "Presets", showPresetsBar, mx, my);
-        drawPillButton(c, cx + 132, actY, 58, 18, "Update", false, mx, my);
+        String updLabel = sel.scanning
+            ? "Cancelar"
+            : (sel.dirtyChunkCount > 0 ? "Update (" + sel.dirtyChunkCount + ")" : "Update");
+        drawPillButton(c, cx + 132, actY, 68, 18, updLabel, sel.scanning, mx, my);
+        if (canDelete) {
+            drawPillButton(c, cx + 204, actY, 52, 18, "Región", editingBounds, mx, my);
+        }
 
         if (showPresetsBar && !savingPreset) {
             int py = panelY + 92;
@@ -313,6 +354,28 @@ public final class PerimetersScreen extends UiScreen {
 
         if (savingPreset && presetNameField != null) {
             presetNameField.renderBox(c, cx, panelY + 96, Math.max(100, cw - 134), 20, mx, my, delta);
+        }
+
+        if (editingBounds) {
+            int by = panelY + 94;
+            AeternumTheme.drawCard(c, cx, by, cw, 62, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
+            int rx1 = sel.hasOrigBounds ? sel.origMinX : sel.minX;
+            int ry1 = sel.hasOrigBounds ? sel.origMinY : sel.minY;
+            int rz1 = sel.hasOrigBounds ? sel.origMinZ : sel.minZ;
+            int rx2 = sel.hasOrigBounds ? sel.origMaxX : sel.maxX;
+            int ry2 = sel.hasOrigBounds ? sel.origMaxY : sel.maxY;
+            int rz2 = sel.hasOrigBounds ? sel.origMaxZ : sel.maxZ;
+            String refTxt = "Ref inicial: [" + rx1 + ", " + ry1 + ", " + rz1 + "] .. [" + rx2 + ", " + ry2 + ", " + rz2 + "]";
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, refTxt, cw - 16), cx + 8, by + 5, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(textRenderer, "P1:", cx + 8, by + 22, AeternumTheme.TEXT_SECONDARY, false);
+            c.drawText(textRenderer, "P2:", cx + 8, by + 43, AeternumTheme.TEXT_SECONDARY, false);
+            for (int i = 0; i < 6; i++) {
+                if (boundFields[i] != null) {
+                    int row = i / 3;
+                    int col = i % 3;
+                    boundFields[i].renderBox(c, cx + 28 + col * 64, by + 18 + row * 21, 58, 17, mx, my, delta);
+                }
+            }
         }
 
         int pBoxY = paletteBoxY();
@@ -613,6 +676,28 @@ public final class PerimetersScreen extends UiScreen {
         return true;
     }
 
+    private void submitBounds() {
+        Perimeter sel = selectedPerimeter();
+        if (sel == null) return;
+        int[] cur = {sel.minX, sel.minY, sel.minZ, sel.maxX, sel.maxY, sel.maxZ};
+        int[] next = new int[6];
+        for (int i = 0; i < 6; i++) {
+            next[i] = parseIntOr(boundFields[i], cur[i]);
+        }
+        String packed = next[0] + "," + next[1] + "," + next[2] + "," + next[3] + "," + next[4] + "," + next[5];
+        ClientPlayNetworking.send(new PerimeterActionPayload("set_bounds", sel.id, packed, ""));
+        editingBounds = false;
+        init();
+    }
+
+    private void resetBounds() {
+        Perimeter sel = selectedPerimeter();
+        if (sel == null) return;
+        ClientPlayNetworking.send(new PerimeterActionPayload("reset_bounds", sel.id, "", ""));
+        editingBounds = false;
+        init();
+    }
+
     private boolean handleAnalysisClick(Perimeter sel, int cx, int cw, double mx, double my) {
         int actY = panelY + 70;
         if (my >= actY && my < actY + 18) {
@@ -625,11 +710,19 @@ public final class PerimetersScreen extends UiScreen {
             if (mx >= cx + 72 && mx < cx + 128) {
                 showPresetsBar = !showPresetsBar;
                 savingPreset = false;
+                editingBounds = false;
                 init();
                 return true;
             }
-            if (mx >= cx + 132 && mx < cx + 190) {
-                ClientPlayNetworking.send(new PerimeterActionPayload("update", sel.id, "", ""));
+            if (mx >= cx + 132 && mx < cx + 200) {
+                ClientPlayNetworking.send(new PerimeterActionPayload(sel.scanning ? "cancel" : "update", sel.id, "", ""));
+                return true;
+            }
+            if (canDelete && mx >= cx + 204 && mx < cx + 256) {
+                editingBounds = !editingBounds;
+                showPresetsBar = false;
+                savingPreset = false;
+                init();
                 return true;
             }
         }
