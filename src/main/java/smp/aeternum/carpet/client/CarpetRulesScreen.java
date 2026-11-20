@@ -375,15 +375,18 @@ public final class CarpetRulesScreen extends UiScreen {
                 int valY = cy + (CARD_H - 20) / 2;
 
                 int titleMaxW = valX - cardX - 20;
-                String title = (r.displayName != null && !r.displayName.isEmpty()) ? r.displayName : r.name;
+                String title = r.name;
                 String titleShown = AeternumTheme.ellipsize(textRenderer, title, titleMaxW);
                 c.drawTextWithShadow(textRenderer, titleShown, cardX + 10, cy + 7, AeternumTheme.TEXT_PRIMARY);
 
-                if (r.displayName != null && !r.displayName.equals(r.name)) {
-                    int techX = cardX + 16 + textRenderer.getWidth(titleShown);
-                    int techAvail = valX - techX - 10;
-                    if (techAvail > 36) {
-                        c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, r.name, techAvail), techX, cy + 8, AeternumTheme.TEXT_MUTED, false);
+                if ("ALL".equals(selectedScope) || "MODIFIED".equals(selectedScope)) {
+                    String sideTag = resolveSource(r);
+                    if (!sideTag.isEmpty()) {
+                        int techX = cardX + 16 + textRenderer.getWidth(titleShown);
+                        int techAvail = valX - techX - 10;
+                        if (techAvail > 24) {
+                            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, sideTag, techAvail), techX, cy + 8, AeternumTheme.TEXT_MUTED, false);
+                        }
                     }
                 }
 

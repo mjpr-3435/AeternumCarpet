@@ -302,6 +302,10 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
                 return false;
             }
             if (serverTarget != null) {
+                if (serverTarget.interactionManager.getGameMode() == GameMode.SPECTATOR
+                    && (target == GameMode.SURVIVAL || target == GameMode.CREATIVE)) {
+                    serverTarget.requestTeleport(serverTarget.getX(), serverTarget.getY() + 0.20, serverTarget.getZ());
+                }
                 serverTarget.changeGameMode(target);
                 if (serverTarget instanceof EntityPlayerMPFake) {
                     FakePlayerReloadManager.markDirty();
