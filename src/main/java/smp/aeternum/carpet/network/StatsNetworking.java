@@ -114,6 +114,17 @@ public final class StatsNetworking {
                 }
             }
             case "lookup_name" -> startMojangLookup(server, player, payload.uuid());
+            case "delete_unexpected" -> {
+                if (PlayerRegistryStore.deleteUnexpectedFile(server, payload.value())) {
+                    sendSnapshot(player, false, "Archivo eliminado: " + payload.value(), false);
+                } else {
+                    sendSnapshot(player, false, "No se pudo eliminar: " + payload.value(), true);
+                }
+            }
+            case "delete_all_unexpected" -> {
+                int count = PlayerRegistryStore.deleteAllUnexpectedFiles(server);
+                sendSnapshot(player, false, "Eliminados " + count + " archivos raros.", false);
+            }
         }
     }
 

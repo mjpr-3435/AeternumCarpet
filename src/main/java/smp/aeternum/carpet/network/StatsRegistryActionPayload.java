@@ -11,7 +11,7 @@ public record StatsRegistryActionPayload(String action, String uuid, String valu
     public static final PacketCodec<RegistryByteBuf, StatsRegistryActionPayload> CODEC = PacketCodec.tuple(
         PacketCodecs.string(32), StatsRegistryActionPayload::action,
         PacketCodecs.string(64), StatsRegistryActionPayload::uuid,
-        PacketCodecs.string(64), StatsRegistryActionPayload::value,
+        PacketCodecs.string(512), StatsRegistryActionPayload::value,
         StatsRegistryActionPayload::new
     );
 

@@ -2,8 +2,11 @@ package smp.aeternum.carpet.client;
 
 import com.google.gson.Gson;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Text;
@@ -35,6 +38,8 @@ public final class StatsScreen extends UiScreen {
         HUMAN("Humans"),
         BOT("Bots"),
         UNKNOWN("Unknown"),
+        ONLINE("Online"),
+        OFFLINE("Offline"),
         ANOMALY("Anomalías");
 
         final String label;
@@ -44,10 +49,32 @@ public final class StatsScreen extends UiScreen {
         }
     }
 
+    private enum SortMode {
+        NAME("Nombre"),
+        TYPE("Tipo"),
+        ORIGIN("Online/Offline"),
+        ANOMALY("Anomalías");
+
+        final String label;
+
+        SortMode(String label) {
+            this.label = label;
+        }
+
+        SortMode next() {
+            SortMode[] vals = values();
+            return vals[(ordinal() + 1) % vals.length];
+        }
+    }
+
     private List<RegistryEntrySnapshot> entries = List.of();
+    private final Map<String, RegistryEntrySnapshot> entriesByUuid = new HashMap<>();
+    private final List<String> displayOrder = new ArrayList<>();
+    private boolean recomputeOrderOnNextSnapshot = true;
     private List<String> unexpectedFiles = List.of();
     private Tab activeTab = Tab.REGISTRY;
     private Filter activeFilter = Filter.ALL;
+    private SortMode activeSort = SortMode.NAME;
 
     private String statusMessage = "";
     private boolean statusError;
@@ -56,7 +83,10 @@ public final class StatsScreen extends UiScreen {
     private boolean draggingScrollbar;
 
     private UiTextField searchField;
+    private UiButton sortButton;
     private UiButton rescanButton;
+    private UiButton deleteAllButton;
+    private String hoveredUnexpectedDelete;
 
     public StatsScreen(String json) {
         super(Text.literal("Stats Admin"));
@@ -77,12 +107,58 @@ public final class StatsScreen extends UiScreen {
             if (snap != null) {
                 this.entries = snap.entries != null ? snap.entries : List.of();
                 this.unexpectedFiles = snap.unexpectedFiles != null ? snap.unexpectedFiles : List.of();
+                this.entriesByUuid.clear();
+                for (RegistryEntrySnapshot e : this.entries) {
+                    if (e.uuid != null) {
+                        this.entriesByUuid.put(e.uuid, e);
+                    }
+                }
+                if (recomputeOrderOnNextSnapshot || displayOrder.isEmpty()) {
+                    recomputeDisplayOrder();
+                    recomputeOrderOnNextSnapshot = false;
+                } else {
+                    for (RegistryEntrySnapshot e : this.entries) {
+                        if (e.uuid != null && !displayOrder.contains(e.uuid)) {
+                            displayOrder.add(e.uuid);
+                        }
+                    }
+                }
                 return;
             }
         } catch (Exception ignored) {
         }
         this.entries = List.of();
+        this.entriesByUuid.clear();
+        this.displayOrder.clear();
         this.unexpectedFiles = List.of();
+    }
+
+    private void recomputeDisplayOrder() {
+        Comparator<RegistryEntrySnapshot> byNameOrUuid = Comparator
+            .comparing((RegistryEntrySnapshot e) -> e.name == null || e.name.isEmpty())
+            .thenComparing(e -> (e.name == null || e.name.isEmpty()) ? e.uuid : e.name, String.CASE_INSENSITIVE_ORDER);
+        Comparator<RegistryEntrySnapshot> comparator = switch (activeSort) {
+            case NAME -> byNameOrUuid;
+            case TYPE -> Comparator.comparingInt((RegistryEntrySnapshot e) -> switch (e.type) {
+                case "HUMAN" -> 0;
+                case "BOT" -> 1;
+                default -> 2;
+            }).thenComparing(byNameOrUuid);
+            case ORIGIN -> Comparator.comparingInt((RegistryEntrySnapshot e) -> switch (e.uuidVersion) {
+                case 4 -> 0;
+                case 3 -> 1;
+                default -> 2;
+            }).thenComparing(byNameOrUuid);
+            case ANOMALY -> Comparator.comparing((RegistryEntrySnapshot e) -> !e.anomaly).thenComparing(byNameOrUuid);
+        };
+        List<RegistryEntrySnapshot> sorted = new ArrayList<>(entries);
+        sorted.sort(comparator);
+        displayOrder.clear();
+        for (RegistryEntrySnapshot e : sorted) {
+            if (e.uuid != null) {
+                displayOrder.add(e.uuid);
+            }
+        }
     }
 
     @Override
@@ -95,7 +171,9 @@ public final class StatsScreen extends UiScreen {
         if (activeTab == Tab.REGISTRY) {
             int contentX = panelX + SIDEBAR_W + 10;
             int contentW = panelW - SIDEBAR_W - 22;
-            searchField = new UiTextField(textRenderer, contentX, contentTop + 8, contentW, 20, "Buscar nombre o UUID…");
+            int sortW = 132;
+            int searchW = Math.max(100, contentW - sortW - 6);
+            searchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar nombre o UUID…");
             searchField.setMaxLength(80);
             searchField.setText(prevQuery);
             searchField.setChangedListener(s -> {
@@ -104,14 +182,35 @@ public final class StatsScreen extends UiScreen {
             });
             addDrawableChild(searchField);
 
+            sortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeSort.label, b -> {
+                activeSort = activeSort.next();
+                b.setLabel("Orden: " + activeSort.label);
+                recomputeDisplayOrder();
+                targetListScroll = 0;
+                listScroll = 0;
+            });
+            addDrawableChild(sortButton);
+
+            deleteAllButton = null;
             rescanButton = UiButton.secondary(panelX + 8, panelY + panelH - 64, SIDEBAR_W - 16, 22, "Re-escanear", b -> {
                 statusMessage = "Re-escaneando archivos…";
                 statusError = false;
+                recomputeOrderOnNextSnapshot = true;
                 ClientPlayNetworking.send(new StatsRegistryActionPayload("rescan", "", ""));
             });
             addDrawableChild(rescanButton);
         } else {
             searchField = null;
+            sortButton = null;
+            deleteAllButton = UiButton.danger(panelX + panelW - 216, contentTop + 8, 98, 20, "Borrar todo", b -> {
+                if (!hasShiftDown() || unexpectedFiles.isEmpty()) return;
+                statusMessage = "Borrando todos los archivos raros…";
+                statusError = false;
+                ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_all_unexpected", "", ""));
+            });
+            deleteAllButton.active = !unexpectedFiles.isEmpty() && hasShiftDown();
+            addDrawableChild(deleteAllButton);
+
             rescanButton = UiButton.secondary(panelX + panelW - 114, contentTop + 8, 102, 20, "Re-escanear", b -> {
                 statusMessage = "Re-escaneando archivos…";
                 statusError = false;
@@ -124,8 +223,9 @@ public final class StatsScreen extends UiScreen {
     private List<RegistryEntrySnapshot> filteredEntries() {
         String q = searchField != null ? searchField.getText().trim().toLowerCase(Locale.ROOT) : "";
         List<RegistryEntrySnapshot> out = new ArrayList<>();
-        for (RegistryEntrySnapshot e : entries) {
-            if (!matchesFilter(e)) continue;
+        for (String uuid : displayOrder) {
+            RegistryEntrySnapshot e = entriesByUuid.get(uuid);
+            if (e == null || !matchesFilter(e)) continue;
             if (!q.isEmpty()) {
                 String n = e.name != null ? e.name.toLowerCase(Locale.ROOT) : "";
                 String u = e.uuid != null ? e.uuid.toLowerCase(Locale.ROOT) : "";
@@ -142,6 +242,8 @@ public final class StatsScreen extends UiScreen {
             case HUMAN -> "HUMAN".equals(e.type);
             case BOT -> "BOT".equals(e.type);
             case UNKNOWN -> "UNKNOWN".equals(e.type);
+            case ONLINE -> e.uuidVersion == 4;
+            case OFFLINE -> e.uuidVersion == 3;
             case ANOMALY -> e.anomaly;
         };
     }
@@ -154,6 +256,8 @@ public final class StatsScreen extends UiScreen {
                 case HUMAN -> { if ("HUMAN".equals(e.type)) count++; }
                 case BOT -> { if ("BOT".equals(e.type)) count++; }
                 case UNKNOWN -> { if ("UNKNOWN".equals(e.type)) count++; }
+                case ONLINE -> { if (e.uuidVersion == 4) count++; }
+                case OFFLINE -> { if (e.uuidVersion == 3) count++; }
                 case ANOMALY -> { if (e.anomaly) count++; }
             }
         }
@@ -180,6 +284,7 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public void render(DrawContext c, int mx, int my, float delta) {
+        hoveredUnexpectedDelete = null;
         renderBackground(c, mx, my, delta);
 
         long anomalyCount = entries.stream().filter(e -> e.anomaly).count();
@@ -211,9 +316,26 @@ public final class StatsScreen extends UiScreen {
             c.drawText(textRenderer, hint, panelX + 14, footerY + 14, AeternumTheme.TEXT_MUTED, false);
         }
 
+        if (deleteAllButton != null) {
+            deleteAllButton.active = !unexpectedFiles.isEmpty() && hasShiftDown();
+        }
+
         super.render(c, mx, my, delta);
         if (searchField != null) {
             searchField.renderBox(c, searchField.boxX(), searchField.boxY(), searchField.getWidth() + 12, 20, mx, my, delta);
+        }
+
+        if (isCloseButtonHit(mx, my)) {
+            c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+        } else if (sortButton != null && sortButton.isHovered()) {
+            c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
+        } else if (deleteAllButton != null && deleteAllButton.isHovered()) {
+            String tip = unexpectedFiles.isEmpty()
+                ? "No hay archivos raros"
+                : (hasShiftDown() ? "Clic para borrar todos los archivos raros" : "Mantén Shift para habilitar Borrar todo");
+            c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
+        } else if (activeTab == Tab.UNEXPECTED && hoveredUnexpectedDelete != null) {
+            c.drawTooltip(textRenderer, Text.literal("Borrar " + hoveredUnexpectedDelete), mx, my);
         }
     }
 
@@ -408,7 +530,7 @@ public final class StatsScreen extends UiScreen {
     private void renderUnexpectedTab(DrawContext c, int mx, int my, float delta) {
         int topY = tabBarY() + TAB_BAR_H;
         c.drawText(textRenderer,
-            "Archivos fuera de formato esperado en playerdata/, stats/ y advancements/:",
+            "Archivos fuera de formato esperado:",
             panelX + 14, topY + 13, AeternumTheme.TEXT_SECONDARY, false);
 
         int lTop = listTop();
@@ -435,8 +557,20 @@ public final class StatsScreen extends UiScreen {
             if (cy + UNEXPECTED_ROW_H < lTop || cy > lBottom) continue;
 
             String path = unexpectedFiles.get(i);
-            AeternumTheme.drawCard(c, cardX, cy, cardW, UNEXPECTED_ROW_H - 2, AeternumTheme.CARD_BG, 0x60E59B53);
-            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, path, cardW - 16), cardX + 8, cy + 6, 0xFFE59B53, false);
+            int rowH = UNEXPECTED_ROW_H - 2;
+            AeternumTheme.drawCard(c, cardX, cy, cardW, rowH, AeternumTheme.CARD_BG, 0x60E59B53);
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, path, cardW - 32), cardX + 8, cy + 6, 0xFFE59B53, false);
+
+            int delX = cardX + cardW - 20;
+            int delY = cy + 2;
+            boolean inArea = my >= lTop && my < lBottom;
+            boolean overDel = inArea && mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16;
+            if (overDel) {
+                hoveredUnexpectedDelete = path;
+                c.fill(delX, delY, delX + 16, delY + 16, 0x45E55353);
+                c.drawBorder(delX, delY, 16, 16, AeternumTheme.withAlpha(AeternumTheme.ACCENT_RED, 0x90));
+            }
+            c.drawTextWithShadow(textRenderer, "\u00D7", delX + 5, delY + 4, overDel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
         }
         c.disableScissor();
 
@@ -501,6 +635,7 @@ public final class StatsScreen extends UiScreen {
                 int idx = (int) ((my - fTop) / SIDEBAR_ROW_H);
                 if (idx >= 0 && idx < filters.length) {
                     activeFilter = filters[idx];
+                    recomputeDisplayOrder();
                     listScroll = targetListScroll = 0;
                     return true;
                 }
@@ -539,6 +674,28 @@ public final class StatsScreen extends UiScreen {
                         statusMessage = "Consultando Mojang para " + item.uuid + "…";
                         statusError = false;
                         ClientPlayNetworking.send(new StatsRegistryActionPayload("lookup_name", item.uuid, ""));
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if (activeTab == Tab.UNEXPECTED && button == 0) {
+            int lTop = listTop();
+            int lBottom = listBottom();
+            if (my >= lTop && my < lBottom) {
+                int cardX = panelX + 12;
+                int cardW = panelW - 28;
+                int delX = cardX + cardW - 20;
+                for (int i = 0; i < unexpectedFiles.size(); i++) {
+                    int cy = lTop + i * UNEXPECTED_ROW_H - (int) Math.round(listScroll);
+                    if (cy + UNEXPECTED_ROW_H < lTop || cy > lBottom) continue;
+                    int delY = cy + 2;
+                    if (mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16) {
+                        String path = unexpectedFiles.get(i);
+                        statusMessage = "Borrando " + path + "…";
+                        statusError = false;
+                        ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_unexpected", "", path));
                         return true;
                     }
                 }

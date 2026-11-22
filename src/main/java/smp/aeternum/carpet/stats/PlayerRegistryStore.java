@@ -290,6 +290,73 @@ public final class PlayerRegistryStore {
         return List.copyOf(unexpectedFiles);
     }
 
+    public static synchronized boolean deleteUnexpectedFile(MinecraftServer server, String relativePath) {
+        if (server == null || relativePath == null || !unexpectedFiles.contains(relativePath)) {
+            return false;
+        }
+        boolean deleted = deleteUnexpectedTarget(server, relativePath);
+        scanFull(server);
+        return deleted;
+    }
+
+    public static synchronized int deleteAllUnexpectedFiles(MinecraftServer server) {
+        if (server == null || unexpectedFiles.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (String relativePath : List.copyOf(unexpectedFiles)) {
+            if (deleteUnexpectedTarget(server, relativePath)) {
+                count++;
+            }
+        }
+        scanFull(server);
+        return count;
+    }
+
+    private static boolean deleteUnexpectedTarget(MinecraftServer server, String relativePath) {
+        Path baseDir;
+        String subPath;
+        if (relativePath.startsWith("playerdata/")) {
+            baseDir = server.getSavePath(WorldSavePath.PLAYERDATA).toAbsolutePath().normalize();
+            subPath = relativePath.substring("playerdata/".length());
+        } else if (relativePath.startsWith("stats/")) {
+            baseDir = server.getSavePath(WorldSavePath.STATS).toAbsolutePath().normalize();
+            subPath = relativePath.substring("stats/".length());
+        } else if (relativePath.startsWith("advancements/")) {
+            baseDir = server.getSavePath(WorldSavePath.ADVANCEMENTS).toAbsolutePath().normalize();
+            subPath = relativePath.substring("advancements/".length());
+        } else {
+            return false;
+        }
+
+        if (subPath.endsWith("/")) {
+            subPath = subPath.substring(0, subPath.length() - 1);
+        }
+        if (subPath.isEmpty() || subPath.contains("/") || subPath.contains("\\") || subPath.equals("..") || subPath.equals(".")) {
+            return false;
+        }
+
+        Path target = baseDir.resolve(subPath).normalize();
+        if (!target.startsWith(baseDir) || target.equals(baseDir)) {
+            return false;
+        }
+
+        try {
+            if (Files.isDirectory(target)) {
+                try (Stream<Path> walk = Files.walk(target)) {
+                    for (Path p : walk.sorted(Collections.reverseOrder()).toList()) {
+                        Files.deleteIfExists(p);
+                    }
+                }
+                return true;
+            }
+            return Files.deleteIfExists(target);
+        } catch (IOException exception) {
+            AeternumCarpet.LOGGER.error("Failed to delete unexpected file {}", target, exception);
+            return false;
+        }
+    }
+
     public static synchronized boolean setType(String uuid, EntryType nextType) {
         if (uuid == null || nextType == null) {
             return false;
