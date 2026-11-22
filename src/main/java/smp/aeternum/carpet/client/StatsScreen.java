@@ -22,13 +22,14 @@ public final class StatsScreen extends UiScreen {
     private static final Gson GSON = new Gson();
     private static final int TAB_BAR_H = 24;
     private static final int SIDEBAR_W = 156;
-    private static final int SIDEBAR_ROW_H = 22;
+    private static final int SIDEBAR_ROW_H = 19;
     private static final int CARD_H = 44;
     private static final int CARD_GAP = 4;
     private static final int ROW_STRIDE = CARD_H + CARD_GAP;
     private static final int UNEXPECTED_ROW_H = 22;
 
     private enum Tab {
+        GUIDE,
         REGISTRY,
         UNEXPECTED
     }
@@ -40,6 +41,8 @@ public final class StatsScreen extends UiScreen {
         UNKNOWN("Unknown"),
         ONLINE("Online"),
         OFFLINE("Offline"),
+        NAMED("Con nombre"),
+        UNNAMED("Sin nombre"),
         ANOMALY("Anomalías");
 
         final String label;
@@ -51,6 +54,7 @@ public final class StatsScreen extends UiScreen {
 
     private enum SortMode {
         NAME("Nombre"),
+        UNNAMED_FIRST("Sin nombre"),
         TYPE("Tipo"),
         ORIGIN("Online/Offline"),
         ANOMALY("Anomalías");
@@ -72,7 +76,11 @@ public final class StatsScreen extends UiScreen {
     private final List<String> displayOrder = new ArrayList<>();
     private boolean recomputeOrderOnNextSnapshot = true;
     private List<String> unexpectedFiles = List.of();
-    private Tab activeTab = Tab.REGISTRY;
+    private boolean lookupRunning;
+    private int lookupDone;
+    private int lookupTotal;
+    private int lookupResolved;
+    private Tab activeTab = Tab.GUIDE;
     private Filter activeFilter = Filter.ALL;
     private SortMode activeSort = SortMode.NAME;
 
@@ -84,6 +92,7 @@ public final class StatsScreen extends UiScreen {
 
     private UiTextField searchField;
     private UiButton sortButton;
+    private UiButton lookupAllButton;
     private UiButton rescanButton;
     private UiButton healAnomaliesButton;
     private UiButton deleteAllButton;
@@ -112,6 +121,10 @@ public final class StatsScreen extends UiScreen {
             if (snap != null) {
                 this.entries = snap.entries != null ? snap.entries : List.of();
                 this.unexpectedFiles = snap.unexpectedFiles != null ? snap.unexpectedFiles : List.of();
+                this.lookupRunning = snap.lookupRunning;
+                this.lookupDone = snap.lookupDone;
+                this.lookupTotal = snap.lookupTotal;
+                this.lookupResolved = snap.lookupResolved;
                 this.entriesByUuid.clear();
                 for (RegistryEntrySnapshot e : this.entries) {
                     if (e.uuid != null) {
@@ -142,8 +155,12 @@ public final class StatsScreen extends UiScreen {
         Comparator<RegistryEntrySnapshot> byNameOrUuid = Comparator
             .comparing((RegistryEntrySnapshot e) -> e.name == null || e.name.isEmpty())
             .thenComparing(e -> (e.name == null || e.name.isEmpty()) ? e.uuid : e.name, String.CASE_INSENSITIVE_ORDER);
+        Comparator<RegistryEntrySnapshot> byUnnamedFirst = Comparator
+            .comparing((RegistryEntrySnapshot e) -> e.name != null && !e.name.isEmpty())
+            .thenComparing(e -> (e.name == null || e.name.isEmpty()) ? e.uuid : e.name, String.CASE_INSENSITIVE_ORDER);
         Comparator<RegistryEntrySnapshot> comparator = switch (activeSort) {
             case NAME -> byNameOrUuid;
+            case UNNAMED_FIRST -> byUnnamedFirst;
             case TYPE -> Comparator.comparingInt((RegistryEntrySnapshot e) -> switch (e.type) {
                 case "HUMAN" -> 0;
                 case "BOT" -> 1;
@@ -197,6 +214,16 @@ public final class StatsScreen extends UiScreen {
             addDrawableChild(sortButton);
 
             deleteAllButton = null;
+            lookupAllButton = UiButton.secondary(panelX + 8, panelY + panelH - 114, SIDEBAR_W - 16, 22,
+                lookupRunning ? "Cancelar" : "Consultar online", b -> {
+                    if (lookupRunning) {
+                        ClientPlayNetworking.send(new StatsRegistryActionPayload("cancel_lookup_all", "", ""));
+                    } else {
+                        ClientPlayNetworking.send(new StatsRegistryActionPayload("lookup_all_online", "", ""));
+                    }
+                });
+            addDrawableChild(lookupAllButton);
+
             rescanButton = UiButton.secondary(panelX + 8, panelY + panelH - 88, SIDEBAR_W - 16, 22, "Re-escanear", b -> {
                 statusMessage = "Re-escaneando archivos…";
                 statusError = false;
@@ -215,9 +242,10 @@ public final class StatsScreen extends UiScreen {
             });
             healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
             addDrawableChild(healAnomaliesButton);
-        } else {
+        } else if (activeTab == Tab.UNEXPECTED) {
             searchField = null;
             sortButton = null;
+            lookupAllButton = null;
             healAnomaliesButton = null;
             deleteAllButton = UiButton.danger(panelX + panelW - 216, contentTop + 8, 98, 20, "Borrar todo", b -> {
                 if (!hasShiftDown() || unexpectedFiles.isEmpty()) return;
@@ -234,6 +262,13 @@ public final class StatsScreen extends UiScreen {
                 ClientPlayNetworking.send(new StatsRegistryActionPayload("rescan", "", ""));
             });
             addDrawableChild(rescanButton);
+        } else {
+            searchField = null;
+            sortButton = null;
+            lookupAllButton = null;
+            healAnomaliesButton = null;
+            deleteAllButton = null;
+            rescanButton = null;
         }
     }
 
@@ -261,6 +296,8 @@ public final class StatsScreen extends UiScreen {
             case UNKNOWN -> "UNKNOWN".equals(e.type);
             case ONLINE -> e.uuidVersion == 4;
             case OFFLINE -> e.uuidVersion == 3;
+            case NAMED -> e.name != null && !e.name.isEmpty();
+            case UNNAMED -> e.name == null || e.name.isEmpty();
             case ANOMALY -> e.anomaly;
         };
     }
@@ -275,7 +312,19 @@ public final class StatsScreen extends UiScreen {
                 case UNKNOWN -> { if ("UNKNOWN".equals(e.type)) count++; }
                 case ONLINE -> { if (e.uuidVersion == 4) count++; }
                 case OFFLINE -> { if (e.uuidVersion == 3) count++; }
+                case NAMED -> { if (e.name != null && !e.name.isEmpty()) count++; }
+                case UNNAMED -> { if (e.name == null || e.name.isEmpty()) count++; }
                 case ANOMALY -> { if (e.anomaly) count++; }
+            }
+        }
+        return count;
+    }
+
+    private int countUnnamedOnline() {
+        int count = 0;
+        for (RegistryEntrySnapshot e : entries) {
+            if (e.uuidVersion == 4 && (e.name == null || e.name.isEmpty())) {
+                count++;
             }
         }
         return count;
@@ -286,7 +335,7 @@ public final class StatsScreen extends UiScreen {
     }
 
     private int listTop() {
-        return tabBarY() + TAB_BAR_H + 34;
+        return activeTab == Tab.GUIDE ? (tabBarY() + TAB_BAR_H + 8) : (tabBarY() + TAB_BAR_H + 34);
     }
 
     private int listBottom() {
@@ -319,7 +368,9 @@ public final class StatsScreen extends UiScreen {
 
         drawTabBar(c, mx, my);
 
-        if (activeTab == Tab.REGISTRY) {
+        if (activeTab == Tab.GUIDE) {
+            renderGuideTab(c, delta);
+        } else if (activeTab == Tab.REGISTRY) {
             renderRegistryTab(c, mx, my, delta);
         } else {
             renderUnexpectedTab(c, mx, my, delta);
@@ -328,16 +379,46 @@ public final class StatsScreen extends UiScreen {
         // Footer
         int footerY = panelY + panelH - 36;
         AeternumTheme.drawFooter(c, panelX, footerY, panelW, panelY + panelH);
-        if (!statusMessage.isEmpty()) {
+        if (lookupRunning && lookupTotal > 0) {
+            int barW = Math.min(220, Math.max(120, panelW / 3));
+            int barX = panelX + panelW - barW - 14;
+            int barY = footerY + 20;
+            float ratio = (float) lookupDone / Math.max(1, lookupTotal);
+            int pct = Math.round(ratio * 100f);
+            String progTxt = "Mojang: " + lookupDone + "/" + lookupTotal + " (" + pct + "%) \u00B7 " + lookupResolved + " ok";
+            c.drawText(textRenderer, progTxt, barX, footerY + 8, AeternumTheme.TEXT_PRIMARY, false);
+            AeternumTheme.drawProgressBar(c, barX, barY, barW, 6, ratio, AeternumTheme.ACCENT_GOLD);
+
+            int textMaxW = Math.max(60, barX - panelX - 24);
+            if (!statusMessage.isEmpty()) {
+                int col = statusError ? 0xFFE56B6B : AeternumTheme.TEXT_SECONDARY;
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, statusMessage, textMaxW), panelX + 14, footerY + 14, col, false);
+            } else {
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, "Consultando perfiles en cola...", textMaxW), panelX + 14, footerY + 14, AeternumTheme.TEXT_MUTED, false);
+            }
+        } else if (!statusMessage.isEmpty()) {
             int col = statusError ? 0xFFE56B6B : AeternumTheme.TEXT_SECONDARY;
             c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, statusMessage, panelW - 28), panelX + 14, footerY + 14, col, false);
         } else {
-            String hint = activeTab == Tab.REGISTRY
-                ? "Click en el tipo para rotar: UNKNOWN \u2192 HUMAN \u2192 BOT"
-                : "Archivos fuera de formato <uuid>.dat / <uuid>.json";
+            String hint = switch (activeTab) {
+                case GUIDE -> "Guía rápida de administración para /stats";
+                case REGISTRY -> "Click en el tipo para rotar: UNKNOWN \u2192 HUMAN \u2192 BOT";
+                case UNEXPECTED -> "Archivos fuera de formato <uuid>.dat / <uuid>.json";
+            };
             c.drawText(textRenderer, hint, panelX + 14, footerY + 14, AeternumTheme.TEXT_MUTED, false);
         }
 
+        if (lookupAllButton != null) {
+            if (lookupRunning) {
+                lookupAllButton.setLabel("Cancelar");
+                lookupAllButton.setVariant(UiButton.Variant.DANGER);
+                lookupAllButton.active = true;
+            } else {
+                lookupAllButton.setLabel("Consultar online");
+                lookupAllButton.setVariant(UiButton.Variant.SECONDARY);
+                lookupAllButton.active = countUnnamedOnline() > 0;
+            }
+        }
         if (healAnomaliesButton != null) {
             healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
         }
@@ -353,13 +434,19 @@ public final class StatsScreen extends UiScreen {
         if (isCloseButtonHit(mx, my)) {
             c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
         } else if (sortButton != null && sortButton.isHovered()) {
-            c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
+            c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Sin nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
+        } else if (lookupAllButton != null && lookupAllButton.isHovered()) {
+            String tip = lookupRunning
+                ? "Cancelar consulta masiva en curso"
+                : ("Consultar en cola los " + countUnnamedOnline() + " UUIDs online sin nombre");
+            c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
         } else if (healAnomaliesButton != null && healAnomaliesButton.isHovered()) {
             List<Text> tip = List.of(
-                Text.literal("Subsanar anomalías (jugadores desconectados):"),
+                Text.literal("Subsanar anomalías:"),
                 Text.literal("\u2022 Restaura .dat_old si falta .dat"),
                 Text.literal("\u2022 Crea stats y advancements vacíos si existe .dat"),
-                Text.literal("\u2022 No inventa inventarios ni .dat desde cero")
+                Text.literal("\u2022 No inventa inventarios ni .dat desde cero"),
+                Text.literal("\u2022 Omite jugadores o bots conectados actualmente")
             );
             c.drawTooltip(textRenderer, tip, mx, my);
         } else if (deleteAllButton != null && deleteAllButton.isHovered()) {
@@ -369,10 +456,11 @@ public final class StatsScreen extends UiScreen {
             c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
         } else if (activeTab == Tab.REGISTRY && hoveredRowHealUuid != null) {
             List<Text> tip = List.of(
-                Text.literal("Subsanar esta UUID (jugadores desconectados):"),
+                Text.literal("Subsanar esta UUID:"),
                 Text.literal("\u2022 Restaura .dat_old si falta .dat"),
                 Text.literal("\u2022 Crea stats y advancements vacíos si existe .dat"),
-                Text.literal("\u2022 No inventa inventarios ni .dat desde cero")
+                Text.literal("\u2022 No inventa inventarios ni .dat desde cero"),
+                Text.literal("\u2022 No aplica si el jugador o bot está conectado")
             );
             c.drawTooltip(textRenderer, tip, mx, my);
         } else if (activeTab == Tab.REGISTRY && hoveredRowDeleteUuid != null) {
@@ -396,6 +484,7 @@ public final class StatsScreen extends UiScreen {
         c.fill(panelX + 1, ty + TAB_BAR_H - 1, panelX + panelW - 1, ty + TAB_BAR_H, AeternumTheme.BORDER_SUBTLE);
 
         int x = panelX + 10;
+        x += drawTabButton(c, x, ty + 3, "Guía", activeTab == Tab.GUIDE, false, mx, my) + 6;
         x += drawTabButton(c, x, ty + 3, "Registro (" + entries.size() + ")", activeTab == Tab.REGISTRY, false, mx, my) + 6;
         String unexpLabel = "Archivos raros (" + unexpectedFiles.size() + ")";
         drawTabButton(c, x, ty + 3, unexpLabel, activeTab == Tab.UNEXPECTED, !unexpectedFiles.isEmpty(), mx, my);
@@ -611,6 +700,134 @@ public final class StatsScreen extends UiScreen {
         }
     }
 
+    private record GuideBadge(String text, int bg, int fg) {
+    }
+
+    private record GuideSection(String title, List<GuideBadge> badges, List<String> lines) {
+    }
+
+    private static final List<GuideSection> GUIDE_SECTIONS = List.of(
+        new GuideSection(
+            "1. Por qué cada jugador tiene 3 archivos (y qué pasa si falta alguno)",
+            List.of(),
+            List.of(
+                "Cuando un jugador o bot se guarda en el mundo (al desconectarse o al guardar el servidor), Minecraft divide su estado en 3 archivos distintos identificados por su UUID:",
+                "\u2022 playerdata/<uuid>.dat: es el personaje en el mundo (inventario, Ender Chest, posición, dimensión, XP y modo de juego). A partir del 2.\u00BA guardado crea además <uuid>.dat_old como respaldo automático del guardado anterior.",
+                "\u2022 stats/<uuid>.json: sus estadísticas (bloques minados, tiempo jugado, muertes, crafteos, etc.).",
+                "\u2022 advancements/<uuid>.json: su progreso de logros y recetas.",
+                "¿Por qué importa? Porque Minecraft escribe los 3 archivos juntos en cada guardado normal. Si en el disco falta alguno de los 3, significa que hubo un guardado interrumpido, un borrado parcial o restos huérfanos: por eso aparece marcado como anomalía. (Excepción normal: alguien que entró por primera vez y sigue conectado antes del primer guardado.)"
+            )
+        ),
+        new GuideSection(
+            "2. Por qué hay UUIDs ONLINE y OFFLINE en un servidor online",
+            List.of(
+                new GuideBadge("ONLINE", 0xFF1A2A22, 0xFF8BE0B2),
+                new GuideBadge("OFFLINE", 0xFF24242D, 0xFFB8B8C8)
+            ),
+            List.of(
+                "Aunque el servidor esté en online-mode=true, verás dos tipos de UUID en las carpetas:",
+                "\u2022 ONLINE (UUID v4): es la UUID oficial que Mojang asigna a cada cuenta premium. Aunque el jugador cambie de nick, su UUID v4 nunca cambia y sus datos siguen siendo los mismos.",
+                "\u2022 OFFLINE (UUID v3): se calcula matemáticamente a partir del nombre (OfflinePlayer:<nick>). En este servidor solo aparecen por dos razones:",
+                "  1) Bots de Carpet (/player <nick> spawn): si el nick del bot no existe en Mojang, Carpet le crea una UUID v3. (En cambio, si el nick sí existe en Mojang, Carpet usa su UUID v4 real porque el servidor está en modo online.)",
+                "  2) Jugadores antiguos del servidor: cuentas de épocas previas en modo offline/Waterfall. Muchas de esas personas hoy tienen cuenta Mojang v4 y sus datos podrían migrarse; otras nunca tuvieron cuenta premium (HTTP 404) y no tienen UUID v4 a la que mudarse."
+            )
+        ),
+        new GuideSection(
+            "3. Cómo clasifica el Registro",
+            List.of(
+                new GuideBadge("HUMAN", 0xFF1A281E, 0xFF9DF0B4),
+                new GuideBadge("BOT", 0xFF18222C, 0xFF9CD0FF),
+                new GuideBadge("UNKNOWN", 0xFF1A1A20, AeternumTheme.TEXT_SECONDARY)
+            ),
+            List.of(
+                "El registro usa la UUID como identidad única (no el nombre), porque dos UUIDs distintas pueden compartir nick sin ser el mismo archivo:",
+                "\u2022 UNKNOWN: estado inicial de cualquier archivo viejo que ya estaba en disco antes de activar este registro. Se queda así hasta que entre en una sesión o un admin lo clasifique manualmente.",
+                "\u2022 HUMAN: se asigna automáticamente cuando entra una persona real. Un bot nunca puede degradar un HUMAN a BOT, aunque alguien invoque un bot con el nombre de un jugador real.",
+                "\u2022 BOT: se asigna cuando entra un bot de Carpet, siempre que la UUID fuera nueva o estuviera en UNKNOWN. Si más adelante entra una persona real con esa misma UUID, se promoverá a HUMAN."
+            )
+        ),
+        new GuideSection(
+            "4. Reglas de seguridad antes de subsanar o borrar",
+            List.of(),
+            List.of(
+                "\u2022 Jugadores o bots conectados: Minecraft mantiene el inventario, las stats y los logros en RAM mientras están en el servidor y sobrescribiría el disco al guardar; por eso la interfaz bloquea u omite automáticamente cualquier borrado o subsanación sobre alguien conectado.",
+                "\u2022 Qué hace Subsanar (y qué NO hace): si falta .dat pero existe .dat_old, restaura el respaldo; si existe .dat, crea stats y advancements vacíos para quitar la anomalía. Nunca inventa inventarios ni crea un .dat desde cero (si falta .dat sin .dat_old, lo omite para que tú decidas si borrar esos restos).",
+                "\u2022 Qué hace Borrar (Shift + 2 clics): elimina la entrada del registro y borra sus archivos en disco (.dat, .dat_old, stats, advancements).",
+                "\u2022 Archivos raros: cualquier archivo o subcarpeta dentro de playerdata/, stats/ o advancements/ que no siga el formato <uuid>.dat, <uuid>.dat_old o <uuid>.json. Puedes limpiarlos uno a uno o con Shift + Borrar todo."
+            )
+        )
+    );
+
+    private void renderGuideTab(DrawContext c, float delta) {
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = Math.max(1, lBottom - lTop);
+        int cardX = panelX + 12;
+        int cardW = panelW - 28;
+        int wrapW = Math.max(120, cardW - 24);
+
+        int totalH = measureGuideContentHeight(wrapW);
+        int maxL = Math.max(0, totalH - viewH);
+        targetListScroll = Math.max(0, Math.min(targetListScroll, maxL));
+        listScroll += (targetListScroll - listScroll) * Math.min(1.0, delta * 0.45 + 0.25);
+        listScroll = Math.max(0, Math.min(listScroll, maxL));
+
+        c.enableScissor(panelX + 4, lTop, panelX + panelW - 8, lBottom);
+        int curY = lTop - (int) Math.round(listScroll);
+        for (GuideSection section : GUIDE_SECTIONS) {
+            int cardH = measureGuideCardHeight(section, wrapW);
+            if (curY + cardH >= lTop && curY <= lBottom) {
+                AeternumTheme.drawCard(c, cardX, curY, cardW, cardH, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
+                c.fill(cardX + 1, curY + 1, cardX + 3, curY + cardH - 1, AeternumTheme.ACCENT_GOLD);
+
+                int titleX = cardX + 12;
+                c.drawTextWithShadow(textRenderer, section.title, titleX, curY + 8, AeternumTheme.TEXT_PRIMARY);
+                int badgeX = titleX + textRenderer.getWidth(section.title) + 8;
+                for (GuideBadge badge : section.badges) {
+                    int bw = textRenderer.getWidth(badge.text) + 10;
+                    if (badgeX + bw <= cardX + cardW - 8) {
+                        AeternumTheme.drawBadge(c, textRenderer, badgeX, curY + 6, badge.text, badge.bg, badge.fg);
+                        badgeX += bw + 4;
+                    }
+                }
+
+                int lineY = curY + 24;
+                for (String para : section.lines) {
+                    for (var ordered : textRenderer.wrapLines(Text.literal(para), wrapW)) {
+                        c.drawText(textRenderer, ordered, cardX + 12, lineY, AeternumTheme.TEXT_SECONDARY, false);
+                        lineY += 10;
+                    }
+                    lineY += 4;
+                }
+            }
+            curY += cardH + 6;
+        }
+        c.disableScissor();
+
+        if (maxL > 0) {
+            AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom, totalH, viewH, listScroll, draggingScrollbar);
+        }
+    }
+
+    private int measureGuideCardHeight(GuideSection section, int wrapW) {
+        int h = 24;
+        for (String para : section.lines) {
+            h += textRenderer.wrapLines(Text.literal(para), wrapW).size() * 10 + 4;
+        }
+        return h + 6;
+    }
+
+    private int measureGuideContentHeight(int wrapW) {
+        int total = 0;
+        for (int i = 0; i < GUIDE_SECTIONS.size(); i++) {
+            total += measureGuideCardHeight(GUIDE_SECTIONS.get(i), wrapW);
+            if (i + 1 < GUIDE_SECTIONS.size()) {
+                total += 6;
+            }
+        }
+        return total;
+    }
+
     private void renderUnexpectedTab(DrawContext c, int mx, int my, float delta) {
         int topY = tabBarY() + TAB_BAR_H;
         c.drawText(textRenderer,
@@ -690,8 +907,18 @@ public final class StatsScreen extends UiScreen {
             int ty = tabBarY();
             int tabY = ty + 3;
             int tabX = panelX + 10;
+            int guideW = textRenderer.getWidth("Guía") + 18;
+            if (mx >= tabX && mx < tabX + guideW && my >= tabY && my < tabY + 18) {
+                if (activeTab != Tab.GUIDE) {
+                    activeTab = Tab.GUIDE;
+                    listScroll = targetListScroll = 0;
+                    init();
+                }
+                return true;
+            }
+            int regX = tabX + guideW + 6;
             int regW = textRenderer.getWidth("Registro (" + entries.size() + ")") + 18;
-            if (mx >= tabX && mx < tabX + regW && my >= tabY && my < tabY + 18) {
+            if (mx >= regX && mx < regX + regW && my >= tabY && my < tabY + 18) {
                 if (activeTab != Tab.REGISTRY) {
                     activeTab = Tab.REGISTRY;
                     listScroll = targetListScroll = 0;
@@ -699,7 +926,7 @@ public final class StatsScreen extends UiScreen {
                 }
                 return true;
             }
-            int unexpX = tabX + regW + 6;
+            int unexpX = regX + regW + 6;
             int unexpW = textRenderer.getWidth("Archivos raros (" + unexpectedFiles.size() + ")") + 18;
             if (mx >= unexpX && mx < unexpX + unexpW && my >= tabY && my < tabY + 18) {
                 if (activeTab != Tab.UNEXPECTED) {
@@ -831,14 +1058,25 @@ public final class StatsScreen extends UiScreen {
         return super.mouseReleased(mx, my, button);
     }
 
+    private int maxActiveScrollPx() {
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = Math.max(1, lBottom - lTop);
+        if (activeTab == Tab.GUIDE) {
+            int wrapW = Math.max(120, (panelW - 28) - 24);
+            return Math.max(0, measureGuideContentHeight(wrapW) - viewH);
+        }
+        int count = activeTab == Tab.REGISTRY ? filteredEntries().size() : unexpectedFiles.size();
+        int stride = activeTab == Tab.REGISTRY ? ROW_STRIDE : UNEXPECTED_ROW_H;
+        return maxListScrollPx(count, stride);
+    }
+
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
         if (draggingScrollbar) {
             int lTop = listTop();
             int lBottom = listBottom();
-            int count = activeTab == Tab.REGISTRY ? filteredEntries().size() : unexpectedFiles.size();
-            int stride = activeTab == Tab.REGISTRY ? ROW_STRIDE : UNEXPECTED_ROW_H;
-            int maxL = maxListScrollPx(count, stride);
+            int maxL = maxActiveScrollPx();
             double frac = Math.max(0.0, Math.min(1.0, (my - lTop) / Math.max(1.0, lBottom - lTop)));
             targetListScroll = listScroll = frac * maxL;
             return true;
@@ -849,12 +1087,18 @@ public final class StatsScreen extends UiScreen {
     @Override
     public boolean mouseScrolled(double mx, double my, double hAmt, double vAmt) {
         if (my >= listTop() && my < listBottom()) {
-            int count = activeTab == Tab.REGISTRY ? filteredEntries().size() : unexpectedFiles.size();
-            int stride = activeTab == Tab.REGISTRY ? ROW_STRIDE : UNEXPECTED_ROW_H;
-            int maxL = maxListScrollPx(count, stride);
+            int maxL = maxActiveScrollPx();
             targetListScroll = Math.max(0.0, Math.min(maxL, targetListScroll - vAmt * 26.0));
             return true;
         }
         return super.mouseScrolled(mx, my, hAmt, vAmt);
+    }
+
+    @Override
+    public void removed() {
+        if (client != null && client.getNetworkHandler() != null) {
+            ClientPlayNetworking.send(new StatsRegistryActionPayload("close_screen", "", ""));
+        }
+        super.removed();
     }
 }

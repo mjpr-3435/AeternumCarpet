@@ -128,6 +128,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(CommandRunner::tick);
 		ServerTickEvents.END_SERVER_TICK.register(FakePlayerReloadManager::tick);
 		ServerTickEvents.END_SERVER_TICK.register(PlayerSitManager::tickServer);
+		ServerTickEvents.END_SERVER_TICK.register(StatsNetworking::tick);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

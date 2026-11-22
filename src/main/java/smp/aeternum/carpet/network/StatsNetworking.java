@@ -7,8 +7,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -30,6 +32,15 @@ public final class StatsNetworking {
         .connectTimeout(Duration.ofSeconds(5))
         .build();
     private static final Set<String> IN_FLIGHT_LOOKUPS = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> ACTIVE_VIEWERS = ConcurrentHashMap.newKeySet();
+
+    private static final Deque<String> BATCH_QUEUE = new ArrayDeque<>();
+    private static boolean batchRunning;
+    private static boolean batchInFlight;
+    private static int batchCooldownTicks;
+    private static int batchDone;
+    private static int batchTotal;
+    private static int batchResolved;
 
     private StatsNetworking() {
     }
@@ -51,8 +62,26 @@ public final class StatsNetworking {
         if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2)) {
             return;
         }
+        if (openScreen) {
+            ACTIVE_VIEWERS.add(player.getUuid());
+        }
         StatsSnapshot snapshot = buildSnapshot();
         ServerPlayNetworking.send(player, new StatsDataPayload(GSON.toJson(snapshot), openScreen, status, error));
+    }
+
+    private static void broadcastProgress(MinecraftServer server, String status, boolean error) {
+        if (server == null || ACTIVE_VIEWERS.isEmpty()) {
+            return;
+        }
+        String json = GSON.toJson(buildSnapshot());
+        for (UUID viewerId : List.copyOf(ACTIVE_VIEWERS)) {
+            ServerPlayerEntity viewer = server.getPlayerManager().getPlayer(viewerId);
+            if (viewer == null || viewer.isDisconnected() || !AeternumCarpetSettings.commandStats || !viewer.hasPermissionLevel(2)) {
+                ACTIVE_VIEWERS.remove(viewerId);
+                continue;
+            }
+            ServerPlayNetworking.send(viewer, new StatsDataPayload(json, false, status, error));
+        }
     }
 
     private static StatsSnapshot buildSnapshot() {
@@ -79,6 +108,10 @@ public final class StatsNetworking {
         );
         snapshot.entries = list;
         snapshot.unexpectedFiles = PlayerRegistryStore.getUnexpectedFilesSnapshot();
+        snapshot.lookupRunning = batchRunning;
+        snapshot.lookupDone = batchDone;
+        snapshot.lookupTotal = batchTotal;
+        snapshot.lookupResolved = batchResolved;
         return snapshot;
     }
 
@@ -94,11 +127,15 @@ public final class StatsNetworking {
         if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2)) {
             return;
         }
+        ACTIVE_VIEWERS.add(player.getUuid());
         switch (payload.action()) {
+            case "close_screen" -> ACTIVE_VIEWERS.remove(player.getUuid());
             case "rescan" -> {
                 PlayerRegistryStore.scanFull(server);
                 sendSnapshot(player, false, "Escaneo completado.", false);
             }
+            case "lookup_all_online" -> startBatchLookup(server, player);
+            case "cancel_lookup_all" -> cancelBatchLookup(server, player);
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -213,9 +250,111 @@ public final class StatsNetworking {
             }));
     }
 
+    public static void tick(MinecraftServer server) {
+        if (!batchRunning || batchInFlight) {
+            return;
+        }
+        if (batchCooldownTicks > 0) {
+            batchCooldownTicks--;
+            return;
+        }
+        String nextUuid = BATCH_QUEUE.pollFirst();
+        if (nextUuid == null) {
+            batchRunning = false;
+            broadcastProgress(server, "Consulta masiva completada: " + batchResolved + "/" + batchTotal + " nombres resueltos.", false);
+            return;
+        }
+
+        batchInFlight = true;
+        String compactUuid = nextUuid.replace("-", "");
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://sessionserver.mojang.com/session/minecraft/profile/" + compactUuid))
+            .timeout(Duration.ofSeconds(5))
+            .GET()
+            .build();
+
+        HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+            .whenComplete((response, throwable) -> server.execute(() -> {
+                batchInFlight = false;
+                if (!batchRunning) {
+                    return;
+                }
+                if (throwable != null) {
+                    batchDone++;
+                    batchCooldownTicks = 10;
+                    broadcastProgress(server, "", false);
+                    return;
+                }
+                int code = response.statusCode();
+                if (code == 429) {
+                    BATCH_QUEUE.addFirst(nextUuid);
+                    batchCooldownTicks = 100;
+                    broadcastProgress(server, "Mojang rate-limit (429), pausando 5s…", false);
+                    return;
+                }
+                if (code == 200) {
+                    try {
+                        JsonObject json = GSON.fromJson(response.body(), JsonObject.class);
+                        String name = json != null && json.has("name") ? json.get("name").getAsString() : "";
+                        if (name != null && !name.isBlank()) {
+                            PlayerRegistryStore.setName(nextUuid, name);
+                            batchResolved++;
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                batchDone++;
+                batchCooldownTicks = 6;
+                if (BATCH_QUEUE.isEmpty()) {
+                    batchRunning = false;
+                    broadcastProgress(server, "Consulta masiva completada: " + batchResolved + "/" + batchTotal + " nombres resueltos.", false);
+                } else {
+                    broadcastProgress(server, "", false);
+                }
+            }));
+    }
+
+    private static void startBatchLookup(MinecraftServer server, ServerPlayerEntity requester) {
+        if (batchRunning) {
+            sendSnapshot(requester, false, "Ya hay una consulta masiva en curso.", false);
+            return;
+        }
+        BATCH_QUEUE.clear();
+        for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
+            if (parseUuidVersion(entry.uuid) == 4 && (entry.name == null || entry.name.isBlank())) {
+                BATCH_QUEUE.addLast(entry.uuid);
+            }
+        }
+        if (BATCH_QUEUE.isEmpty()) {
+            sendSnapshot(requester, false, "No hay UUIDs online sin nombre.", false);
+            return;
+        }
+        batchTotal = BATCH_QUEUE.size();
+        batchDone = 0;
+        batchResolved = 0;
+        batchCooldownTicks = 0;
+        batchInFlight = false;
+        batchRunning = true;
+        broadcastProgress(server, "Consultando Mojang en cola (" + batchTotal + " UUIDs)…", false);
+    }
+
+    private static void cancelBatchLookup(MinecraftServer server, ServerPlayerEntity requester) {
+        if (!batchRunning) {
+            return;
+        }
+        BATCH_QUEUE.clear();
+        batchRunning = false;
+        batchInFlight = false;
+        broadcastProgress(server, "Consulta masiva cancelada (" + batchDone + "/" + batchTotal + ", " + batchResolved + " resueltos).", false);
+    }
+
     public static final class StatsSnapshot {
         public List<RegistryEntrySnapshot> entries = List.of();
         public List<String> unexpectedFiles = List.of();
+        public boolean lookupRunning;
+        public int lookupDone;
+        public int lookupTotal;
+        public int lookupResolved;
     }
 
     public static final class RegistryEntrySnapshot {
