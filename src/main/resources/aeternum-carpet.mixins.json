@@ -22,7 +22,8 @@
 		"AbstractFireBlockMixin",
 		"ArmorStandEntityAccessor",
 		"NeighborUpdaterMixin",
-		"MinecraftServerMixin"
+		"MinecraftServerMixin",
+		"PlayerManagerMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",

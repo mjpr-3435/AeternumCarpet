@@ -103,4 +103,7 @@ public class AeternumCarpetSettings {
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandViewInventory = false;
 
+    @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
+    public static boolean commandStats = false;
+
 }

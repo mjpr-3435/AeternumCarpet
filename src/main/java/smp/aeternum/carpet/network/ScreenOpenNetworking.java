@@ -35,6 +35,7 @@ public final class ScreenOpenNetworking {
                 case "exploration" -> { if (AeternumCarpetSettings.explorationManager) ExplorationMapNetworking.open(player); }
                 case "actions" -> { if (AeternumCarpetSettings.commandActions) CommandPacksNetworking.sendSnapshot(player, true); }
                 case "rules" -> { if (player.hasPermissionLevel(2)) CarpetRulesNetworking.sendSnapshot(player, true); }
+                case "stats" -> { if (AeternumCarpetSettings.commandStats && player.hasPermissionLevel(2)) StatsNetworking.sendSnapshot(player, true); }
             }
         }));
         ServerPlayNetworking.registerGlobalReceiver(MotdTasksSavePayload.ID, (payload, context) -> context.server().execute(() -> {
@@ -92,6 +93,7 @@ public final class ScreenOpenNetworking {
         state.actions = AeternumCarpetSettings.commandActions;
         state.perimeters = AeternumCarpetSettings.commandPerimeters;
         state.exploration = AeternumCarpetSettings.explorationManager;
+        state.stats = AeternumCarpetSettings.commandStats;
         ServerPlayNetworking.send(player, new DockStatePayload(GSON.toJson(state)));
     }
 
@@ -119,5 +121,6 @@ public final class ScreenOpenNetworking {
         public boolean actions;
         public boolean perimeters;
         public boolean exploration;
+        public boolean stats;
     }
 }

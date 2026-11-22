@@ -52,6 +52,7 @@ import smp.aeternum.carpet.network.ExplorationMapNetworking;
 import smp.aeternum.carpet.network.MaterialsNetworking;
 import smp.aeternum.carpet.network.ScreenOpenNetworking;
 import smp.aeternum.carpet.network.CarpetRulesNetworking;
+import smp.aeternum.carpet.network.StatsNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
 import smp.aeternum.carpet.command.RulesCommand;
@@ -61,8 +62,10 @@ import smp.aeternum.carpet.command.DimensionCommand;
 import smp.aeternum.carpet.command.CameraModeCommand;
 import smp.aeternum.carpet.command.HatCommand;
 import smp.aeternum.carpet.command.CarefulBreakCommand;
+import smp.aeternum.carpet.command.StatsCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
+import smp.aeternum.carpet.stats.PlayerRegistryStore;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.FakePlayerReloadManager;
@@ -84,6 +87,7 @@ public class AeternumCarpet implements ModInitializer {
 		MaterialsNetworking.registerPayloads();
 		ScreenOpenNetworking.registerPayloads();
 		CarpetRulesNetworking.registerPayloads();
+		StatsNetworking.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -103,6 +107,7 @@ public class AeternumCarpet implements ModInitializer {
 			CameraModeStore.load(server);
 			CarefulBreakStore.load(server);
 			FakePlayerReloadManager.load(server);
+			PlayerRegistryStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerLifecycleEvents.SERVER_STARTED.register(server ->
@@ -126,6 +131,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			PlayerRegistryStore.onPlayerJoin(server, handler.player);
 			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd);
 			PerimeterNetworking.sendHud(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake bot) FakePlayerReloadManager.onFakePlayerJoin(bot);
@@ -179,6 +185,7 @@ public class AeternumCarpet implements ModInitializer {
 			CarefulBreakCommand.register(dispatcher);
 			SitBehaviourCommand.register(dispatcher);
 			ViewInventoryCommand.register(dispatcher);
+			StatsCommand.register(dispatcher);
 		});
 	}
 

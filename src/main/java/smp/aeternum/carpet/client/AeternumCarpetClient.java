@@ -17,6 +17,7 @@ import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
 import smp.aeternum.carpet.network.CarpetRulesDataPayload;
+import smp.aeternum.carpet.network.StatsDataPayload;
 import smp.aeternum.carpet.network.DockStatePayload;
 import smp.aeternum.carpet.network.BotOpenPayload;
 import smp.aeternum.carpet.bot.BotOpenData;
@@ -96,6 +97,10 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(CarpetRulesDataPayload.ID, (payload, context) -> context.client().execute(() -> {
             if (context.client().currentScreen instanceof CarpetRulesScreen screen) screen.replaceData(payload.json(), payload.statusMessage(), payload.statusError());
             else if (payload.openScreen()) context.client().setScreen(new CarpetRulesScreen(payload.json()));
+        }));
+        ClientPlayNetworking.registerGlobalReceiver(StatsDataPayload.ID, (payload, context) -> context.client().execute(() -> {
+            if (context.client().currentScreen instanceof StatsScreen screen) screen.replaceData(payload.json(), payload.statusMessage(), payload.statusError());
+            else if (payload.openScreen()) context.client().setScreen(new StatsScreen(payload.json()));
         }));
         ClientPlayNetworking.registerGlobalReceiver(ProjectDownloadDataPayload.ID, (payload, context) -> context.client().execute(() ->
             LitematicaBridge.handleDownload(payload)
