@@ -125,6 +125,40 @@ public final class StatsNetworking {
                 int count = PlayerRegistryStore.deleteAllUnexpectedFiles(server);
                 sendSnapshot(player, false, "Eliminados " + count + " archivos raros.", false);
             }
+            case "heal_anomalies" -> {
+                PlayerRegistryStore.HealResult res = PlayerRegistryStore.healAllAnomalies(server);
+                StringBuilder msg = new StringBuilder();
+                msg.append("Subsanados: ").append(res.healed());
+                if (res.restoredDatOld() > 0) {
+                    msg.append(" (").append(res.restoredDatOld()).append(" desde .dat_old)");
+                }
+                if (res.skippedMissingDat() > 0) {
+                    msg.append("  ·  Sin .dat: ").append(res.skippedMissingDat());
+                }
+                if (res.skippedOnline() > 0) {
+                    msg.append("  ·  Online omitidos: ").append(res.skippedOnline());
+                }
+                sendSnapshot(player, false, msg.toString(), false);
+            }
+            case "heal_entry" -> {
+                switch (PlayerRegistryStore.healSingleAnomaly(server, payload.uuid())) {
+                    case HEALED -> sendSnapshot(player, false, "Anomalía subsanada: " + payload.uuid(), false);
+                    case RESTORED_DAT_OLD -> sendSnapshot(player, false, "Restaurado .dat_old y subsanado: " + payload.uuid(), false);
+                    case MISSING_DAT -> sendSnapshot(player, false, "No se puede subsanar: falta .dat (ni .dat_old).", true);
+                    case ONLINE -> sendSnapshot(player, false, "No se puede subsanar: el jugador/bot está conectado.", true);
+                    case NOT_ANOMALOUS -> sendSnapshot(player, false, "Esa entrada ya no tiene anomalías.", false);
+                    case NOT_FOUND -> sendSnapshot(player, false, "UUID no encontrada en el registro.", true);
+                    case IO_ERROR -> sendSnapshot(player, false, "Error de disco al subsanar.", true);
+                }
+            }
+            case "delete_entry" -> {
+                switch (PlayerRegistryStore.deleteEntryAndFiles(server, payload.uuid())) {
+                    case OK -> sendSnapshot(player, false, "Registro y archivos eliminados: " + payload.uuid(), false);
+                    case ONLINE -> sendSnapshot(player, false, "No se puede borrar: el jugador/bot está conectado.", true);
+                    case NOT_FOUND -> sendSnapshot(player, false, "UUID no encontrada en el registro.", true);
+                    case IO_ERROR -> sendSnapshot(player, false, "Error de disco al borrar archivos.", true);
+                }
+            }
         }
     }
 

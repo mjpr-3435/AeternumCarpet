@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.UserCache;
@@ -288,6 +289,170 @@ public final class PlayerRegistryStore {
 
     public static synchronized List<String> getUnexpectedFilesSnapshot() {
         return List.copyOf(unexpectedFiles);
+    }
+
+    public record HealResult(int healed, int restoredDatOld, int skippedMissingDat, int skippedOnline) {
+    }
+
+    public enum SingleHealStatus {
+        HEALED,
+        RESTORED_DAT_OLD,
+        MISSING_DAT,
+        ONLINE,
+        NOT_ANOMALOUS,
+        NOT_FOUND,
+        IO_ERROR
+    }
+
+    public enum DeleteResult {
+        OK,
+        NOT_FOUND,
+        ONLINE,
+        IO_ERROR
+    }
+
+    public static synchronized SingleHealStatus healSingleAnomaly(MinecraftServer server, String uuidStr) {
+        if (server == null || uuidStr == null) {
+            return SingleHealStatus.NOT_FOUND;
+        }
+        Entry entry = entries.get(uuidStr);
+        if (entry == null) {
+            return SingleHealStatus.NOT_FOUND;
+        }
+        if (!entry.hasAnomaly()) {
+            return SingleHealStatus.NOT_ANOMALOUS;
+        }
+        Path playerdataDir = server.getSavePath(WorldSavePath.PLAYERDATA);
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        Path advancementsDir = server.getSavePath(WorldSavePath.ADVANCEMENTS);
+        int dataVersion = SharedConstants.getGameVersion().dataVersion().id();
+
+        SingleHealStatus status = healEntryInternal(server, entry, playerdataDir, statsDir, advancementsDir, dataVersion);
+        if (status == SingleHealStatus.HEALED || status == SingleHealStatus.RESTORED_DAT_OLD) {
+            scanFull(server);
+        }
+        return status;
+    }
+
+    public static synchronized HealResult healAllAnomalies(MinecraftServer server) {
+        if (server == null) {
+            return new HealResult(0, 0, 0, 0);
+        }
+
+        Path playerdataDir = server.getSavePath(WorldSavePath.PLAYERDATA);
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        Path advancementsDir = server.getSavePath(WorldSavePath.ADVANCEMENTS);
+        int dataVersion = SharedConstants.getGameVersion().dataVersion().id();
+
+        int healed = 0;
+        int restoredDatOld = 0;
+        int skippedMissingDat = 0;
+        int skippedOnline = 0;
+
+        for (Entry entry : List.copyOf(entries.values())) {
+            if (!entry.hasAnomaly()) {
+                continue;
+            }
+            switch (healEntryInternal(server, entry, playerdataDir, statsDir, advancementsDir, dataVersion)) {
+                case RESTORED_DAT_OLD -> {
+                    restoredDatOld++;
+                    healed++;
+                }
+                case HEALED -> healed++;
+                case MISSING_DAT -> skippedMissingDat++;
+                case ONLINE -> skippedOnline++;
+                default -> { }
+            }
+        }
+
+        scanFull(server);
+        return new HealResult(healed, restoredDatOld, skippedMissingDat, skippedOnline);
+    }
+
+    private static SingleHealStatus healEntryInternal(
+        MinecraftServer server,
+        Entry entry,
+        Path playerdataDir,
+        Path statsDir,
+        Path advancementsDir,
+        int dataVersion
+    ) {
+        UUID uuid = tryParseCanonicalUuid(entry.uuid);
+        if (uuid == null) {
+            return SingleHealStatus.NOT_FOUND;
+        }
+        if (server.getPlayerManager().getPlayer(uuid) != null) {
+            return SingleHealStatus.ONLINE;
+        }
+
+        String key = uuid.toString();
+        Path datPath = playerdataDir.resolve(key + ".dat");
+        Path datOldPath = playerdataDir.resolve(key + ".dat_old");
+        Path statsPath = statsDir.resolve(key + ".json");
+        Path advPath = advancementsDir.resolve(key + ".json");
+
+        boolean restored = false;
+        boolean modified = false;
+        try {
+            if (Files.notExists(datPath) && Files.isRegularFile(datOldPath)) {
+                Files.createDirectories(playerdataDir);
+                Files.copy(datOldPath, datPath);
+                restored = true;
+                modified = true;
+            }
+            if (Files.notExists(datPath)) {
+                return SingleHealStatus.MISSING_DAT;
+            }
+            if (Files.notExists(statsPath)) {
+                Files.createDirectories(statsDir);
+                Files.writeString(statsPath, "{\"stats\":{},\"DataVersion\":" + dataVersion + "}");
+                modified = true;
+            }
+            if (Files.notExists(advPath)) {
+                Files.createDirectories(advancementsDir);
+                Files.writeString(advPath, "{\"DataVersion\":" + dataVersion + "}");
+                modified = true;
+            }
+            if (restored) {
+                return SingleHealStatus.RESTORED_DAT_OLD;
+            }
+            return modified ? SingleHealStatus.HEALED : SingleHealStatus.NOT_ANOMALOUS;
+        } catch (IOException exception) {
+            AeternumCarpet.LOGGER.error("Failed to heal anomalies for {}", key, exception);
+            return SingleHealStatus.IO_ERROR;
+        }
+    }
+
+    public static synchronized DeleteResult deleteEntryAndFiles(MinecraftServer server, String uuidStr) {
+        if (server == null || uuidStr == null) {
+            return DeleteResult.NOT_FOUND;
+        }
+        Entry existing = entries.get(uuidStr);
+        if (existing == null) {
+            return DeleteResult.NOT_FOUND;
+        }
+        UUID uuid = tryParseCanonicalUuid(uuidStr);
+        if (uuid != null && server.getPlayerManager().getPlayer(uuid) != null) {
+            return DeleteResult.ONLINE;
+        }
+
+        Path playerdataDir = server.getSavePath(WorldSavePath.PLAYERDATA);
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        Path advancementsDir = server.getSavePath(WorldSavePath.ADVANCEMENTS);
+
+        try {
+            Files.deleteIfExists(playerdataDir.resolve(uuidStr + ".dat"));
+            Files.deleteIfExists(playerdataDir.resolve(uuidStr + ".dat_old"));
+            Files.deleteIfExists(statsDir.resolve(uuidStr + ".json"));
+            Files.deleteIfExists(advancementsDir.resolve(uuidStr + ".json"));
+        } catch (IOException exception) {
+            AeternumCarpet.LOGGER.error("Failed to delete player files for {}", uuidStr, exception);
+            return DeleteResult.IO_ERROR;
+        }
+
+        entries.remove(uuidStr);
+        save();
+        return DeleteResult.OK;
     }
 
     public static synchronized boolean deleteUnexpectedFile(MinecraftServer server, String relativePath) {

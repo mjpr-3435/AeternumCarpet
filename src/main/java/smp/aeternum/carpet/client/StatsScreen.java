@@ -85,8 +85,13 @@ public final class StatsScreen extends UiScreen {
     private UiTextField searchField;
     private UiButton sortButton;
     private UiButton rescanButton;
+    private UiButton healAnomaliesButton;
     private UiButton deleteAllButton;
     private String hoveredUnexpectedDelete;
+    private String hoveredRowDeleteUuid;
+    private String hoveredRowHealUuid;
+    private String armedDeleteUuid;
+    private long armedDeleteUntilMs;
 
     public StatsScreen(String json) {
         super(Text.literal("Stats Admin"));
@@ -192,16 +197,28 @@ public final class StatsScreen extends UiScreen {
             addDrawableChild(sortButton);
 
             deleteAllButton = null;
-            rescanButton = UiButton.secondary(panelX + 8, panelY + panelH - 64, SIDEBAR_W - 16, 22, "Re-escanear", b -> {
+            rescanButton = UiButton.secondary(panelX + 8, panelY + panelH - 88, SIDEBAR_W - 16, 22, "Re-escanear", b -> {
                 statusMessage = "Re-escaneando archivos…";
                 statusError = false;
+                armedDeleteUuid = null;
                 recomputeOrderOnNextSnapshot = true;
                 ClientPlayNetworking.send(new StatsRegistryActionPayload("rescan", "", ""));
             });
             addDrawableChild(rescanButton);
+
+            healAnomaliesButton = UiButton.primary(panelX + 8, panelY + panelH - 62, SIDEBAR_W - 16, 22, "Subsanar todo", b -> {
+                if (countFor(Filter.ANOMALY) <= 0) return;
+                statusMessage = "Subsanando anomalías…";
+                statusError = false;
+                armedDeleteUuid = null;
+                ClientPlayNetworking.send(new StatsRegistryActionPayload("heal_anomalies", "", ""));
+            });
+            healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
+            addDrawableChild(healAnomaliesButton);
         } else {
             searchField = null;
             sortButton = null;
+            healAnomaliesButton = null;
             deleteAllButton = UiButton.danger(panelX + panelW - 216, contentTop + 8, 98, 20, "Borrar todo", b -> {
                 if (!hasShiftDown() || unexpectedFiles.isEmpty()) return;
                 statusMessage = "Borrando todos los archivos raros…";
@@ -285,6 +302,11 @@ public final class StatsScreen extends UiScreen {
     @Override
     public void render(DrawContext c, int mx, int my, float delta) {
         hoveredUnexpectedDelete = null;
+        hoveredRowDeleteUuid = null;
+        hoveredRowHealUuid = null;
+        if (armedDeleteUuid != null && System.currentTimeMillis() > armedDeleteUntilMs) {
+            armedDeleteUuid = null;
+        }
         renderBackground(c, mx, my, delta);
 
         long anomalyCount = entries.stream().filter(e -> e.anomaly).count();
@@ -316,6 +338,9 @@ public final class StatsScreen extends UiScreen {
             c.drawText(textRenderer, hint, panelX + 14, footerY + 14, AeternumTheme.TEXT_MUTED, false);
         }
 
+        if (healAnomaliesButton != null) {
+            healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
+        }
         if (deleteAllButton != null) {
             deleteAllButton.active = !unexpectedFiles.isEmpty() && hasShiftDown();
         }
@@ -329,10 +354,36 @@ public final class StatsScreen extends UiScreen {
             c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
         } else if (sortButton != null && sortButton.isHovered()) {
             c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
+        } else if (healAnomaliesButton != null && healAnomaliesButton.isHovered()) {
+            List<Text> tip = List.of(
+                Text.literal("Subsanar anomalías (jugadores desconectados):"),
+                Text.literal("\u2022 Restaura .dat_old si falta .dat"),
+                Text.literal("\u2022 Crea stats y advancements vacíos si existe .dat"),
+                Text.literal("\u2022 No inventa inventarios ni .dat desde cero")
+            );
+            c.drawTooltip(textRenderer, tip, mx, my);
         } else if (deleteAllButton != null && deleteAllButton.isHovered()) {
             String tip = unexpectedFiles.isEmpty()
                 ? "No hay archivos raros"
                 : (hasShiftDown() ? "Clic para borrar todos los archivos raros" : "Mantén Shift para habilitar Borrar todo");
+            c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
+        } else if (activeTab == Tab.REGISTRY && hoveredRowHealUuid != null) {
+            List<Text> tip = List.of(
+                Text.literal("Subsanar esta UUID (jugadores desconectados):"),
+                Text.literal("\u2022 Restaura .dat_old si falta .dat"),
+                Text.literal("\u2022 Crea stats y advancements vacíos si existe .dat"),
+                Text.literal("\u2022 No inventa inventarios ni .dat desde cero")
+            );
+            c.drawTooltip(textRenderer, tip, mx, my);
+        } else if (activeTab == Tab.REGISTRY && hoveredRowDeleteUuid != null) {
+            String tip;
+            if (!hasShiftDown()) {
+                tip = "Mantén Shift para borrar registro y sus archivos";
+            } else if (hoveredRowDeleteUuid.equals(armedDeleteUuid)) {
+                tip = "Clic de nuevo con Shift para BORRAR entrada y archivos";
+            } else {
+                tip = "Shift + Clic para armar borrado";
+            }
             c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
         } else if (activeTab == Tab.UNEXPECTED && hoveredUnexpectedDelete != null) {
             c.drawTooltip(textRenderer, Text.literal("Borrar " + hoveredUnexpectedDelete), mx, my);
@@ -426,15 +477,36 @@ public final class StatsScreen extends UiScreen {
             AeternumTheme.drawCard(c, cardX, cy, cardW, CARD_H, bg, border);
 
             // Right-side controls at title level
+            int delW = 18;
+            int delH = 18;
+            int delX = cardX + cardW - delW - 6;
             int rotW = 68;
             int rotH = 18;
-            int rotX = cardX + cardW - rotW - 8;
+            int rotX = delX - rotW - 4;
             int rotY = cy + 5;
+
+            boolean showHeal = item.anomaly;
+            int healW = 54;
+            int healX = rotX - healW - 4;
+            int leftOfHeal = showHeal ? healX : rotX;
 
             boolean showLookup = item.uuidVersion == 4 && (item.name == null || item.name.isEmpty());
             int lookW = 66;
-            int lookX = rotX - lookW - 6;
-            int controlsLeftX = showLookup ? lookX : rotX;
+            int lookX = leftOfHeal - lookW - 4;
+            int controlsLeftX = showLookup ? lookX : leftOfHeal;
+
+            // Delete entry button (Shift + confirmation)
+            boolean overDel = inArea && mx >= delX && mx < delX + delW && my >= rotY && my < rotY + delH;
+            if (overDel) {
+                hoveredRowDeleteUuid = item.uuid;
+            }
+            boolean shift = hasShiftDown();
+            boolean armed = item.uuid.equals(armedDeleteUuid);
+            int delBg = !shift ? 0xFF131318 : (armed ? (overDel ? 0xFF8C2A2A : 0xFF6B1E1E) : (overDel ? 0xFF3A2024 : 0xFF221619));
+            int delBorder = !shift ? AeternumTheme.BORDER_SUBTLE : (armed ? 0xFFFF6B6B : (overDel ? 0xFFE56B6B : 0x80E56B6B));
+            int delFg = !shift ? AeternumTheme.TEXT_MUTED : (armed ? 0xFFFFFFFF : 0xFFE58A8A);
+            AeternumTheme.drawCard(c, delX, rotY, delW, delH, delBg, delBorder);
+            c.drawTextWithShadow(textRenderer, armed ? "!" : "\u00D7", delX + (armed ? 7 : 6), rotY + 5, delFg);
 
             // Rotator button
             boolean overRot = inArea && mx >= rotX && mx < rotX + rotW && my >= rotY && my < rotY + rotH;
@@ -455,6 +527,18 @@ public final class StatsScreen extends UiScreen {
             };
             AeternumTheme.drawCard(c, rotX, rotY, rotW, rotH, rotBg, rotBorder);
             c.drawTextWithShadow(textRenderer, item.type, rotX + (rotW - textRenderer.getWidth(item.type)) / 2, rotY + 5, rotFg);
+
+            if (showHeal) {
+                boolean overHeal = inArea && mx >= healX && mx < healX + healW && my >= rotY && my < rotY + rotH;
+                if (overHeal) {
+                    hoveredRowHealUuid = item.uuid;
+                }
+                AeternumTheme.drawCard(c, healX, rotY, healW, rotH,
+                    overHeal ? 0xFF3A2D18 : 0xFF281F12,
+                    overHeal ? 0xFFFFB866 : 0xFFE59B53);
+                String healLbl = "Subsanar";
+                c.drawTextWithShadow(textRenderer, healLbl, healX + (healW - textRenderer.getWidth(healLbl)) / 2, rotY + 5, 0xFFFFC57A);
+            }
 
             if (showLookup) {
                 boolean overLook = inArea && mx >= lookX && mx < lookX + lookW && my >= rotY && my < rotY + rotH;
@@ -647,11 +731,14 @@ public final class StatsScreen extends UiScreen {
                 List<RegistryEntrySnapshot> shown = filteredEntries();
                 int cardX = panelX + SIDEBAR_W + 10;
                 int cardW = panelW - SIDEBAR_W - 26;
+                int delW = 18;
+                int delX = cardX + cardW - delW - 6;
                 int rotW = 68;
                 int rotH = 18;
-                int rotX = cardX + cardW - rotW - 8;
+                int rotX = delX - rotW - 4;
+                int healW = 54;
+                int healX = rotX - healW - 4;
                 int lookW = 66;
-                int lookX = rotX - lookW - 6;
 
                 for (int i = 0; i < shown.size(); i++) {
                     int cy = lTop + i * ROW_STRIDE - (int) Math.round(listScroll);
@@ -660,6 +747,28 @@ public final class StatsScreen extends UiScreen {
                     if (my < rotY || my >= rotY + rotH) continue;
 
                     RegistryEntrySnapshot item = shown.get(i);
+                    int leftOfHeal = item.anomaly ? healX : rotX;
+                    int lookX = leftOfHeal - lookW - 4;
+                    if (mx >= delX && mx < delX + delW) {
+                        if (!hasShiftDown()) {
+                            statusMessage = "Mantén Shift para habilitar el borrado de registros.";
+                            statusError = false;
+                            return true;
+                        }
+                        if (item.uuid.equals(armedDeleteUuid)) {
+                            armedDeleteUuid = null;
+                            statusMessage = "Eliminando registro y archivos…";
+                            statusError = false;
+                            ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_entry", item.uuid, ""));
+                        } else {
+                            armedDeleteUuid = item.uuid;
+                            armedDeleteUntilMs = System.currentTimeMillis() + 5000L;
+                            String targetLabel = (item.name != null && !item.name.isEmpty()) ? item.name : item.uuid;
+                            statusMessage = "Confirma Shift + Clic en ! para borrar a " + targetLabel;
+                            statusError = true;
+                        }
+                        return true;
+                    }
                     if (mx >= rotX && mx < rotX + rotW) {
                         String nextType = switch (item.type) {
                             case "UNKNOWN" -> "HUMAN";
@@ -667,6 +776,12 @@ public final class StatsScreen extends UiScreen {
                             default -> "UNKNOWN";
                         };
                         ClientPlayNetworking.send(new StatsRegistryActionPayload("set_type", item.uuid, nextType));
+                        return true;
+                    }
+                    if (item.anomaly && mx >= healX && mx < healX + healW) {
+                        statusMessage = "Subsanando " + item.uuid + "…";
+                        statusError = false;
+                        ClientPlayNetworking.send(new StatsRegistryActionPayload("heal_entry", item.uuid, ""));
                         return true;
                     }
                     boolean showLookup = item.uuidVersion == 4 && (item.name == null || item.name.isEmpty());
