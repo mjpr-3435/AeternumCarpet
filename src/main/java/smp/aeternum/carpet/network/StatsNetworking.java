@@ -11,6 +11,8 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -19,6 +21,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardDisplaySlot;
+import net.minecraft.scoreboard.ScoreboardEntry;
+import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import smp.aeternum.carpet.AeternumCarpetSettings;
@@ -47,6 +53,7 @@ public final class StatsNetworking {
 
     public static void registerPayloads() {
         PayloadTypeRegistry.playS2C().register(StatsDataPayload.ID, StatsDataPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(ScoreboardDetailPayload.ID, ScoreboardDetailPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(StatsRegistryActionPayload.ID, StatsRegistryActionPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(StatsRegistryActionPayload.ID, (payload, context) ->
@@ -65,7 +72,7 @@ public final class StatsNetworking {
         if (openScreen) {
             ACTIVE_VIEWERS.add(player.getUuid());
         }
-        StatsSnapshot snapshot = buildSnapshot();
+        StatsSnapshot snapshot = buildSnapshot(player.getServer());
         ServerPlayNetworking.send(player, new StatsDataPayload(GSON.toJson(snapshot), openScreen, status, error));
     }
 
@@ -73,7 +80,7 @@ public final class StatsNetworking {
         if (server == null || ACTIVE_VIEWERS.isEmpty()) {
             return;
         }
-        String json = GSON.toJson(buildSnapshot());
+        String json = GSON.toJson(buildSnapshot(server));
         for (UUID viewerId : List.copyOf(ACTIVE_VIEWERS)) {
             ServerPlayerEntity viewer = server.getPlayerManager().getPlayer(viewerId);
             if (viewer == null || viewer.isDisconnected() || !AeternumCarpetSettings.commandStats || !viewer.hasPermissionLevel(2)) {
@@ -84,10 +91,11 @@ public final class StatsNetworking {
         }
     }
 
-    private static StatsSnapshot buildSnapshot() {
+    private static StatsSnapshot buildSnapshot(MinecraftServer server) {
         StatsSnapshot snapshot = new StatsSnapshot();
         Map<String, Entry> rawEntries = PlayerRegistryStore.getEntriesSnapshot();
         List<RegistryEntrySnapshot> list = new ArrayList<>(rawEntries.size());
+        Map<String, EnumSet<EntryType>> typesByName = new HashMap<>();
         for (Entry entry : rawEntries.values()) {
             RegistryEntrySnapshot item = new RegistryEntrySnapshot();
             item.uuid = entry.uuid;
@@ -101,6 +109,11 @@ public final class StatsNetworking {
             }
             item.anomaly = entry.hasAnomaly();
             list.add(item);
+
+            if (!item.name.isEmpty()) {
+                typesByName.computeIfAbsent(item.name.toLowerCase(Locale.ROOT), k -> EnumSet.noneOf(EntryType.class))
+                    .add(entry.type != null ? entry.type : EntryType.UNKNOWN);
+            }
         }
         list.sort(
             Comparator.comparing((RegistryEntrySnapshot e) -> e.name.isEmpty())
@@ -108,11 +121,91 @@ public final class StatsNetworking {
         );
         snapshot.entries = list;
         snapshot.unexpectedFiles = PlayerRegistryStore.getUnexpectedFilesSnapshot();
+        snapshot.scoreboards = buildScoreboardSnapshots(server, typesByName);
         snapshot.lookupRunning = batchRunning;
         snapshot.lookupDone = batchDone;
         snapshot.lookupTotal = batchTotal;
         snapshot.lookupResolved = batchResolved;
         return snapshot;
+    }
+
+    private static List<ScoreboardObjectiveSnapshot> buildScoreboardSnapshots(
+        MinecraftServer server,
+        Map<String, EnumSet<EntryType>> typesByName
+    ) {
+        if (server == null) {
+            return List.of();
+        }
+        Scoreboard sb = server.getScoreboard();
+        ScoreboardObjective sidebarObj = sb.getObjectiveForSlot(ScoreboardDisplaySlot.SIDEBAR);
+        ScoreboardObjective listObj = sb.getObjectiveForSlot(ScoreboardDisplaySlot.LIST);
+        ScoreboardObjective belowObj = sb.getObjectiveForSlot(ScoreboardDisplaySlot.BELOW_NAME);
+
+        List<ScoreboardObjectiveSnapshot> out = new ArrayList<>();
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            ScoreboardObjectiveSnapshot snap = new ScoreboardObjectiveSnapshot();
+            snap.name = obj.getName();
+            snap.displayName = obj.getDisplayName() != null ? obj.getDisplayName().getString() : obj.getName();
+            if (obj == sidebarObj) snap.slot = "SIDEBAR";
+            else if (obj == listObj) snap.slot = "LIST";
+            else if (obj == belowObj) snap.slot = "BELOW_NAME";
+            snap.entryCount = sb.getScoreboardEntries(obj).size();
+            out.add(snap);
+        }
+        out.sort(Comparator.comparing((ScoreboardObjectiveSnapshot o) -> o.name, String.CASE_INSENSITIVE_ORDER));
+        return out;
+    }
+
+    private static void sendObjectiveDetail(ServerPlayerEntity player, MinecraftServer server, String objectiveName) {
+        if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2) || objectiveName == null || objectiveName.isEmpty()) {
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        ScoreboardObjective target = null;
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            if (obj.getName().equals(objectiveName)) {
+                target = obj;
+                break;
+            }
+        }
+        if (target == null) {
+            ServerPlayNetworking.send(player, new ScoreboardDetailPayload(objectiveName, "[]"));
+            return;
+        }
+        Map<String, EnumSet<EntryType>> typesByName = new HashMap<>();
+        for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
+            if (entry.name != null && !entry.name.isBlank()) {
+                typesByName.computeIfAbsent(entry.name.toLowerCase(Locale.ROOT), k -> EnumSet.noneOf(EntryType.class))
+                    .add(entry.type != null ? entry.type : EntryType.UNKNOWN);
+            }
+        }
+        List<ScoreboardEntrySnapshot> entries = new ArrayList<>();
+        for (ScoreboardEntry entry : sb.getScoreboardEntries(target)) {
+            ScoreboardEntrySnapshot eSnap = new ScoreboardEntrySnapshot();
+            eSnap.owner = entry.owner();
+            eSnap.score = entry.value();
+            eSnap.badge = resolveOwnerBadge(typesByName, entry.owner());
+            entries.add(eSnap);
+        }
+        entries.sort(Comparator.comparingInt((ScoreboardEntrySnapshot e) -> e.score).reversed()
+            .thenComparing(e -> e.owner, String.CASE_INSENSITIVE_ORDER));
+        ServerPlayNetworking.send(player, new ScoreboardDetailPayload(objectiveName, GSON.toJson(entries)));
+    }
+
+    private static String resolveOwnerBadge(Map<String, EnumSet<EntryType>> typesByName, String owner) {
+        if (owner == null || owner.isBlank()) {
+            return "UNKNOWN";
+        }
+        EnumSet<EntryType> types = typesByName.get(owner.toLowerCase(Locale.ROOT));
+        if (types == null || types.isEmpty()) {
+            return "UNKNOWN";
+        }
+        boolean hasHuman = types.contains(EntryType.HUMAN);
+        boolean hasBot = types.contains(EntryType.BOT);
+        if (hasHuman && hasBot) return "AMBOS";
+        if (hasHuman) return "HUMAN";
+        if (hasBot) return "BOT";
+        return "UNKNOWN";
     }
 
     private static int parseUuidVersion(String raw) {
@@ -136,6 +229,25 @@ public final class StatsNetworking {
             }
             case "lookup_all_online" -> startBatchLookup(server, player);
             case "cancel_lookup_all" -> cancelBatchLookup(server, player);
+            case "refresh_scoreboards" -> sendSnapshot(player, false, "Scoreboards actualizadas.", false);
+            case "select_objective" -> sendObjectiveDetail(player, server, payload.value());
+            case "delete_objective" -> {
+                String objName = payload.value();
+                Scoreboard sb = server.getScoreboard();
+                ScoreboardObjective target = null;
+                for (ScoreboardObjective obj : sb.getObjectives()) {
+                    if (obj.getName().equals(objName)) {
+                        target = obj;
+                        break;
+                    }
+                }
+                if (target != null) {
+                    sb.removeObjective(target);
+                    sendSnapshot(player, false, "Scoreboard eliminada: " + objName, false);
+                } else {
+                    sendSnapshot(player, false, "Scoreboard no encontrada: " + objName, true);
+                }
+            }
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -351,10 +463,24 @@ public final class StatsNetworking {
     public static final class StatsSnapshot {
         public List<RegistryEntrySnapshot> entries = List.of();
         public List<String> unexpectedFiles = List.of();
+        public List<ScoreboardObjectiveSnapshot> scoreboards = List.of();
         public boolean lookupRunning;
         public int lookupDone;
         public int lookupTotal;
         public int lookupResolved;
+    }
+
+    public static final class ScoreboardObjectiveSnapshot {
+        public String name = "";
+        public String displayName = "";
+        public String slot = "";
+        public int entryCount;
+    }
+
+    public static final class ScoreboardEntrySnapshot {
+        public String owner = "";
+        public int score;
+        public String badge = "UNKNOWN";
     }
 
     public static final class RegistryEntrySnapshot {

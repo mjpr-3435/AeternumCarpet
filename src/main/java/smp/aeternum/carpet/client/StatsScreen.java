@@ -1,6 +1,8 @@
 package smp.aeternum.carpet.client;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -15,11 +17,14 @@ import smp.aeternum.carpet.client.ui.UiButton;
 import smp.aeternum.carpet.client.ui.UiScreen;
 import smp.aeternum.carpet.client.ui.UiTextField;
 import smp.aeternum.carpet.network.StatsNetworking.RegistryEntrySnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.ScoreboardEntrySnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.ScoreboardObjectiveSnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.StatsSnapshot;
 import smp.aeternum.carpet.network.StatsRegistryActionPayload;
 
 public final class StatsScreen extends UiScreen {
     private static final Gson GSON = new Gson();
+    private static final Type SCORE_ENTRY_LIST_TYPE = new TypeToken<List<ScoreboardEntrySnapshot>>() {}.getType();
     private static final int TAB_BAR_H = 24;
     private static final int SIDEBAR_W = 156;
     private static final int SIDEBAR_ROW_H = 19;
@@ -27,10 +32,15 @@ public final class StatsScreen extends UiScreen {
     private static final int CARD_GAP = 4;
     private static final int ROW_STRIDE = CARD_H + CARD_GAP;
     private static final int UNEXPECTED_ROW_H = 22;
+    private static final int SB_SIDEBAR_ROW_H = 28;
+    private static final int SB_ENTRY_H = 26;
+    private static final int SB_ENTRY_GAP = 3;
+    private static final int SB_ENTRY_STRIDE = SB_ENTRY_H + SB_ENTRY_GAP;
 
     private enum Tab {
         GUIDE,
         REGISTRY,
+        SCOREBOARDS,
         UNEXPECTED
     }
 
@@ -71,11 +81,53 @@ public final class StatsScreen extends UiScreen {
         }
     }
 
+    private enum ScoreFilter {
+        ALL("Todos"),
+        HUMAN("Humans"),
+        BOT("Bots"),
+        BOTH("Ambos"),
+        UNKNOWN("Unknown");
+
+        final String label;
+
+        ScoreFilter(String label) {
+            this.label = label;
+        }
+    }
+
+    private enum ScoreSort {
+        SCORE_DESC("Score \u2193"),
+        SCORE_ASC("Score \u2191"),
+        NAME("Nombre"),
+        TYPE("Tipo");
+
+        final String label;
+
+        ScoreSort(String label) {
+            this.label = label;
+        }
+
+        ScoreSort next() {
+            ScoreSort[] vals = values();
+            return vals[(ordinal() + 1) % vals.length];
+        }
+    }
+
     private List<RegistryEntrySnapshot> entries = List.of();
     private final Map<String, RegistryEntrySnapshot> entriesByUuid = new HashMap<>();
     private final List<String> displayOrder = new ArrayList<>();
     private boolean recomputeOrderOnNextSnapshot = true;
     private List<String> unexpectedFiles = List.of();
+    private List<ScoreboardObjectiveSnapshot> scoreboards = List.of();
+    private String selectedObjectiveName;
+    private String loadedObjectiveName;
+    private List<ScoreboardEntrySnapshot> selectedObjectiveEntries = List.of();
+    private ScoreFilter activeScoreFilter = ScoreFilter.ALL;
+    private ScoreSort activeScoreSort = ScoreSort.SCORE_DESC;
+    private double sbSidebarScroll, targetSbSidebarScroll;
+    private String hoveredObjectiveDelete;
+    private String armedObjectiveDelete;
+    private long armedObjectiveDeleteUntilMs;
     private boolean lookupRunning;
     private int lookupDone;
     private int lookupTotal;
@@ -89,6 +141,7 @@ public final class StatsScreen extends UiScreen {
 
     private double listScroll, targetListScroll;
     private boolean draggingScrollbar;
+    private boolean draggingSbSidebarScrollbar;
 
     private UiTextField searchField;
     private UiButton sortButton;
@@ -96,6 +149,10 @@ public final class StatsScreen extends UiScreen {
     private UiButton rescanButton;
     private UiButton healAnomaliesButton;
     private UiButton deleteAllButton;
+    private UiTextField scoreSearchField;
+    private UiTextField objectiveSearchField;
+    private UiButton scoreSortButton;
+    private UiButton scoreRefreshButton;
     private String hoveredUnexpectedDelete;
     private String hoveredRowDeleteUuid;
     private String hoveredRowHealUuid;
@@ -113,6 +170,28 @@ public final class StatsScreen extends UiScreen {
             this.statusMessage = status;
             this.statusError = error;
         }
+        if (activeTab == Tab.SCOREBOARDS && selectedObjectiveName != null && !selectedObjectiveName.equals(loadedObjectiveName)) {
+            requestSelectedObjectiveDetail();
+        }
+    }
+
+    public void replaceScoreboardDetail(String objectiveName, String json) {
+        this.loadedObjectiveName = objectiveName;
+        try {
+            List<ScoreboardEntrySnapshot> list = GSON.fromJson(json, SCORE_ENTRY_LIST_TYPE);
+            this.selectedObjectiveEntries = list != null ? list : List.of();
+        } catch (Exception ignored) {
+            this.selectedObjectiveEntries = List.of();
+        }
+    }
+
+    private void requestSelectedObjectiveDetail() {
+        if (selectedObjectiveName == null || selectedObjectiveName.isEmpty()) {
+            loadedObjectiveName = null;
+            selectedObjectiveEntries = List.of();
+            return;
+        }
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("select_objective", "", selectedObjectiveName));
     }
 
     private void applySnapshot(String json) {
@@ -121,6 +200,17 @@ public final class StatsScreen extends UiScreen {
             if (snap != null) {
                 this.entries = snap.entries != null ? snap.entries : List.of();
                 this.unexpectedFiles = snap.unexpectedFiles != null ? snap.unexpectedFiles : List.of();
+                this.scoreboards = snap.scoreboards != null ? snap.scoreboards : List.of();
+                if (this.scoreboards.isEmpty()) {
+                    this.selectedObjectiveName = null;
+                    this.loadedObjectiveName = null;
+                    this.selectedObjectiveEntries = List.of();
+                } else if (this.selectedObjectiveName == null
+                    || this.scoreboards.stream().noneMatch(o -> o.name.equals(this.selectedObjectiveName))) {
+                    this.selectedObjectiveName = this.scoreboards.get(0).name;
+                    this.loadedObjectiveName = null;
+                    this.selectedObjectiveEntries = List.of();
+                }
                 this.lookupRunning = snap.lookupRunning;
                 this.lookupDone = snap.lookupDone;
                 this.lookupTotal = snap.lookupTotal;
@@ -186,10 +276,23 @@ public final class StatsScreen extends UiScreen {
     @Override
     protected void init() {
         String prevQuery = searchField != null ? searchField.getText() : "";
+        String prevScoreQuery = scoreSearchField != null ? scoreSearchField.getText() : "";
+        String prevObjQuery = objectiveSearchField != null ? objectiveSearchField.getText() : "";
         clearChildren();
         computePanel(Math.min(780, (int) (width * 0.88)), Math.min(470, (int) (height * 0.85)));
 
         int contentTop = panelY + 44 + TAB_BAR_H;
+        searchField = null;
+        sortButton = null;
+        lookupAllButton = null;
+        rescanButton = null;
+        healAnomaliesButton = null;
+        deleteAllButton = null;
+        scoreSearchField = null;
+        objectiveSearchField = null;
+        scoreSortButton = null;
+        scoreRefreshButton = null;
+
         if (activeTab == Tab.REGISTRY) {
             int contentX = panelX + SIDEBAR_W + 10;
             int contentW = panelW - SIDEBAR_W - 22;
@@ -213,7 +316,6 @@ public final class StatsScreen extends UiScreen {
             });
             addDrawableChild(sortButton);
 
-            deleteAllButton = null;
             lookupAllButton = UiButton.secondary(panelX + 8, panelY + panelH - 114, SIDEBAR_W - 16, 22,
                 lookupRunning ? "Cancelar" : "Consultar online", b -> {
                     if (lookupRunning) {
@@ -242,11 +344,46 @@ public final class StatsScreen extends UiScreen {
             });
             healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
             addDrawableChild(healAnomaliesButton);
+        } else if (activeTab == Tab.SCOREBOARDS) {
+            objectiveSearchField = new UiTextField(textRenderer, panelX + 8, contentTop + 6, SIDEBAR_W - 16, 18, "Buscar objetivo…");
+            objectiveSearchField.setMaxLength(64);
+            objectiveSearchField.setText(prevObjQuery);
+            objectiveSearchField.setChangedListener(s -> {
+                targetSbSidebarScroll = 0;
+                sbSidebarScroll = 0;
+            });
+            addDrawableChild(objectiveSearchField);
+
+            int contentX = panelX + SIDEBAR_W + 10;
+            int contentW = panelW - SIDEBAR_W - 22;
+            int sortW = 122;
+            int searchW = Math.max(100, contentW - sortW - 6);
+            scoreSearchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar entrada…");
+            scoreSearchField.setMaxLength(80);
+            scoreSearchField.setText(prevScoreQuery);
+            scoreSearchField.setChangedListener(s -> {
+                targetListScroll = 0;
+                listScroll = 0;
+            });
+            addDrawableChild(scoreSearchField);
+
+            scoreSortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeScoreSort.label, b -> {
+                activeScoreSort = activeScoreSort.next();
+                b.setLabel("Orden: " + activeScoreSort.label);
+                targetListScroll = 0;
+                listScroll = 0;
+            });
+            addDrawableChild(scoreSortButton);
+
+            scoreRefreshButton = UiButton.secondary(panelX + 8, panelY + panelH - 62, SIDEBAR_W - 16, 22, "Refrescar", b -> {
+                statusMessage = "Actualizando scoreboards…";
+                statusError = false;
+                armedObjectiveDelete = null;
+                loadedObjectiveName = null;
+                ClientPlayNetworking.send(new StatsRegistryActionPayload("refresh_scoreboards", "", ""));
+            });
+            addDrawableChild(scoreRefreshButton);
         } else if (activeTab == Tab.UNEXPECTED) {
-            searchField = null;
-            sortButton = null;
-            lookupAllButton = null;
-            healAnomaliesButton = null;
             deleteAllButton = UiButton.danger(panelX + panelW - 216, contentTop + 8, 98, 20, "Borrar todo", b -> {
                 if (!hasShiftDown() || unexpectedFiles.isEmpty()) return;
                 statusMessage = "Borrando todos los archivos raros…";
@@ -262,13 +399,6 @@ public final class StatsScreen extends UiScreen {
                 ClientPlayNetworking.send(new StatsRegistryActionPayload("rescan", "", ""));
             });
             addDrawableChild(rescanButton);
-        } else {
-            searchField = null;
-            sortButton = null;
-            lookupAllButton = null;
-            healAnomaliesButton = null;
-            deleteAllButton = null;
-            rescanButton = null;
         }
     }
 
@@ -335,7 +465,11 @@ public final class StatsScreen extends UiScreen {
     }
 
     private int listTop() {
-        return activeTab == Tab.GUIDE ? (tabBarY() + TAB_BAR_H + 8) : (tabBarY() + TAB_BAR_H + 34);
+        return switch (activeTab) {
+            case GUIDE -> tabBarY() + TAB_BAR_H + 8;
+            case SCOREBOARDS -> tabBarY() + TAB_BAR_H + 54;
+            default -> tabBarY() + TAB_BAR_H + 34;
+        };
     }
 
     private int listBottom() {
@@ -353,8 +487,12 @@ public final class StatsScreen extends UiScreen {
         hoveredUnexpectedDelete = null;
         hoveredRowDeleteUuid = null;
         hoveredRowHealUuid = null;
+        hoveredObjectiveDelete = null;
         if (armedDeleteUuid != null && System.currentTimeMillis() > armedDeleteUntilMs) {
             armedDeleteUuid = null;
+        }
+        if (armedObjectiveDelete != null && System.currentTimeMillis() > armedObjectiveDeleteUntilMs) {
+            armedObjectiveDelete = null;
         }
         renderBackground(c, mx, my, delta);
 
@@ -372,6 +510,8 @@ public final class StatsScreen extends UiScreen {
             renderGuideTab(c, delta);
         } else if (activeTab == Tab.REGISTRY) {
             renderRegistryTab(c, mx, my, delta);
+        } else if (activeTab == Tab.SCOREBOARDS) {
+            renderScoreboardsTab(c, mx, my, delta);
         } else {
             renderUnexpectedTab(c, mx, my, delta);
         }
@@ -403,6 +543,7 @@ public final class StatsScreen extends UiScreen {
             String hint = switch (activeTab) {
                 case GUIDE -> "Guía rápida de administración para /stats";
                 case REGISTRY -> "Click en el tipo para rotar: UNKNOWN \u2192 HUMAN \u2192 BOT";
+                case SCOREBOARDS -> "Datos de scoreboard.dat  ·  Shift + 2 clics en × para borrar objetivo";
                 case UNEXPECTED -> "Archivos fuera de formato <uuid>.dat / <uuid>.json";
             };
             c.drawText(textRenderer, hint, panelX + 14, footerY + 14, AeternumTheme.TEXT_MUTED, false);
@@ -430,11 +571,29 @@ public final class StatsScreen extends UiScreen {
         if (searchField != null) {
             searchField.renderBox(c, searchField.boxX(), searchField.boxY(), searchField.getWidth() + 12, 20, mx, my, delta);
         }
+        if (scoreSearchField != null) {
+            scoreSearchField.renderBox(c, scoreSearchField.boxX(), scoreSearchField.boxY(), scoreSearchField.getWidth() + 12, 20, mx, my, delta);
+        }
+        if (objectiveSearchField != null) {
+            objectiveSearchField.renderBox(c, objectiveSearchField.boxX(), objectiveSearchField.boxY(), objectiveSearchField.getWidth() + 12, 18, mx, my, delta);
+        }
 
         if (isCloseButtonHit(mx, my)) {
             c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
         } else if (sortButton != null && sortButton.isHovered()) {
             c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Sin nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
+        } else if (scoreSortButton != null && scoreSortButton.isHovered()) {
+            c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Score \u2193, Score \u2191, Nombre, Tipo)"), mx, my);
+        } else if (activeTab == Tab.SCOREBOARDS && hoveredObjectiveDelete != null) {
+            String tip;
+            if (!hasShiftDown()) {
+                tip = "Mantén Shift para borrar scoreboard '" + hoveredObjectiveDelete + "'";
+            } else if (hoveredObjectiveDelete.equals(armedObjectiveDelete)) {
+                tip = "Clic de nuevo con Shift para BORRAR scoreboard '" + hoveredObjectiveDelete + "'";
+            } else {
+                tip = "Shift + Clic para armar borrado de '" + hoveredObjectiveDelete + "'";
+            }
+            c.drawTooltip(textRenderer, Text.literal(tip), mx, my);
         } else if (lookupAllButton != null && lookupAllButton.isHovered()) {
             String tip = lookupRunning
                 ? "Cancelar consulta masiva en curso"
@@ -486,6 +645,7 @@ public final class StatsScreen extends UiScreen {
         int x = panelX + 10;
         x += drawTabButton(c, x, ty + 3, "Guía", activeTab == Tab.GUIDE, false, mx, my) + 6;
         x += drawTabButton(c, x, ty + 3, "Registro (" + entries.size() + ")", activeTab == Tab.REGISTRY, false, mx, my) + 6;
+        x += drawTabButton(c, x, ty + 3, "Scoreboards (" + scoreboards.size() + ")", activeTab == Tab.SCOREBOARDS, false, mx, my) + 6;
         String unexpLabel = "Archivos raros (" + unexpectedFiles.size() + ")";
         drawTabButton(c, x, ty + 3, unexpLabel, activeTab == Tab.UNEXPECTED, !unexpectedFiles.isEmpty(), mx, my);
     }
@@ -828,6 +988,233 @@ public final class StatsScreen extends UiScreen {
         return total;
     }
 
+    private ScoreboardObjectiveSnapshot selectedObjectiveSnapshot() {
+        if (selectedObjectiveName == null) return null;
+        for (ScoreboardObjectiveSnapshot obj : scoreboards) {
+            if (selectedObjectiveName.equals(obj.name)) {
+                return obj;
+            }
+        }
+        return null;
+    }
+
+    private List<ScoreboardEntrySnapshot> filteredScoreEntries(ScoreboardObjectiveSnapshot obj) {
+        if (obj == null || !obj.name.equals(loadedObjectiveName) || selectedObjectiveEntries == null) return List.of();
+        String q = scoreSearchField != null ? scoreSearchField.getText().trim().toLowerCase(Locale.ROOT) : "";
+        List<ScoreboardEntrySnapshot> out = new ArrayList<>();
+        for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
+            boolean matchFilter = switch (activeScoreFilter) {
+                case ALL -> true;
+                case HUMAN -> "HUMAN".equals(e.badge);
+                case BOT -> "BOT".equals(e.badge);
+                case BOTH -> "AMBOS".equals(e.badge);
+                case UNKNOWN -> "UNKNOWN".equals(e.badge);
+            };
+            if (!matchFilter) continue;
+            if (!q.isEmpty() && (e.owner == null || !e.owner.toLowerCase(Locale.ROOT).contains(q))) {
+                continue;
+            }
+            out.add(e);
+        }
+        Comparator<ScoreboardEntrySnapshot> comp = switch (activeScoreSort) {
+            case SCORE_DESC -> Comparator.comparingInt((ScoreboardEntrySnapshot e) -> e.score).reversed()
+                .thenComparing(e -> e.owner, String.CASE_INSENSITIVE_ORDER);
+            case SCORE_ASC -> Comparator.comparingInt((ScoreboardEntrySnapshot e) -> e.score)
+                .thenComparing(e -> e.owner, String.CASE_INSENSITIVE_ORDER);
+            case NAME -> Comparator.comparing((ScoreboardEntrySnapshot e) -> e.owner, String.CASE_INSENSITIVE_ORDER);
+            case TYPE -> Comparator.comparingInt((ScoreboardEntrySnapshot e) -> switch (e.badge) {
+                case "HUMAN" -> 0;
+                case "AMBOS" -> 1;
+                case "BOT" -> 2;
+                default -> 3;
+            }).thenComparing(Comparator.comparingInt((ScoreboardEntrySnapshot e) -> e.score).reversed());
+        };
+        out.sort(comp);
+        return out;
+    }
+
+    private int countScoreFilter(ScoreboardObjectiveSnapshot obj, ScoreFilter filter) {
+        if (obj == null) return 0;
+        if (!obj.name.equals(loadedObjectiveName)) {
+            return filter == ScoreFilter.ALL ? obj.entryCount : 0;
+        }
+        if (filter == ScoreFilter.ALL) return selectedObjectiveEntries.size();
+        int count = 0;
+        for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
+            boolean match = switch (filter) {
+                case ALL -> true;
+                case HUMAN -> "HUMAN".equals(e.badge);
+                case BOT -> "BOT".equals(e.badge);
+                case BOTH -> "AMBOS".equals(e.badge);
+                case UNKNOWN -> "UNKNOWN".equals(e.badge);
+            };
+            if (match) count++;
+        }
+        return count;
+    }
+
+    private List<ScoreboardObjectiveSnapshot> filteredObjectives() {
+        String q = objectiveSearchField != null ? objectiveSearchField.getText().trim().toLowerCase(Locale.ROOT) : "";
+        if (q.isEmpty()) return scoreboards;
+        List<ScoreboardObjectiveSnapshot> out = new ArrayList<>();
+        for (ScoreboardObjectiveSnapshot obj : scoreboards) {
+            if (obj.name != null && obj.name.toLowerCase(Locale.ROOT).contains(q)) {
+                out.add(obj);
+            }
+        }
+        return out;
+    }
+
+    private void renderScoreboardsTab(DrawContext c, int mx, int my, float delta) {
+        int topY = tabBarY() + TAB_BAR_H;
+        int footerY = panelY + panelH - 36;
+        int sTop = topY + 28;
+        int sBottom = footerY - 34;
+
+        // Sidebar: list of objectives
+        c.fill(panelX + 1, topY, panelX + SIDEBAR_W, footerY, AeternumTheme.SIDEBAR_BG);
+        c.fill(panelX + SIDEBAR_W, topY, panelX + SIDEBAR_W + 1, footerY, AeternumTheme.BORDER_SUBTLE);
+
+        List<ScoreboardObjectiveSnapshot> shownObjectives = filteredObjectives();
+        int maxSbScroll = Math.max(0, shownObjectives.size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
+        targetSbSidebarScroll = Math.max(0, Math.min(targetSbSidebarScroll, maxSbScroll));
+        sbSidebarScroll += (targetSbSidebarScroll - sbSidebarScroll) * Math.min(1.0, delta * 0.45 + 0.25);
+
+        if (shownObjectives.isEmpty()) {
+            c.drawText(textRenderer, "Sin scoreboards", panelX + 12, sTop + 8, AeternumTheme.TEXT_MUTED, false);
+        } else {
+            c.enableScissor(panelX + 2, sTop, panelX + SIDEBAR_W - 1, sBottom);
+            for (int i = 0; i < shownObjectives.size(); i++) {
+                ScoreboardObjectiveSnapshot obj = shownObjectives.get(i);
+                int ry = sTop + i * SB_SIDEBAR_ROW_H - (int) Math.round(sbSidebarScroll);
+                if (ry + SB_SIDEBAR_ROW_H < sTop || ry > sBottom) continue;
+
+                boolean sel = obj.name.equals(selectedObjectiveName);
+                boolean inSidebar = mx >= panelX + 4 && mx < panelX + SIDEBAR_W - 4 && my >= sTop && my < sBottom;
+                boolean hover = inSidebar && my >= ry && my < ry + SB_SIDEBAR_ROW_H - 2;
+                if (sel) {
+                    c.fill(panelX + 4, ry, panelX + SIDEBAR_W - 4, ry + SB_SIDEBAR_ROW_H - 2, AeternumTheme.CARD_SELECTED);
+                    c.fill(panelX + 4, ry, panelX + 7, ry + SB_SIDEBAR_ROW_H - 2, AeternumTheme.ACCENT_GOLD);
+                } else if (hover) {
+                    c.fill(panelX + 4, ry, panelX + SIDEBAR_W - 4, ry + SB_SIDEBAR_ROW_H - 2, AeternumTheme.CARD_HOVER);
+                }
+
+                int delX = panelX + SIDEBAR_W - 24;
+                int delY = ry + 5;
+                boolean overDel = inSidebar && mx >= delX && mx < delX + 14 && my >= delY && my < delY + 14;
+                if (overDel) {
+                    hoveredObjectiveDelete = obj.name;
+                }
+                boolean shift = hasShiftDown();
+                boolean armed = obj.name.equals(armedObjectiveDelete);
+                int delBg = !shift ? 0xFF131318 : (armed ? 0xFF6B1E1E : (overDel ? 0xFF3A2024 : 0xFF221619));
+                int delBorder = !shift ? AeternumTheme.BORDER_SUBTLE : (armed ? 0xFFFF6B6B : 0x80E56B6B);
+                int delFg = !shift ? AeternumTheme.TEXT_MUTED : (armed ? 0xFFFFFFFF : 0xFFE58A8A);
+                AeternumTheme.drawCard(c, delX, delY, 14, 14, delBg, delBorder);
+                c.drawTextWithShadow(textRenderer, armed ? "!" : "\u00D7", delX + (armed ? 5 : 4), delY + 3, delFg);
+
+                String lbl = AeternumTheme.ellipsize(textRenderer, obj.name, SIDEBAR_W - 38);
+                c.drawTextWithShadow(textRenderer, lbl, panelX + 10, ry + 3, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
+                String meta = obj.entryCount + " ent." + (obj.slot != null && !obj.slot.isEmpty() ? (" \u00B7 " + obj.slot) : "");
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, meta, SIDEBAR_W - 38), panelX + 10, ry + 14, AeternumTheme.TEXT_MUTED, false);
+            }
+            c.disableScissor();
+            if (maxSbScroll > 0) {
+                AeternumTheme.drawScrollbar(c, panelX + SIDEBAR_W - 5, sTop, sBottom,
+                    shownObjectives.size() * SB_SIDEBAR_ROW_H, Math.max(1, sBottom - sTop),
+                    sbSidebarScroll, draggingSbSidebarScrollbar);
+            }
+        }
+
+        // Right panel: filter chips + entries list
+        ScoreboardObjectiveSnapshot selected = selectedObjectiveSnapshot();
+        int contentX = panelX + SIDEBAR_W + 10;
+        int chipY = topY + 32;
+        int chipX = contentX;
+        for (ScoreFilter sf : ScoreFilter.values()) {
+            String chipLabel = sf.label + " (" + countScoreFilter(selected, sf) + ")";
+            int cw = textRenderer.getWidth(chipLabel) + 12;
+            boolean sel = sf == activeScoreFilter;
+            boolean over = mx >= chipX && mx < chipX + cw && my >= chipY && my < chipY + 16;
+            AeternumTheme.drawCard(c, chipX, chipY, cw, 16,
+                sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
+                sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
+            c.drawText(textRenderer, chipLabel, chipX + 6, chipY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+            chipX += cw + 4;
+        }
+
+        int lTop = listTop();
+        int lBottom = listBottom();
+        int viewH = Math.max(1, lBottom - lTop);
+        int cardX = contentX;
+        int cardW = panelW - SIDEBAR_W - 26;
+
+        if (selected == null) {
+            c.drawCenteredTextWithShadow(textRenderer, "Selecciona una scoreboard.", cardX + cardW / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+        if (!selected.name.equals(loadedObjectiveName)) {
+            c.drawCenteredTextWithShadow(textRenderer, "Cargando entradas...", cardX + cardW / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+
+        List<ScoreboardEntrySnapshot> shown = filteredScoreEntries(selected);
+        int maxL = maxListScrollPx(shown.size(), SB_ENTRY_STRIDE);
+        targetListScroll = Math.max(0, Math.min(targetListScroll, maxL));
+        listScroll += (targetListScroll - listScroll) * Math.min(1.0, delta * 0.45 + 0.25);
+        listScroll = Math.max(0, Math.min(listScroll, maxL));
+
+        if (shown.isEmpty()) {
+            c.drawCenteredTextWithShadow(textRenderer, "Sin entradas en esta scoreboard.", cardX + cardW / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+
+        c.enableScissor(panelX + SIDEBAR_W + 2, lTop, panelX + panelW - 8, lBottom);
+        for (int i = 0; i < shown.size(); i++) {
+            int cy = lTop + i * SB_ENTRY_STRIDE - (int) Math.round(listScroll);
+            if (cy + SB_ENTRY_H < lTop || cy > lBottom) continue;
+
+            ScoreboardEntrySnapshot item = shown.get(i);
+            boolean inArea = my >= lTop && my < lBottom;
+            boolean over = inArea && mx >= cardX && mx < cardX + cardW && my >= cy && my < cy + SB_ENTRY_H;
+            AeternumTheme.drawCard(c, cardX, cy, cardW, SB_ENTRY_H, over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG,
+                over ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
+
+            String scoreStr = String.format(Locale.US, "%,d", item.score);
+            int scoreW = textRenderer.getWidth(scoreStr);
+            int scoreX = cardX + cardW - scoreW - 10;
+            c.drawTextWithShadow(textRenderer, scoreStr, scoreX, cy + 9, AeternumTheme.ACCENT_GOLD);
+
+            int badgeW = textRenderer.getWidth(item.badge) + 10;
+            int ownerMaxW = Math.max(40, scoreX - cardX - badgeW - 22);
+            String ownerShown = AeternumTheme.ellipsize(textRenderer, item.owner, ownerMaxW);
+            c.drawTextWithShadow(textRenderer, ownerShown, cardX + 10, cy + 9, AeternumTheme.TEXT_PRIMARY);
+
+            int badgeX = cardX + 16 + textRenderer.getWidth(ownerShown);
+            int badgeBg = switch (item.badge) {
+                case "HUMAN" -> 0xFF1A281E;
+                case "BOT" -> 0xFF18222C;
+                case "AMBOS" -> 0xFF2D2414;
+                default -> 0xFF1A1A20;
+            };
+            int badgeFg = switch (item.badge) {
+                case "HUMAN" -> 0xFF9DF0B4;
+                case "BOT" -> 0xFF9CD0FF;
+                case "AMBOS" -> 0xFFFFC57A;
+                default -> AeternumTheme.TEXT_SECONDARY;
+            };
+            if (badgeX + badgeW < scoreX - 6) {
+                AeternumTheme.drawBadge(c, textRenderer, badgeX, cy + 6, item.badge, badgeBg, badgeFg);
+            }
+        }
+        c.disableScissor();
+
+        if (maxL > 0) {
+            AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
+                shown.size() * SB_ENTRY_STRIDE, viewH, listScroll, draggingScrollbar);
+        }
+    }
+
     private void renderUnexpectedTab(DrawContext c, int mx, int my, float delta) {
         int topY = tabBarY() + TAB_BAR_H;
         c.drawText(textRenderer,
@@ -926,7 +1313,20 @@ public final class StatsScreen extends UiScreen {
                 }
                 return true;
             }
-            int unexpX = regX + regW + 6;
+            int sbX = regX + regW + 6;
+            int sbW = textRenderer.getWidth("Scoreboards (" + scoreboards.size() + ")") + 18;
+            if (mx >= sbX && mx < sbX + sbW && my >= tabY && my < tabY + 18) {
+                if (activeTab != Tab.SCOREBOARDS) {
+                    activeTab = Tab.SCOREBOARDS;
+                    listScroll = targetListScroll = 0;
+                    init();
+                    if (selectedObjectiveName != null && !selectedObjectiveName.equals(loadedObjectiveName)) {
+                        requestSelectedObjectiveDetail();
+                    }
+                }
+                return true;
+            }
+            int unexpX = sbX + sbW + 6;
             int unexpW = textRenderer.getWidth("Archivos raros (" + unexpectedFiles.size() + ")") + 18;
             if (mx >= unexpX && mx < unexpX + unexpW && my >= tabY && my < tabY + 18) {
                 if (activeTab != Tab.UNEXPECTED) {
@@ -1022,6 +1422,70 @@ public final class StatsScreen extends UiScreen {
             }
         }
 
+        if (activeTab == Tab.SCOREBOARDS && button == 0) {
+            int topY = tabBarY() + TAB_BAR_H;
+            int footerY = panelY + panelH - 36;
+            int sTop = topY + 28;
+            int sBottom = footerY - 34;
+
+            if (mx >= panelX + SIDEBAR_W - 8 && mx <= panelX + SIDEBAR_W && my >= sTop && my < sBottom) {
+                draggingSbSidebarScrollbar = true;
+                return true;
+            }
+
+            if (mx >= panelX + 4 && mx < panelX + SIDEBAR_W - 4 && my >= sTop && my < sBottom) {
+                int delX = panelX + SIDEBAR_W - 24;
+                List<ScoreboardObjectiveSnapshot> shownObjectives = filteredObjectives();
+                for (int i = 0; i < shownObjectives.size(); i++) {
+                    int ry = sTop + i * SB_SIDEBAR_ROW_H - (int) Math.round(sbSidebarScroll);
+                    if (ry + SB_SIDEBAR_ROW_H < sTop || ry > sBottom) continue;
+                    if (my >= ry && my < ry + SB_SIDEBAR_ROW_H - 2) {
+                        ScoreboardObjectiveSnapshot obj = shownObjectives.get(i);
+                        int delY = ry + 5;
+                        if (mx >= delX && mx < delX + 14 && my >= delY && my < delY + 14) {
+                            if (!hasShiftDown()) {
+                                statusMessage = "Mantén Shift para habilitar el borrado de scoreboards.";
+                                statusError = false;
+                                return true;
+                            }
+                            if (obj.name.equals(armedObjectiveDelete)) {
+                                armedObjectiveDelete = null;
+                                statusMessage = "Eliminando scoreboard " + obj.name + "…";
+                                statusError = false;
+                                ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_objective", "", obj.name));
+                            } else {
+                                armedObjectiveDelete = obj.name;
+                                armedObjectiveDeleteUntilMs = System.currentTimeMillis() + 5000L;
+                                statusMessage = "Confirma Shift + Clic en ! para borrar scoreboard '" + obj.name + "'";
+                                statusError = true;
+                            }
+                            return true;
+                        }
+                        selectedObjectiveName = obj.name;
+                        listScroll = targetListScroll = 0;
+                        requestSelectedObjectiveDetail();
+                        return true;
+                    }
+                }
+            }
+
+            ScoreboardObjectiveSnapshot selected = selectedObjectiveSnapshot();
+            int chipY = topY + 32;
+            if (my >= chipY && my < chipY + 16) {
+                int chipX = panelX + SIDEBAR_W + 10;
+                for (ScoreFilter sf : ScoreFilter.values()) {
+                    String chipLabel = sf.label + " (" + countScoreFilter(selected, sf) + ")";
+                    int cw = textRenderer.getWidth(chipLabel) + 12;
+                    if (mx >= chipX && mx < chipX + cw) {
+                        activeScoreFilter = sf;
+                        listScroll = targetListScroll = 0;
+                        return true;
+                    }
+                    chipX += cw + 4;
+                }
+            }
+        }
+
         if (activeTab == Tab.UNEXPECTED && button == 0) {
             int lTop = listTop();
             int lBottom = listBottom();
@@ -1055,6 +1519,7 @@ public final class StatsScreen extends UiScreen {
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
         draggingScrollbar = false;
+        draggingSbSidebarScrollbar = false;
         return super.mouseReleased(mx, my, button);
     }
 
@@ -1066,6 +1531,10 @@ public final class StatsScreen extends UiScreen {
             int wrapW = Math.max(120, (panelW - 28) - 24);
             return Math.max(0, measureGuideContentHeight(wrapW) - viewH);
         }
+        if (activeTab == Tab.SCOREBOARDS) {
+            int count = filteredScoreEntries(selectedObjectiveSnapshot()).size();
+            return maxListScrollPx(count, SB_ENTRY_STRIDE);
+        }
         int count = activeTab == Tab.REGISTRY ? filteredEntries().size() : unexpectedFiles.size();
         int stride = activeTab == Tab.REGISTRY ? ROW_STRIDE : UNEXPECTED_ROW_H;
         return maxListScrollPx(count, stride);
@@ -1073,6 +1542,14 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (draggingSbSidebarScrollbar) {
+            int sTop = tabBarY() + TAB_BAR_H + 28;
+            int sBottom = panelY + panelH - 36 - 34;
+            int maxSb = Math.max(0, filteredObjectives().size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
+            double frac = Math.max(0.0, Math.min(1.0, (my - sTop) / Math.max(1.0, sBottom - sTop)));
+            targetSbSidebarScroll = sbSidebarScroll = frac * maxSb;
+            return true;
+        }
         if (draggingScrollbar) {
             int lTop = listTop();
             int lBottom = listBottom();
@@ -1086,6 +1563,15 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double hAmt, double vAmt) {
+        if (activeTab == Tab.SCOREBOARDS && mx >= panelX + 4 && mx < panelX + SIDEBAR_W) {
+            int sTop = tabBarY() + TAB_BAR_H + 28;
+            int sBottom = panelY + panelH - 36 - 34;
+            if (my >= sTop && my < sBottom) {
+                int maxSb = Math.max(0, filteredObjectives().size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
+                targetSbSidebarScroll = Math.max(0, Math.min(maxSb, targetSbSidebarScroll - vAmt * 22.0));
+                return true;
+            }
+        }
         if (my >= listTop() && my < listBottom()) {
             int maxL = maxActiveScrollPx();
             targetListScroll = Math.max(0.0, Math.min(maxL, targetListScroll - vAmt * 26.0));
