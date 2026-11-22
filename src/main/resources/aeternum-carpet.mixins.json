@@ -23,7 +23,8 @@
 		"ArmorStandEntityAccessor",
 		"NeighborUpdaterMixin",
 		"MinecraftServerMixin",
-		"PlayerManagerMixin"
+		"PlayerManagerMixin",
+		"StatHandlerMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",

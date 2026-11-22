@@ -66,6 +66,7 @@ import smp.aeternum.carpet.command.StatsCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.stats.PlayerRegistryStore;
+import smp.aeternum.carpet.stats.ScoreboardConfigStore;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.FakePlayerReloadManager;
@@ -108,6 +109,7 @@ public class AeternumCarpet implements ModInitializer {
 			CarefulBreakStore.load(server);
 			FakePlayerReloadManager.load(server);
 			PlayerRegistryStore.load(server);
+			ScoreboardConfigStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerLifecycleEvents.SERVER_STARTED.register(server ->
@@ -130,7 +132,10 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(PlayerSitManager::tickServer);
 		ServerTickEvents.END_SERVER_TICK.register(StatsNetworking::tick);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
-		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> !ActionsCommand.handleChat(player, message.getContent().getString()));
+		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> {
+			String content = message.getContent().getString();
+			return !ActionsCommand.handleChat(player, content) && !ScoreboardConfigStore.handleChat(player, content);
+		});
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			PlayerRegistryStore.onPlayerJoin(server, handler.player);
 			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd);

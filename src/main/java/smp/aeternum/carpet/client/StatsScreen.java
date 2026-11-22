@@ -11,11 +11,15 @@ import java.util.Locale;
 import java.util.Map;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import smp.aeternum.carpet.client.ui.AeternumTheme;
 import smp.aeternum.carpet.client.ui.UiButton;
 import smp.aeternum.carpet.client.ui.UiScreen;
 import smp.aeternum.carpet.client.ui.UiTextField;
+import smp.aeternum.carpet.motd.MotdMarkup;
+import smp.aeternum.carpet.network.StatsNetworking.CreateObjectiveRequest;
+import smp.aeternum.carpet.network.StatsNetworking.EditObjectiveRequest;
 import smp.aeternum.carpet.network.StatsNetworking.RegistryEntrySnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardEntrySnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardObjectiveSnapshot;
@@ -36,6 +40,12 @@ public final class StatsScreen extends UiScreen {
     private static final int SB_ENTRY_H = 26;
     private static final int SB_ENTRY_GAP = 3;
     private static final int SB_ENTRY_STRIDE = SB_ENTRY_H + SB_ENTRY_GAP;
+
+    private enum SbPanelMode {
+        VIEW,
+        CREATE,
+        EDIT
+    }
 
     private enum Tab {
         GUIDE,
@@ -126,8 +136,20 @@ public final class StatsScreen extends UiScreen {
     private ScoreSort activeScoreSort = ScoreSort.SCORE_DESC;
     private double sbSidebarScroll, targetSbSidebarScroll;
     private String hoveredObjectiveDelete;
+    private String hoveredObjectiveEdit;
     private String armedObjectiveDelete;
     private long armedObjectiveDeleteUntilMs;
+    private SbPanelMode sbPanelMode = SbPanelMode.VIEW;
+    private String editingObjectiveName = "";
+    private String editingObjectiveCriterion = "dummy";
+    private boolean formFillFromStats;
+    private String formSlot = "";
+    private boolean formTotalEnabled;
+    private boolean formTotalHumans = true;
+    private boolean formTotalBots;
+    private boolean formTotalUnknown;
+    private int criterionSugScroll;
+    private boolean draggingCriterionScrollbar;
     private boolean lookupRunning;
     private int lookupDone;
     private int lookupTotal;
@@ -151,8 +173,15 @@ public final class StatsScreen extends UiScreen {
     private UiButton deleteAllButton;
     private UiTextField scoreSearchField;
     private UiTextField objectiveSearchField;
+    private UiButton sbCreateButton;
     private UiButton scoreSortButton;
     private UiButton scoreRefreshButton;
+    private UiTextField sbNameField;
+    private UiTextField sbDisplayField;
+    private UiTextField sbCriterionField;
+    private UiTextField sbAliasField;
+    private UiButton sbSaveButton;
+    private UiButton sbCancelButton;
     private String hoveredUnexpectedDelete;
     private String hoveredRowDeleteUuid;
     private String hoveredRowHealUuid;
@@ -278,6 +307,10 @@ public final class StatsScreen extends UiScreen {
         String prevQuery = searchField != null ? searchField.getText() : "";
         String prevScoreQuery = scoreSearchField != null ? scoreSearchField.getText() : "";
         String prevObjQuery = objectiveSearchField != null ? objectiveSearchField.getText() : "";
+        String prevSbName = sbNameField != null ? sbNameField.getText() : "";
+        String prevSbDisplay = sbDisplayField != null ? sbDisplayField.getText() : "";
+        String prevSbCriterion = sbCriterionField != null ? sbCriterionField.getText() : "";
+        String prevSbAlias = sbAliasField != null ? sbAliasField.getText() : "";
         clearChildren();
         computePanel(Math.min(780, (int) (width * 0.88)), Math.min(470, (int) (height * 0.85)));
 
@@ -290,8 +323,15 @@ public final class StatsScreen extends UiScreen {
         deleteAllButton = null;
         scoreSearchField = null;
         objectiveSearchField = null;
+        sbCreateButton = null;
         scoreSortButton = null;
         scoreRefreshButton = null;
+        sbNameField = null;
+        sbDisplayField = null;
+        sbCriterionField = null;
+        sbAliasField = null;
+        sbSaveButton = null;
+        sbCancelButton = null;
 
         if (activeTab == Tab.REGISTRY) {
             int contentX = panelX + SIDEBAR_W + 10;
@@ -345,7 +385,7 @@ public final class StatsScreen extends UiScreen {
             healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
             addDrawableChild(healAnomaliesButton);
         } else if (activeTab == Tab.SCOREBOARDS) {
-            objectiveSearchField = new UiTextField(textRenderer, panelX + 8, contentTop + 6, SIDEBAR_W - 16, 18, "Buscar objetivo…");
+            objectiveSearchField = new UiTextField(textRenderer, panelX + 8, contentTop + 6, SIDEBAR_W - 38, 18, "Buscar objetivo…");
             objectiveSearchField.setMaxLength(64);
             objectiveSearchField.setText(prevObjQuery);
             objectiveSearchField.setChangedListener(s -> {
@@ -354,26 +394,8 @@ public final class StatsScreen extends UiScreen {
             });
             addDrawableChild(objectiveSearchField);
 
-            int contentX = panelX + SIDEBAR_W + 10;
-            int contentW = panelW - SIDEBAR_W - 22;
-            int sortW = 122;
-            int searchW = Math.max(100, contentW - sortW - 6);
-            scoreSearchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar entrada…");
-            scoreSearchField.setMaxLength(80);
-            scoreSearchField.setText(prevScoreQuery);
-            scoreSearchField.setChangedListener(s -> {
-                targetListScroll = 0;
-                listScroll = 0;
-            });
-            addDrawableChild(scoreSearchField);
-
-            scoreSortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeScoreSort.label, b -> {
-                activeScoreSort = activeScoreSort.next();
-                b.setLabel("Orden: " + activeScoreSort.label);
-                targetListScroll = 0;
-                listScroll = 0;
-            });
-            addDrawableChild(scoreSortButton);
+            sbCreateButton = UiButton.primary(panelX + SIDEBAR_W - 26, contentTop + 6, 18, 18, "+", b -> openCreateObjectiveForm());
+            addDrawableChild(sbCreateButton);
 
             scoreRefreshButton = UiButton.secondary(panelX + 8, panelY + panelH - 62, SIDEBAR_W - 16, 22, "Refrescar", b -> {
                 statusMessage = "Actualizando scoreboards…";
@@ -383,6 +405,64 @@ public final class StatsScreen extends UiScreen {
                 ClientPlayNetworking.send(new StatsRegistryActionPayload("refresh_scoreboards", "", ""));
             });
             addDrawableChild(scoreRefreshButton);
+
+            int contentX = panelX + SIDEBAR_W + 10;
+            int contentW = panelW - SIDEBAR_W - 22;
+            if (sbPanelMode == SbPanelMode.VIEW) {
+                int sortW = 122;
+                int searchW = Math.max(100, contentW - sortW - 6);
+                scoreSearchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar entrada…");
+                scoreSearchField.setMaxLength(80);
+                scoreSearchField.setText(prevScoreQuery);
+                scoreSearchField.setChangedListener(s -> {
+                    targetListScroll = 0;
+                    listScroll = 0;
+                });
+                addDrawableChild(scoreSearchField);
+
+                scoreSortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeScoreSort.label, b -> {
+                    activeScoreSort = activeScoreSort.next();
+                    b.setLabel("Orden: " + activeScoreSort.label);
+                    targetListScroll = 0;
+                    listScroll = 0;
+                });
+                addDrawableChild(scoreSortButton);
+            } else {
+                int dispLabelY = formDisplayLabelY(contentTop);
+                if (sbPanelMode == SbPanelMode.CREATE) {
+                    sbNameField = new UiTextField(textRenderer, contentX, contentTop + 35, contentW, 18, "ej: dig_diamantes");
+                    sbNameField.setMaxLength(16);
+                    sbNameField.setText(prevSbName);
+                    addDrawableChild(sbNameField);
+
+                    sbCriterionField = new UiTextField(textRenderer, contentX, contentTop + 69, contentW, 18, "vacío = dummy");
+                    sbCriterionField.setMaxLength(128);
+                    sbCriterionField.setText(prevSbCriterion);
+                    sbCriterionField.setChangedListener(s -> criterionSugScroll = 0);
+                    addDrawableChild(sbCriterionField);
+                }
+
+                sbDisplayField = new UiTextField(textRenderer, contentX, dispLabelY + 11, contentW, 18, "Ej: \\gold\\boldMi Scoreboard (vacío = ID)");
+                sbDisplayField.setMaxLength(128);
+                sbDisplayField.setText(prevSbDisplay);
+                addDrawableChild(sbDisplayField);
+
+                int aliasFieldY = dispLabelY + 60;
+                sbAliasField = new UiTextField(textRenderer, contentX, aliasFieldY, 150, 18, "ej: gold (vacío = sin atajo)");
+                sbAliasField.setMaxLength(32);
+                sbAliasField.setText(prevSbAlias);
+                addDrawableChild(sbAliasField);
+
+                int btnY = panelY + panelH - 64;
+                sbSaveButton = UiButton.primary(contentX + contentW - 156, btnY, 76, 20,
+                    sbPanelMode == SbPanelMode.CREATE ? "Crear" : "Guardar", b -> submitScoreboardForm());
+                sbCancelButton = UiButton.secondary(contentX + contentW - 76, btnY, 76, 20, "Cancelar", b -> {
+                    sbPanelMode = SbPanelMode.VIEW;
+                    init();
+                });
+                addDrawableChild(sbSaveButton);
+                addDrawableChild(sbCancelButton);
+            }
         } else if (activeTab == Tab.UNEXPECTED) {
             deleteAllButton = UiButton.danger(panelX + panelW - 216, contentTop + 8, 98, 20, "Borrar todo", b -> {
                 if (!hasShiftDown() || unexpectedFiles.isEmpty()) return;
@@ -488,6 +568,7 @@ public final class StatsScreen extends UiScreen {
         hoveredRowDeleteUuid = null;
         hoveredRowHealUuid = null;
         hoveredObjectiveDelete = null;
+        hoveredObjectiveEdit = null;
         if (armedDeleteUuid != null && System.currentTimeMillis() > armedDeleteUntilMs) {
             armedDeleteUuid = null;
         }
@@ -577,13 +658,32 @@ public final class StatsScreen extends UiScreen {
         if (objectiveSearchField != null) {
             objectiveSearchField.renderBox(c, objectiveSearchField.boxX(), objectiveSearchField.boxY(), objectiveSearchField.getWidth() + 12, 18, mx, my, delta);
         }
+        if (sbNameField != null) {
+            sbNameField.renderBox(c, sbNameField.boxX(), sbNameField.boxY(), sbNameField.getWidth() + 12, 18, mx, my, delta);
+        }
+        if (sbCriterionField != null) {
+            sbCriterionField.renderBox(c, sbCriterionField.boxX(), sbCriterionField.boxY(), sbCriterionField.getWidth() + 12, 18, mx, my, delta);
+        }
+        if (sbDisplayField != null) {
+            sbDisplayField.renderBox(c, sbDisplayField.boxX(), sbDisplayField.boxY(), sbDisplayField.getWidth() + 12, 18, mx, my, delta);
+        }
+        if (sbAliasField != null) {
+            sbAliasField.renderBox(c, sbAliasField.boxX(), sbAliasField.boxY(), sbAliasField.getWidth() + 12, 18, mx, my, delta);
+        }
+        if (activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE && sbCriterionField != null && sbCriterionField.isFocused()) {
+            renderCriterionSuggestions(c, mx, my);
+        }
 
         if (isCloseButtonHit(mx, my)) {
             c.drawTooltip(textRenderer, Text.literal("Cerrar"), mx, my);
+        } else if (sbCreateButton != null && sbCreateButton.isHovered()) {
+            c.drawTooltip(textRenderer, Text.literal("Crear nueva scoreboard"), mx, my);
         } else if (sortButton != null && sortButton.isHovered()) {
             c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Nombre, Sin nombre, Tipo, Online/Offline, Anomalías)"), mx, my);
         } else if (scoreSortButton != null && scoreSortButton.isHovered()) {
             c.drawTooltip(textRenderer, Text.literal("Cambiar orden (Score \u2193, Score \u2191, Nombre, Tipo)"), mx, my);
+        } else if (activeTab == Tab.SCOREBOARDS && hoveredObjectiveEdit != null) {
+            c.drawTooltip(textRenderer, Text.literal("Editar scoreboard '" + hoveredObjectiveEdit + "'"), mx, my);
         } else if (activeTab == Tab.SCOREBOARDS && hoveredObjectiveDelete != null) {
             String tip;
             if (!hasShiftDown()) {
@@ -1065,6 +1165,107 @@ public final class StatsScreen extends UiScreen {
         return out;
     }
 
+    private void openCreateObjectiveForm() {
+        sbPanelMode = SbPanelMode.CREATE;
+        editingObjectiveName = "";
+        editingObjectiveCriterion = "dummy";
+        formFillFromStats = false;
+        formSlot = "";
+        formTotalEnabled = false;
+        formTotalHumans = true;
+        formTotalBots = false;
+        formTotalUnknown = false;
+        init();
+        if (sbNameField != null) sbNameField.setText("");
+        if (sbCriterionField != null) sbCriterionField.setText("");
+        if (sbDisplayField != null) sbDisplayField.setText("");
+        if (sbAliasField != null) sbAliasField.setText("");
+    }
+
+    private void openEditObjectiveForm(ScoreboardObjectiveSnapshot obj) {
+        sbPanelMode = SbPanelMode.EDIT;
+        editingObjectiveName = obj.name;
+        editingObjectiveCriterion = obj.criterion != null ? obj.criterion : "dummy";
+        formFillFromStats = false;
+        formSlot = obj.slot != null ? obj.slot : "";
+        formTotalEnabled = obj.totalEnabled;
+        formTotalHumans = obj.totalHumans;
+        formTotalBots = obj.totalBots;
+        formTotalUnknown = obj.totalUnknown;
+        init();
+        if (sbDisplayField != null) {
+            sbDisplayField.setText(obj.displayNameMarkup != null && !obj.displayNameMarkup.isEmpty()
+                ? obj.displayNameMarkup
+                : (obj.displayName != null ? obj.displayName : obj.name));
+        }
+        if (sbAliasField != null) {
+            sbAliasField.setText(obj.chatAlias != null ? obj.chatAlias : "");
+        }
+    }
+
+    private void submitScoreboardForm() {
+        if (sbPanelMode == SbPanelMode.CREATE) {
+            String name = sbNameField != null ? sbNameField.getText().trim() : "";
+            if (name.isEmpty()) {
+                statusMessage = "Escribe un ID interno para la scoreboard.";
+                statusError = true;
+                return;
+            }
+            CreateObjectiveRequest req = new CreateObjectiveRequest();
+            req.name = name;
+            req.criterion = sbCriterionField != null ? sbCriterionField.getText().trim() : "dummy";
+            req.displayName = sbDisplayField != null ? sbDisplayField.getText().trim() : "";
+            req.fillFromStats = formFillFromStats;
+            req.slot = formSlot;
+            req.chatAlias = sbAliasField != null ? sbAliasField.getText().trim() : "";
+            req.totalEnabled = formTotalEnabled;
+            req.totalHumans = formTotalHumans;
+            req.totalBots = formTotalBots;
+            req.totalUnknown = formTotalUnknown;
+            selectedObjectiveName = name;
+            loadedObjectiveName = null;
+            sbPanelMode = SbPanelMode.VIEW;
+            statusMessage = "Creando scoreboard '" + name + "'…";
+            statusError = false;
+            ClientPlayNetworking.send(new StatsRegistryActionPayload("create_objective", "", GSON.toJson(req)));
+            init();
+        } else if (sbPanelMode == SbPanelMode.EDIT) {
+            EditObjectiveRequest req = new EditObjectiveRequest();
+            req.name = editingObjectiveName;
+            req.displayName = sbDisplayField != null ? sbDisplayField.getText().trim() : "";
+            req.slot = formSlot;
+            req.chatAlias = sbAliasField != null ? sbAliasField.getText().trim() : "";
+            req.totalEnabled = formTotalEnabled;
+            req.totalHumans = formTotalHumans;
+            req.totalBots = formTotalBots;
+            req.totalUnknown = formTotalUnknown;
+            sbPanelMode = SbPanelMode.VIEW;
+            statusMessage = "Guardando '" + editingObjectiveName + "'…";
+            statusError = false;
+            ClientPlayNetworking.send(new StatsRegistryActionPayload("edit_objective", "", GSON.toJson(req)));
+            init();
+        }
+    }
+
+    private long computeObjectiveTotal(ScoreboardObjectiveSnapshot obj) {
+        if (obj == null || !obj.totalEnabled || selectedObjectiveEntries == null) {
+            return 0L;
+        }
+        long sum = 0L;
+        for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
+            boolean include = switch (e.badge) {
+                case "HUMAN" -> obj.totalHumans;
+                case "BOT" -> obj.totalBots;
+                case "AMBOS" -> obj.totalHumans || obj.totalBots;
+                default -> obj.totalUnknown;
+            };
+            if (include) {
+                sum += e.score;
+            }
+        }
+        return sum;
+    }
+
     private void renderScoreboardsTab(DrawContext c, int mx, int my, float delta) {
         int topY = tabBarY() + TAB_BAR_H;
         int footerY = panelY + panelH - 36;
@@ -1099,8 +1300,18 @@ public final class StatsScreen extends UiScreen {
                     c.fill(panelX + 4, ry, panelX + SIDEBAR_W - 4, ry + SB_SIDEBAR_ROW_H - 2, AeternumTheme.CARD_HOVER);
                 }
 
-                int delX = panelX + SIDEBAR_W - 24;
+                int delX = panelX + SIDEBAR_W - 22;
+                int editX = delX - 16;
                 int delY = ry + 5;
+                boolean overEdit = inSidebar && mx >= editX && mx < editX + 14 && my >= delY && my < delY + 14;
+                if (overEdit) {
+                    hoveredObjectiveEdit = obj.name;
+                }
+                AeternumTheme.drawCard(c, editX, delY, 14, 14,
+                    overEdit ? 0xFF2D2D38 : 0xFF1A1A22,
+                    overEdit ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_SUBTLE);
+                c.drawTextWithShadow(textRenderer, "E", editX + 4, delY + 3, overEdit ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
+
                 boolean overDel = inSidebar && mx >= delX && mx < delX + 14 && my >= delY && my < delY + 14;
                 if (overDel) {
                     hoveredObjectiveDelete = obj.name;
@@ -1113,10 +1324,13 @@ public final class StatsScreen extends UiScreen {
                 AeternumTheme.drawCard(c, delX, delY, 14, 14, delBg, delBorder);
                 c.drawTextWithShadow(textRenderer, armed ? "!" : "\u00D7", delX + (armed ? 5 : 4), delY + 3, delFg);
 
-                String lbl = AeternumTheme.ellipsize(textRenderer, obj.name, SIDEBAR_W - 38);
+                String lbl = AeternumTheme.ellipsize(textRenderer, obj.name, SIDEBAR_W - 50);
                 c.drawTextWithShadow(textRenderer, lbl, panelX + 10, ry + 3, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
-                String meta = obj.entryCount + " ent." + (obj.slot != null && !obj.slot.isEmpty() ? (" \u00B7 " + obj.slot) : "");
-                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, meta, SIDEBAR_W - 38), panelX + 10, ry + 14, AeternumTheme.TEXT_MUTED, false);
+                StringBuilder meta = new StringBuilder();
+                meta.append(obj.entryCount).append(" ent.");
+                if (obj.slot != null && !obj.slot.isEmpty()) meta.append(" \u00B7 ").append(obj.slot);
+                if (obj.chatAlias != null && !obj.chatAlias.isEmpty()) meta.append(" \u00B7 !!").append(obj.chatAlias);
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, meta.toString(), SIDEBAR_W - 50), panelX + 10, ry + 14, AeternumTheme.TEXT_MUTED, false);
             }
             c.disableScissor();
             if (maxSbScroll > 0) {
@@ -1124,6 +1338,11 @@ public final class StatsScreen extends UiScreen {
                     shownObjectives.size() * SB_SIDEBAR_ROW_H, Math.max(1, sBottom - sTop),
                     sbSidebarScroll, draggingSbSidebarScrollbar);
             }
+        }
+
+        if (sbPanelMode != SbPanelMode.VIEW) {
+            renderScoreboardForm(c, mx, my);
+            return;
         }
 
         // Right panel: filter chips + entries list
@@ -1141,6 +1360,15 @@ public final class StatsScreen extends UiScreen {
                 sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
             c.drawText(textRenderer, chipLabel, chipX + 6, chipY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
             chipX += cw + 4;
+        }
+        if (selected != null && selected.totalEnabled && selected.name.equals(loadedObjectiveName)) {
+            String totStr = "Total: " + String.format(Locale.US, "%,d", computeObjectiveTotal(selected));
+            int tw = textRenderer.getWidth(totStr) + 12;
+            int tx = panelX + panelW - tw - 12;
+            if (tx > chipX + 4) {
+                AeternumTheme.drawCard(c, tx, chipY, tw, 16, 0xFF1E1A12, AeternumTheme.ACCENT_GOLD);
+                c.drawTextWithShadow(textRenderer, totStr, tx + 6, chipY + 4, AeternumTheme.ACCENT_GOLD);
+            }
         }
 
         int lTop = listTop();
@@ -1212,6 +1440,368 @@ public final class StatsScreen extends UiScreen {
         if (maxL > 0) {
             AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
                 shown.size() * SB_ENTRY_STRIDE, viewH, listScroll, draggingScrollbar);
+        }
+    }
+
+    private static final String[][] CRITERION_PRESETS = {
+        {"clear", ""},
+        {"dig_all", "aeternum:dig_all"},
+        {"placed_blocks", "aeternum:placed_blocks"},
+        {"mined", "minecraft.mined:minecraft."},
+        {"used", "minecraft.used:minecraft."},
+        {"crafted", "minecraft.crafted:minecraft."},
+        {"killed", "minecraft.killed:minecraft."},
+        {"custom", "minecraft.custom:minecraft."}
+    };
+
+    private static final String[][] SLOT_OPTIONS = {
+        {"", "Ninguno"},
+        {"SIDEBAR", "SIDEBAR"},
+        {"LIST", "LIST"},
+        {"BELOW_NAME", "BELOW_NAME"}
+    };
+
+    private int formDisplayLabelY(int contentTop) {
+        return sbPanelMode == SbPanelMode.CREATE ? (contentTop + 111) : (contentTop + 40);
+    }
+
+    private void renderScoreboardForm(DrawContext c, int mx, int my) {
+        int contentTop = panelY + 44 + TAB_BAR_H;
+        int contentX = panelX + SIDEBAR_W + 10;
+        int contentW = panelW - SIDEBAR_W - 22;
+
+        String header = sbPanelMode == SbPanelMode.CREATE
+            ? "Crear nueva scoreboard"
+            : ("Editando: " + editingObjectiveName);
+        c.drawTextWithShadow(textRenderer, header, contentX, contentTop + 8, AeternumTheme.TEXT_PRIMARY);
+
+        if (sbPanelMode == SbPanelMode.CREATE) {
+            c.drawText(textRenderer, "ID interno (sin espacios)", contentX, contentTop + 24, AeternumTheme.TEXT_SECONDARY, false);
+            c.drawText(textRenderer, "Criterio", contentX, contentTop + 58, AeternumTheme.TEXT_SECONDARY, false);
+
+            int pillY = contentTop + 90;
+            int px = contentX;
+            for (String[] preset : CRITERION_PRESETS) {
+                int pw = textRenderer.getWidth(preset[0]) + 10;
+                boolean over = mx >= px && mx < px + pw && my >= pillY && my < pillY + 15;
+                AeternumTheme.drawCard(c, px, pillY, pw, 15,
+                    over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG,
+                    over ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
+                c.drawText(textRenderer, preset[0], px + 5, pillY + 4, AeternumTheme.TEXT_SECONDARY, false);
+                px += pw + 4;
+            }
+            String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
+            if (curCrit.isEmpty() || "dummy".equalsIgnoreCase(curCrit)) {
+                String hint = "Vacío = dummy  \u00B7  o elige mined/used/crafted/killed/custom";
+                int hx = px + 4;
+                int avail = contentX + contentW - hx;
+                if (avail > 50) {
+                    c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, hint, avail), hx, pillY + 4, AeternumTheme.TEXT_MUTED, false);
+                }
+            }
+        } else {
+            c.drawText(textRenderer, "Criterio: " + editingObjectiveCriterion + " (solo lectura)", contentX, contentTop + 24, AeternumTheme.TEXT_MUTED, false);
+        }
+
+        int dispLabelY = formDisplayLabelY(contentTop);
+        c.drawText(textRenderer, "Título visible (soporta \\gold, \\aqua, \\bold, \\reset...)", contentX, dispLabelY, AeternumTheme.TEXT_SECONDARY, false);
+        String dispRaw = sbDisplayField != null ? sbDisplayField.getText() : "";
+        String previewSrc = dispRaw.isBlank()
+            ? (sbPanelMode == SbPanelMode.CREATE ? (sbNameField != null ? sbNameField.getText() : "") : editingObjectiveName)
+            : dispRaw;
+        Text preview = MotdMarkup.parse(previewSrc);
+        c.drawText(textRenderer, "Vista previa: ", contentX, dispLabelY + 33, AeternumTheme.TEXT_MUTED, false);
+        c.drawTextWithShadow(textRenderer, preview, contentX + textRenderer.getWidth("Vista previa: "), dispLabelY + 33, AeternumTheme.TEXT_PRIMARY);
+
+        int aliasLabelY = dispLabelY + 49;
+        c.drawText(textRenderer, "Atajo chat (!!)", contentX, aliasLabelY, AeternumTheme.TEXT_SECONDARY, false);
+        int slotX = contentX + 162;
+        c.drawText(textRenderer, "Slot en pantalla", slotX, aliasLabelY, AeternumTheme.TEXT_SECONDARY, false);
+        int slotPillY = aliasLabelY + 11;
+        int sx = slotX;
+        for (String[] opt : SLOT_OPTIONS) {
+            int sw = textRenderer.getWidth(opt[1]) + 10;
+            boolean sel = opt[0].equals(formSlot);
+            boolean over = mx >= sx && mx < sx + sw && my >= slotPillY && my < slotPillY + 18;
+            AeternumTheme.drawCard(c, sx, slotPillY, sw, 18,
+                sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
+                sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
+            c.drawText(textRenderer, opt[1], sx + 5, slotPillY + 5, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+            sx += sw + 4;
+        }
+
+        int totalLabelY = aliasLabelY + 37;
+        c.drawText(textRenderer, "Cálculo de Total", contentX, totalLabelY, AeternumTheme.TEXT_SECONDARY, false);
+        int ty = totalLabelY + 11;
+        int tx = contentX;
+        tx += drawTogglePill(c, tx, ty, "Total: " + (formTotalEnabled ? "ON" : "OFF"), formTotalEnabled, 0xFF7AD694, mx, my) + 8;
+        tx += drawTogglePill(c, tx, ty, "Humans", formTotalHumans, 0xFF9DF0B4, mx, my) + 4;
+        tx += drawTogglePill(c, tx, ty, "Bots", formTotalBots, 0xFF9CD0FF, mx, my) + 4;
+        drawTogglePill(c, tx, ty, "Unknown", formTotalUnknown, AeternumTheme.ACCENT_GOLD, mx, my);
+
+        if (sbPanelMode == SbPanelMode.CREATE) {
+            int btnY = panelY + panelH - 64;
+            String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
+            boolean isStat = curCrit.contains(":");
+            String box = (formFillFromStats && isStat) ? "[x] " : "[ ] ";
+            String lbl = box + "Poblar con stats previas";
+            int fw = textRenderer.getWidth(lbl) + 14;
+            boolean over = isStat && mx >= contentX && mx < contentX + fw && my >= btnY && my < btnY + 20;
+            int bg = !isStat ? 0xFF121216 : (formFillFromStats ? 0xFF1A281E : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG));
+            int border = !isStat ? AeternumTheme.BORDER_SUBTLE : (formFillFromStats ? 0xFF7AD694 : AeternumTheme.BORDER_BRIGHT);
+            int fg = !isStat ? AeternumTheme.TEXT_MUTED : (formFillFromStats ? 0xFF9DF0B4 : AeternumTheme.TEXT_PRIMARY);
+            AeternumTheme.drawCard(c, contentX, btnY, fw, 20, bg, border);
+            c.drawTextWithShadow(textRenderer, lbl, contentX + 7, btnY + 6, fg);
+        }
+    }
+
+    private int drawTogglePill(DrawContext c, int x, int y, String label, boolean on, int accent, int mx, int my) {
+        int w = textRenderer.getWidth(label) + 14;
+        int h = 18;
+        boolean over = mx >= x && mx < x + w && my >= y && my < y + h;
+        int bg = on ? AeternumTheme.lerpColor(0xFF18181E, accent, 0.20f) : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG);
+        int border = on ? accent : AeternumTheme.BORDER_SUBTLE;
+        int fg = on ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_MUTED;
+        AeternumTheme.drawCard(c, x, y, w, h, bg, border);
+        c.drawTextWithShadow(textRenderer, label, x + 7, y + 5, fg);
+        return w;
+    }
+
+    private boolean handleScoreboardFormClick(double mx, double my) {
+        int contentTop = panelY + 44 + TAB_BAR_H;
+        int contentX = panelX + SIDEBAR_W + 10;
+        int contentW = panelW - SIDEBAR_W - 22;
+
+        if (sbPanelMode == SbPanelMode.CREATE) {
+            int pillY = contentTop + 90;
+            if (my >= pillY && my < pillY + 15) {
+                int px = contentX;
+                for (String[] preset : CRITERION_PRESETS) {
+                    int pw = textRenderer.getWidth(preset[0]) + 10;
+                    if (mx >= px && mx < px + pw) {
+                        if (sbCriterionField != null) {
+                            if (sbNameField != null) sbNameField.setFocused(false);
+                            sbCriterionField.setText(preset[1]);
+                            sbCriterionField.setCursorToEnd(false);
+                            boolean keepFocus = preset[1].endsWith(".");
+                            sbCriterionField.setFocused(keepFocus);
+                            if (!keepFocus && getFocused() == sbCriterionField) {
+                                setFocused(null);
+                            }
+                        }
+                        return true;
+                    }
+                    px += pw + 4;
+                }
+            }
+
+            int btnY = panelY + panelH - 64;
+            String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
+            if (curCrit.contains(":") && my >= btnY && my < btnY + 20) {
+                String box = formFillFromStats ? "[x] " : "[ ] ";
+                int fw = textRenderer.getWidth(box + "Poblar con stats previas") + 14;
+                if (mx >= contentX && mx < contentX + fw) {
+                    formFillFromStats = !formFillFromStats;
+                    return true;
+                }
+            }
+        }
+
+        int dispLabelY = formDisplayLabelY(contentTop);
+        int aliasLabelY = dispLabelY + 49;
+        int slotX = contentX + 162;
+        int slotPillY = aliasLabelY + 11;
+        if (my >= slotPillY && my < slotPillY + 18) {
+            int sx = slotX;
+            for (String[] opt : SLOT_OPTIONS) {
+                int sw = textRenderer.getWidth(opt[1]) + 10;
+                if (mx >= sx && mx < sx + sw) {
+                    formSlot = opt[0];
+                    return true;
+                }
+                sx += sw + 4;
+            }
+        }
+
+        int totalLabelY = aliasLabelY + 37;
+        int ty = totalLabelY + 11;
+        if (my >= ty && my < ty + 18) {
+            int tx = contentX;
+            int wTot = textRenderer.getWidth("Total: " + (formTotalEnabled ? "ON" : "OFF")) + 14;
+            if (mx >= tx && mx < tx + wTot) {
+                formTotalEnabled = !formTotalEnabled;
+                return true;
+            }
+            tx += wTot + 8;
+            int wHum = textRenderer.getWidth("Humans") + 14;
+            if (mx >= tx && mx < tx + wHum) {
+                formTotalHumans = !formTotalHumans;
+                return true;
+            }
+            tx += wHum + 4;
+            int wBot = textRenderer.getWidth("Bots") + 14;
+            if (mx >= tx && mx < tx + wBot) {
+                formTotalBots = !formTotalBots;
+                return true;
+            }
+            tx += wBot + 4;
+            int wUnk = textRenderer.getWidth("Unknown") + 14;
+            if (mx >= tx && mx < tx + wUnk) {
+                formTotalUnknown = !formTotalUnknown;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> criterionSuggestions() {
+        if (sbCriterionField == null) return List.of();
+        String raw = sbCriterionField.getText().trim().toLowerCase(Locale.ROOT);
+        if (raw.isEmpty()) return List.of();
+
+        List<String> out = new ArrayList<>();
+        if (raw.startsWith("minecraft.mined:")) {
+            String q = raw.substring("minecraft.mined:".length()).replace("minecraft.", "");
+            for (var id : Registries.BLOCK.getIds()) {
+                String path = id.getPath();
+                if (q.isEmpty() || path.contains(q)) {
+                    out.add("minecraft.mined:minecraft." + path);
+                }
+            }
+        } else if (raw.startsWith("minecraft.used:") || raw.startsWith("minecraft.crafted:")
+            || raw.startsWith("minecraft.broken:") || raw.startsWith("minecraft.picked_up:")
+            || raw.startsWith("minecraft.dropped:")) {
+            int colon = raw.indexOf(':');
+            String prefix = raw.substring(0, colon + 1);
+            String q = raw.substring(colon + 1).replace("minecraft.", "");
+            for (var id : Registries.ITEM.getIds()) {
+                String path = id.getPath();
+                if (q.isEmpty() || path.contains(q)) {
+                    out.add(prefix + "minecraft." + path);
+                }
+            }
+        } else if (raw.startsWith("minecraft.killed:") || raw.startsWith("minecraft.killed_by:")) {
+            int colon = raw.indexOf(':');
+            String prefix = raw.substring(0, colon + 1);
+            String q = raw.substring(colon + 1).replace("minecraft.", "");
+            for (var id : Registries.ENTITY_TYPE.getIds()) {
+                String path = id.getPath();
+                if (q.isEmpty() || path.contains(q)) {
+                    out.add(prefix + "minecraft." + path);
+                }
+            }
+        } else if (raw.startsWith("minecraft.custom:")) {
+            String q = raw.substring("minecraft.custom:".length()).replace("minecraft.", "");
+            for (var id : Registries.CUSTOM_STAT.getIds()) {
+                String path = id.getPath();
+                if (q.isEmpty() || path.contains(q)) {
+                    out.add("minecraft.custom:minecraft." + path);
+                }
+            }
+        } else {
+            String[] basics = {
+                "aeternum:dig_all", "aeternum:placed_blocks",
+                "dummy", "trigger", "health", "deathCount", "playerKillCount",
+                "totalKillCount", "armor", "food", "air", "xp", "level",
+                "minecraft.mined:minecraft.", "minecraft.used:minecraft.",
+                "minecraft.crafted:minecraft.", "minecraft.killed:minecraft.",
+                "minecraft.custom:minecraft."
+            };
+            for (String b : basics) {
+                if (b.toLowerCase(Locale.ROOT).contains(raw) && !b.equalsIgnoreCase(raw)) {
+                    out.add(b);
+                }
+            }
+        }
+        out.sort(String.CASE_INSENSITIVE_ORDER);
+        if (out.size() == 1 && out.get(0).equalsIgnoreCase(raw)) {
+            return List.of();
+        }
+        return out;
+    }
+
+    private void renderCriterionSuggestions(DrawContext c, int mx, int my) {
+        List<String> suggestions = criterionSuggestions();
+        if (suggestions.isEmpty() || sbCriterionField == null) return;
+        int visible = Math.min(8, suggestions.size());
+        int maxScroll = Math.max(0, suggestions.size() - visible);
+        criterionSugScroll = Math.max(0, Math.min(maxScroll, criterionSugScroll));
+
+        int x = sbCriterionField.boxX();
+        int y = sbCriterionField.boxY() + 19;
+        int w = sbCriterionField.getWidth() + 12;
+        int rowH = 14;
+        int h = visible * rowH + 2;
+        c.fill(x, y, x + w, y + h, 0xFF0B0B0F);
+        c.drawBorder(x, y, w, h, AeternumTheme.BORDER_BRIGHT);
+
+        int textMaxW = maxScroll > 0 ? (w - 16) : (w - 10);
+        int rowRight = maxScroll > 0 ? (x + w - 9) : (x + w - 1);
+        for (int i = 0; i < visible; i++) {
+            int idx = criterionSugScroll + i;
+            int ry = y + 1 + i * rowH;
+            boolean over = mx >= x + 1 && mx < rowRight && my >= ry && my < ry + rowH;
+            if (over) {
+                c.fill(x + 1, ry, rowRight, ry + rowH, AeternumTheme.CARD_HOVER);
+            }
+            String shown = AeternumTheme.ellipsize(textRenderer, suggestions.get(idx), textMaxW);
+            c.drawText(textRenderer, shown, x + 5, ry + 3, over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+        }
+        if (maxScroll > 0) {
+            AeternumTheme.drawScrollbar(c, x + w - 6, y + 2, y + h - 2, suggestions.size(), visible, criterionSugScroll, draggingCriterionScrollbar);
+        }
+    }
+
+    private boolean handleCriterionSuggestionClick(double mx, double my) {
+        if (sbCriterionField == null || !sbCriterionField.isFocused()) return false;
+        List<String> suggestions = criterionSuggestions();
+        if (suggestions.isEmpty()) return false;
+        int visible = Math.min(8, suggestions.size());
+        int maxScroll = Math.max(0, suggestions.size() - visible);
+        criterionSugScroll = Math.max(0, Math.min(maxScroll, criterionSugScroll));
+
+        int x = sbCriterionField.boxX();
+        int y = sbCriterionField.boxY() + 19;
+        int w = sbCriterionField.getWidth() + 12;
+        int rowH = 14;
+        int h = visible * rowH + 2;
+        if (mx < x || mx >= x + w || my < y || my >= y + h) return false;
+
+        if (maxScroll > 0 && mx >= x + w - 9) {
+            draggingCriterionScrollbar = true;
+            double frac = Math.max(0.0, Math.min(1.0, (my - (y + 2)) / Math.max(1.0, h - 4)));
+            criterionSugScroll = (int) Math.round(frac * maxScroll);
+            return true;
+        }
+
+        int idx = criterionSugScroll + (int) ((my - y - 1) / rowH);
+        if (idx >= 0 && idx < suggestions.size()) {
+            sbCriterionField.setText(suggestions.get(idx));
+            sbCriterionField.setCursorToEnd(false);
+            sbCriterionField.setFocused(false);
+            if (getFocused() == sbCriterionField) {
+                setFocused(null);
+            }
+            criterionSugScroll = 0;
+            return true;
+        }
+        return false;
+    }
+
+    private void clearTextFieldFocusIfOutside(double mx, double my) {
+        UiTextField[] fields = { searchField, scoreSearchField, objectiveSearchField, sbNameField, sbCriterionField, sbDisplayField, sbAliasField };
+        for (UiTextField tf : fields) {
+            if (tf == null || !tf.isFocused()) continue;
+            int bx = tf.boxX();
+            int by = tf.boxY();
+            int bw = tf.getWidth() + 12;
+            int bh = 20;
+            if (mx < bx || mx >= bx + bw || my < by || my >= by + bh) {
+                tf.setFocused(false);
+                if (getFocused() == tf) {
+                    setFocused(null);
+                }
+            }
         }
     }
 
@@ -1287,6 +1877,13 @@ public final class StatsScreen extends UiScreen {
         if (button == 0 && isCloseButtonHit(mx, my)) {
             close();
             return true;
+        }
+        if (button == 0 && activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE
+            && handleCriterionSuggestionClick(mx, my)) {
+            return true;
+        }
+        if (button == 0) {
+            clearTextFieldFocusIfOutside(mx, my);
         }
 
         // Tab clicks
@@ -1434,7 +2031,8 @@ public final class StatsScreen extends UiScreen {
             }
 
             if (mx >= panelX + 4 && mx < panelX + SIDEBAR_W - 4 && my >= sTop && my < sBottom) {
-                int delX = panelX + SIDEBAR_W - 24;
+                int delX = panelX + SIDEBAR_W - 22;
+                int editX = delX - 16;
                 List<ScoreboardObjectiveSnapshot> shownObjectives = filteredObjectives();
                 for (int i = 0; i < shownObjectives.size(); i++) {
                     int ry = sTop + i * SB_SIDEBAR_ROW_H - (int) Math.round(sbSidebarScroll);
@@ -1442,6 +2040,11 @@ public final class StatsScreen extends UiScreen {
                     if (my >= ry && my < ry + SB_SIDEBAR_ROW_H - 2) {
                         ScoreboardObjectiveSnapshot obj = shownObjectives.get(i);
                         int delY = ry + 5;
+                        if (mx >= editX && mx < editX + 14 && my >= delY && my < delY + 14) {
+                            selectedObjectiveName = obj.name;
+                            openEditObjectiveForm(obj);
+                            return true;
+                        }
                         if (mx >= delX && mx < delX + 14 && my >= delY && my < delY + 14) {
                             if (!hasShiftDown()) {
                                 statusMessage = "Mantén Shift para habilitar el borrado de scoreboards.";
@@ -1450,6 +2053,10 @@ public final class StatsScreen extends UiScreen {
                             }
                             if (obj.name.equals(armedObjectiveDelete)) {
                                 armedObjectiveDelete = null;
+                                if (sbPanelMode == SbPanelMode.EDIT && obj.name.equals(editingObjectiveName)) {
+                                    sbPanelMode = SbPanelMode.VIEW;
+                                    init();
+                                }
                                 statusMessage = "Eliminando scoreboard " + obj.name + "…";
                                 statusError = false;
                                 ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_objective", "", obj.name));
@@ -1463,25 +2070,38 @@ public final class StatsScreen extends UiScreen {
                         }
                         selectedObjectiveName = obj.name;
                         listScroll = targetListScroll = 0;
+                        if (sbPanelMode != SbPanelMode.VIEW) {
+                            sbPanelMode = SbPanelMode.VIEW;
+                            init();
+                        }
                         requestSelectedObjectiveDetail();
                         return true;
                     }
                 }
             }
 
-            ScoreboardObjectiveSnapshot selected = selectedObjectiveSnapshot();
-            int chipY = topY + 32;
-            if (my >= chipY && my < chipY + 16) {
-                int chipX = panelX + SIDEBAR_W + 10;
-                for (ScoreFilter sf : ScoreFilter.values()) {
-                    String chipLabel = sf.label + " (" + countScoreFilter(selected, sf) + ")";
-                    int cw = textRenderer.getWidth(chipLabel) + 12;
-                    if (mx >= chipX && mx < chipX + cw) {
-                        activeScoreFilter = sf;
-                        listScroll = targetListScroll = 0;
-                        return true;
+            if (sbPanelMode != SbPanelMode.VIEW) {
+                if (sbPanelMode == SbPanelMode.CREATE && handleCriterionSuggestionClick(mx, my)) {
+                    return true;
+                }
+                if (handleScoreboardFormClick(mx, my)) {
+                    return true;
+                }
+            } else {
+                ScoreboardObjectiveSnapshot selected = selectedObjectiveSnapshot();
+                int chipY = topY + 32;
+                if (my >= chipY && my < chipY + 16) {
+                    int chipX = panelX + SIDEBAR_W + 10;
+                    for (ScoreFilter sf : ScoreFilter.values()) {
+                        String chipLabel = sf.label + " (" + countScoreFilter(selected, sf) + ")";
+                        int cw = textRenderer.getWidth(chipLabel) + 12;
+                        if (mx >= chipX && mx < chipX + cw) {
+                            activeScoreFilter = sf;
+                            listScroll = targetListScroll = 0;
+                            return true;
+                        }
+                        chipX += cw + 4;
                     }
-                    chipX += cw + 4;
                 }
             }
         }
@@ -1520,6 +2140,7 @@ public final class StatsScreen extends UiScreen {
     public boolean mouseReleased(double mx, double my, int button) {
         draggingScrollbar = false;
         draggingSbSidebarScrollbar = false;
+        draggingCriterionScrollbar = false;
         return super.mouseReleased(mx, my, button);
     }
 
@@ -1542,6 +2163,16 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        if (draggingCriterionScrollbar && sbCriterionField != null) {
+            List<String> suggestions = criterionSuggestions();
+            int visible = Math.min(8, suggestions.size());
+            int maxScroll = Math.max(0, suggestions.size() - visible);
+            int y = sbCriterionField.boxY() + 19;
+            int h = visible * 14 + 2;
+            double frac = Math.max(0.0, Math.min(1.0, (my - (y + 2)) / Math.max(1.0, h - 4)));
+            criterionSugScroll = (int) Math.round(frac * maxScroll);
+            return true;
+        }
         if (draggingSbSidebarScrollbar) {
             int sTop = tabBarY() + TAB_BAR_H + 28;
             int sBottom = panelY + panelH - 36 - 34;
@@ -1563,6 +2194,22 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double hAmt, double vAmt) {
+        if (activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE
+            && sbCriterionField != null && sbCriterionField.isFocused()) {
+            List<String> suggestions = criterionSuggestions();
+            if (!suggestions.isEmpty()) {
+                int visible = Math.min(8, suggestions.size());
+                int x = sbCriterionField.boxX();
+                int y = sbCriterionField.boxY() + 19;
+                int w = sbCriterionField.getWidth() + 12;
+                int h = visible * 14 + 2;
+                if (mx >= x && mx < x + w && my >= y && my < y + h) {
+                    int maxScroll = Math.max(0, suggestions.size() - visible);
+                    criterionSugScroll = Math.max(0, Math.min(maxScroll, criterionSugScroll - (int) Math.signum(vAmt) * 2));
+                    return true;
+                }
+            }
+        }
         if (activeTab == Tab.SCOREBOARDS && mx >= panelX + 4 && mx < panelX + SIDEBAR_W) {
             int sTop = tabBarY() + TAB_BAR_H + 28;
             int sBottom = panelY + panelH - 36 - 34;

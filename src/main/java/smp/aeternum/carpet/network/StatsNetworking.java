@@ -2,10 +2,13 @@ package smp.aeternum.carpet.network;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import java.io.Reader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,16 +24,31 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.scoreboard.ScoreboardDisplaySlot;
 import net.minecraft.scoreboard.ScoreboardEntry;
 import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.scoreboard.ScoreHolder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.stat.Stat;
+import net.minecraft.stat.Stats;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.WorldSavePath;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.motd.MotdMarkup;
 import smp.aeternum.carpet.stats.PlayerRegistryStore;
 import smp.aeternum.carpet.stats.PlayerRegistryStore.Entry;
 import smp.aeternum.carpet.stats.PlayerRegistryStore.EntryType;
+import smp.aeternum.carpet.stats.ScoreboardConfigStore;
+import smp.aeternum.carpet.stats.ScoreboardConfigStore.ObjectiveConfig;
 
 public final class StatsNetworking {
     private static final Gson GSON = new Gson();
@@ -146,10 +164,23 @@ public final class StatsNetworking {
             ScoreboardObjectiveSnapshot snap = new ScoreboardObjectiveSnapshot();
             snap.name = obj.getName();
             snap.displayName = obj.getDisplayName() != null ? obj.getDisplayName().getString() : obj.getName();
+            snap.criterion = obj.getCriterion() != null ? obj.getCriterion().getName() : "dummy";
             if (obj == sidebarObj) snap.slot = "SIDEBAR";
             else if (obj == listObj) snap.slot = "LIST";
             else if (obj == belowObj) snap.slot = "BELOW_NAME";
             snap.entryCount = sb.getScoreboardEntries(obj).size();
+            ObjectiveConfig cfg = ScoreboardConfigStore.getOrDefault(obj.getName());
+            if (cfg.tracker != null && !cfg.tracker.isEmpty()) {
+                snap.criterion = cfg.tracker;
+            }
+            snap.chatAlias = cfg.chatAlias != null ? cfg.chatAlias : "";
+            snap.displayNameMarkup = (cfg.displayNameMarkup != null && !cfg.displayNameMarkup.isBlank())
+                ? cfg.displayNameMarkup
+                : snap.displayName;
+            snap.totalEnabled = cfg.totalEnabled;
+            snap.totalHumans = cfg.totalHumans;
+            snap.totalBots = cfg.totalBots;
+            snap.totalUnknown = cfg.totalUnknown;
             out.add(snap);
         }
         out.sort(Comparator.comparing((ScoreboardObjectiveSnapshot o) -> o.name, String.CASE_INSENSITIVE_ORDER));
@@ -243,11 +274,14 @@ public final class StatsNetworking {
                 }
                 if (target != null) {
                     sb.removeObjective(target);
+                    ScoreboardConfigStore.remove(objName);
                     sendSnapshot(player, false, "Scoreboard eliminada: " + objName, false);
                 } else {
                     sendSnapshot(player, false, "Scoreboard no encontrada: " + objName, true);
                 }
             }
+            case "create_objective" -> handleCreateObjective(server, player, payload.value());
+            case "edit_objective" -> handleEditObjective(server, player, payload.value());
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -460,6 +494,327 @@ public final class StatsNetworking {
         broadcastProgress(server, "Consulta masiva cancelada (" + batchDone + "/" + batchTotal + ", " + batchResolved + " resueltos).", false);
     }
 
+    private static void handleCreateObjective(MinecraftServer server, ServerPlayerEntity player, String json) {
+        CreateObjectiveRequest req;
+        try {
+            req = GSON.fromJson(json, CreateObjectiveRequest.class);
+        } catch (Exception ex) {
+            sendSnapshot(player, false, "Datos inválidos al crear scoreboard.", true);
+            return;
+        }
+        if (req == null || req.name == null || req.name.isBlank()) {
+            sendSnapshot(player, false, "El ID interno no puede estar vacío.", true);
+            return;
+        }
+        String objName = req.name.trim();
+        if (objName.contains(" ")) {
+            sendSnapshot(player, false, "El ID interno no puede tener espacios.", true);
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        for (ScoreboardObjective existing : sb.getObjectives()) {
+            if (existing.getName().equalsIgnoreCase(objName)) {
+                sendSnapshot(player, false, "Ya existe una scoreboard con ID: " + objName, true);
+                return;
+            }
+        }
+        String criterionRaw = (req.criterion == null || req.criterion.isBlank()) ? "dummy" : req.criterion.trim();
+        boolean isCustomTracker = ScoreboardConfigStore.TRACKER_DIG_ALL.equals(criterionRaw)
+            || ScoreboardConfigStore.TRACKER_PLACED_BLOCKS.equals(criterionRaw);
+        ScoreboardCriterion criterion = isCustomTracker
+            ? ScoreboardCriterion.DUMMY
+            : ScoreboardCriterion.getOrCreateStatCriterion(criterionRaw).orElse(null);
+        if (criterion == null) {
+            sendSnapshot(player, false, "Criterio inválido: " + criterionRaw, true);
+            return;
+        }
+        String alias = ScoreboardConfigStore.normalizeAlias(req.chatAlias);
+        String conflict = ScoreboardConfigStore.findAliasConflict(objName, alias);
+        if (conflict != null) {
+            sendSnapshot(player, false, "Alias !!" + alias + " ya está usado por: " + conflict, true);
+            return;
+        }
+        String disp = (req.displayName == null || req.displayName.isBlank()) ? objName : req.displayName.trim();
+        ScoreboardObjective created = sb.addObjective(
+            objName,
+            criterion,
+            MotdMarkup.parse(disp),
+            criterion.getDefaultRenderType(),
+            false,
+            null
+        );
+        applyObjectiveSlot(sb, created, req.slot);
+
+        ObjectiveConfig cfg = new ObjectiveConfig();
+        cfg.totalEnabled = req.totalEnabled;
+        cfg.totalHumans = req.totalHumans;
+        cfg.totalBots = req.totalBots;
+        cfg.totalUnknown = req.totalUnknown;
+        cfg.chatAlias = alias;
+        cfg.displayNameMarkup = disp;
+        cfg.tracker = isCustomTracker ? criterionRaw : "";
+        ScoreboardConfigStore.put(objName, cfg);
+
+        int filled = 0;
+        if (req.fillFromStats) {
+            if (isCustomTracker) {
+                filled = populateTrackerFromStats(server, sb, created, criterionRaw);
+            } else if (criterion instanceof Stat<?> stat) {
+                filled = populateObjectiveFromStats(server, sb, created, stat, criterionRaw);
+            }
+        }
+        String msg = filled > 0
+            ? ("Scoreboard '" + objName + "' creada (" + filled + " entradas rellenadas).")
+            : ("Scoreboard '" + objName + "' creada.");
+        sendSnapshot(player, false, msg, false);
+    }
+
+    private static int populateTrackerFromStats(
+        MinecraftServer server,
+        Scoreboard sb,
+        ScoreboardObjective objective,
+        String trackerId
+    ) {
+        boolean digAll = ScoreboardConfigStore.TRACKER_DIG_ALL.equals(trackerId);
+        List<Item> trackedItems = new ArrayList<>();
+        for (Item item : Registries.ITEM) {
+            if (digAll) {
+                var stack = item.getDefaultStack();
+                if (stack.isIn(ItemTags.PICKAXES) || stack.isIn(ItemTags.SHOVELS)
+                    || stack.isIn(ItemTags.AXES) || stack.isIn(ItemTags.HOES) || item == Items.SHEARS) {
+                    trackedItems.add(item);
+                }
+            } else if (item instanceof BlockItem) {
+                trackedItems.add(item);
+            }
+        }
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        int count = 0;
+
+        for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
+            if (entry.name == null || entry.name.isBlank()) {
+                continue;
+            }
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(entry.uuid);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+
+            long total = 0L;
+            ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+            if (online != null) {
+                var handler = online.getStatHandler();
+                for (Item item : trackedItems) {
+                    total += handler.getStat(Stats.USED.getOrCreateStat(item));
+                }
+            } else {
+                total = readOfflineUsedSum(statsDir.resolve(entry.uuid + ".json"), trackedItems);
+            }
+
+            if (total > 0) {
+                int clamped = (int) Math.min(Integer.MAX_VALUE, total);
+                sb.getOrCreateScore(ScoreHolder.fromName(entry.name), objective).setScore(clamped);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static long readOfflineUsedSum(Path statsFile, List<Item> trackedItems) {
+        if (!Files.isRegularFile(statsFile)) {
+            return 0L;
+        }
+        try (Reader reader = Files.newBufferedReader(statsFile)) {
+            JsonObject root = GSON.fromJson(reader, JsonObject.class);
+            if (root == null || !root.has("stats") || !root.get("stats").isJsonObject()) {
+                return 0L;
+            }
+            JsonObject statsObj = root.getAsJsonObject("stats");
+            if (!statsObj.has("minecraft:used") || !statsObj.get("minecraft:used").isJsonObject()) {
+                return 0L;
+            }
+            JsonObject usedObj = statsObj.getAsJsonObject("minecraft:used");
+            long sum = 0L;
+            for (Item item : trackedItems) {
+                Identifier id = Registries.ITEM.getId(item);
+                if (usedObj.has(id.toString())) {
+                    sum += usedObj.get(id.toString()).getAsLong();
+                }
+            }
+            return sum;
+        } catch (Exception ignored) {
+            return 0L;
+        }
+    }
+
+    private static int populateObjectiveFromStats(
+        MinecraftServer server,
+        Scoreboard sb,
+        ScoreboardObjective objective,
+        Stat<?> stat,
+        String criterionRaw
+    ) {
+        String[] parts = parseStatCriterionKeys(criterionRaw);
+        String catKey = parts != null ? parts[0] : null;
+        String targetKey = parts != null ? parts[1] : null;
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        int count = 0;
+
+        for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
+            if (entry.name == null || entry.name.isBlank()) {
+                continue;
+            }
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(entry.uuid);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+
+            int val = 0;
+            ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+            if (online != null) {
+                val = online.getStatHandler().getStat(stat);
+            } else if (catKey != null && targetKey != null) {
+                val = readOfflineStatValue(statsDir.resolve(entry.uuid + ".json"), catKey, targetKey);
+            }
+
+            if (val > 0) {
+                sb.getOrCreateScore(ScoreHolder.fromName(entry.name), objective).setScore(val);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static String[] parseStatCriterionKeys(String criterionRaw) {
+        int colon = criterionRaw.indexOf(':');
+        if (colon <= 0 || colon >= criterionRaw.length() - 1) {
+            return null;
+        }
+        String cat = criterionRaw.substring(0, colon).replace('.', ':');
+        String target = criterionRaw.substring(colon + 1).replace('.', ':');
+        return new String[] { cat, target };
+    }
+
+    private static int readOfflineStatValue(Path statsFile, String catKey, String targetKey) {
+        if (!Files.isRegularFile(statsFile)) {
+            return 0;
+        }
+        try (Reader reader = Files.newBufferedReader(statsFile)) {
+            JsonObject root = GSON.fromJson(reader, JsonObject.class);
+            if (root == null || !root.has("stats") || !root.get("stats").isJsonObject()) {
+                return 0;
+            }
+            JsonObject statsObj = root.getAsJsonObject("stats");
+            if (!statsObj.has(catKey) || !statsObj.get(catKey).isJsonObject()) {
+                return 0;
+            }
+            JsonObject catObj = statsObj.getAsJsonObject(catKey);
+            if (!catObj.has(targetKey)) {
+                return 0;
+            }
+            return catObj.get(targetKey).getAsInt();
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private static void handleEditObjective(MinecraftServer server, ServerPlayerEntity player, String json) {
+        EditObjectiveRequest req;
+        try {
+            req = GSON.fromJson(json, EditObjectiveRequest.class);
+        } catch (Exception ex) {
+            sendSnapshot(player, false, "Datos inválidos al editar scoreboard.", true);
+            return;
+        }
+        if (req == null || req.name == null || req.name.isBlank()) {
+            sendSnapshot(player, false, "Scoreboard inválida.", true);
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        ScoreboardObjective target = null;
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            if (obj.getName().equals(req.name)) {
+                target = obj;
+                break;
+            }
+        }
+        if (target == null) {
+            sendSnapshot(player, false, "Scoreboard no encontrada: " + req.name, true);
+            return;
+        }
+
+        String alias = ScoreboardConfigStore.normalizeAlias(req.chatAlias);
+        String conflict = ScoreboardConfigStore.findAliasConflict(req.name, alias);
+        if (conflict != null) {
+            sendSnapshot(player, false, "Alias !!" + alias + " ya está usado por: " + conflict, true);
+            return;
+        }
+
+        String disp = (req.displayName == null || req.displayName.isBlank()) ? req.name : req.displayName.trim();
+        target.setDisplayName(MotdMarkup.parse(disp));
+        applyObjectiveSlot(sb, target, req.slot);
+
+        ObjectiveConfig prev = ScoreboardConfigStore.getOrDefault(req.name);
+        ObjectiveConfig cfg = new ObjectiveConfig();
+        cfg.totalEnabled = req.totalEnabled;
+        cfg.totalHumans = req.totalHumans;
+        cfg.totalBots = req.totalBots;
+        cfg.totalUnknown = req.totalUnknown;
+        cfg.chatAlias = alias;
+        cfg.displayNameMarkup = disp;
+        cfg.tracker = prev.tracker;
+        ScoreboardConfigStore.put(req.name, cfg);
+
+        sendSnapshot(player, false, "Scoreboard '" + req.name + "' actualizada.", false);
+    }
+
+    private static void applyObjectiveSlot(Scoreboard sb, ScoreboardObjective target, String slotName) {
+        for (ScoreboardDisplaySlot slot : ScoreboardDisplaySlot.values()) {
+            if (sb.getObjectiveForSlot(slot) == target) {
+                sb.setObjectiveSlot(slot, null);
+            }
+        }
+        if (slotName != null && !slotName.isEmpty()) {
+            ScoreboardDisplaySlot nextSlot = switch (slotName) {
+                case "SIDEBAR" -> ScoreboardDisplaySlot.SIDEBAR;
+                case "LIST" -> ScoreboardDisplaySlot.LIST;
+                case "BELOW_NAME" -> ScoreboardDisplaySlot.BELOW_NAME;
+                default -> null;
+            };
+            if (nextSlot != null) {
+                sb.setObjectiveSlot(nextSlot, target);
+            }
+        }
+    }
+
+    public static final class CreateObjectiveRequest {
+        public String name = "";
+        public String displayName = "";
+        public String criterion = "dummy";
+        public boolean fillFromStats;
+        public String slot = "";
+        public String chatAlias = "";
+        public boolean totalEnabled;
+        public boolean totalHumans = true;
+        public boolean totalBots;
+        public boolean totalUnknown;
+    }
+
+    public static final class EditObjectiveRequest {
+        public String name = "";
+        public String displayName = "";
+        public String slot = "";
+        public String chatAlias = "";
+        public boolean totalEnabled;
+        public boolean totalHumans = true;
+        public boolean totalBots;
+        public boolean totalUnknown;
+    }
+
     public static final class StatsSnapshot {
         public List<RegistryEntrySnapshot> entries = List.of();
         public List<String> unexpectedFiles = List.of();
@@ -473,8 +828,15 @@ public final class StatsNetworking {
     public static final class ScoreboardObjectiveSnapshot {
         public String name = "";
         public String displayName = "";
+        public String displayNameMarkup = "";
+        public String criterion = "dummy";
         public String slot = "";
         public int entryCount;
+        public String chatAlias = "";
+        public boolean totalEnabled;
+        public boolean totalHumans = true;
+        public boolean totalBots;
+        public boolean totalUnknown;
     }
 
     public static final class ScoreboardEntrySnapshot {
