@@ -25,6 +25,10 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
     private static final int MODE_BTN_SIZE = 16;
     private static final int MODE_BTN_GAP = 2;
     private static final int MODE_BTN_X0 = 115;
+    private static final int KICK_BTN_X = 180;
+    private static final int KICK_BTN_Y = 142;
+    private static final int KICK_BTN_W = 76;
+    private static final int KICK_BTN_H = 16;
     private static final Identifier HEART_CONTAINER_TEX = Identifier.ofVanilla("hud/heart/container");
     private static final Identifier HEART_FULL_TEX = Identifier.ofVanilla("hud/heart/full");
     private static final ItemStack CREATIVE_ICON = new ItemStack(Items.GRASS_BLOCK);
@@ -147,6 +151,16 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
         }
 
         c.drawText(this.textRenderer, "Ender Chest", x + 180, y + 69, 0xFF404040, false);
+
+        if ("Bot".equals(status) || "Online".equals(status)) {
+            int kx = x + KICK_BTN_X;
+            int ky = y + KICK_BTN_Y;
+            boolean hoverKick = mouseX >= kx && mouseX < kx + KICK_BTN_W && mouseY >= ky && mouseY < ky + KICK_BTN_H;
+            c.fill(kx, ky, kx + KICK_BTN_W, ky + KICK_BTN_H, hoverKick ? 0xFFB84747 : 0xFF9E3B3B);
+            c.drawBorder(kx, ky, KICK_BTN_W, KICK_BTN_H, hoverKick ? 0xFF2B0F0F : 0xFF555555);
+            String kickLbl = "Expulsar";
+            c.drawTextWithShadow(this.textRenderer, kickLbl, kx + (KICK_BTN_W - this.textRenderer.getWidth(kickLbl)) / 2, ky + 4, 0xFFFFFFFF);
+        }
     }
 
     private static void drawBevelBox(DrawContext c, int x, int y, int w, int h, int fill) {
@@ -184,6 +198,16 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
                     }
                 }
             }
+            String status = this.handler.getStatusLabel();
+            if ("Bot".equals(status) || "Online".equals(status)) {
+                int kx = this.x + KICK_BTN_X;
+                int ky = this.y + KICK_BTN_Y;
+                if (mouseX >= kx && mouseX < kx + KICK_BTN_W && mouseY >= ky && mouseY < ky + KICK_BTN_H
+                    && this.client != null && this.client.interactionManager != null) {
+                    this.client.interactionManager.clickButton(this.handler.syncId, BotInventoryScreenHandler.KICK_BUTTON_ID);
+                    return true;
+                }
+            }
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -203,6 +227,15 @@ public final class BotInventoryScreen extends HandledScreen<BotInventoryScreenHa
                     context.drawTooltip(this.textRenderer, Text.literal(tip), mouseX, mouseY);
                     break;
                 }
+            }
+        }
+        String status = this.handler.getStatusLabel();
+        if ("Bot".equals(status) || "Online".equals(status)) {
+            int kx = this.x + KICK_BTN_X;
+            int ky = this.y + KICK_BTN_Y;
+            if (mouseX >= kx && mouseX < kx + KICK_BTN_W && mouseY >= ky && mouseY < ky + KICK_BTN_H) {
+                String tip = "Bot".equals(status) ? "Desconectar bot (/player kill)" : "Expulsar jugador (/kick)";
+                context.drawTooltip(this.textRenderer, Text.literal(tip), mouseX, mouseY);
             }
         }
     }

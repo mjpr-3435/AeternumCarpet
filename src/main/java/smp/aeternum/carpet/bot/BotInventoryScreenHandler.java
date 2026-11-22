@@ -14,7 +14,9 @@ import net.minecraft.screen.PropertyDelegate;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.screen.slot.Slot;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
@@ -25,6 +27,7 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
     public static final int MODE_CREATIVE = 1;
     public static final int MODE_SPECTATOR = 2;
     public static final int MODE_BUTTON_BASE = 10;
+    public static final int KICK_BUTTON_ID = 20;
 
     private static final int TARGET_INV_SLOTS = 41;
     private static final int ENDER_SLOTS = 27;
@@ -286,6 +289,25 @@ public final class BotInventoryScreenHandler extends ScreenHandler {
     @Override
     public boolean onButtonClick(PlayerEntity player, int id) {
         if (serverTarget == null && offlineSession == null) return false;
+        if (id == KICK_BUTTON_ID) {
+            if (serverTarget == null) return false;
+            if (serverTarget instanceof EntityPlayerMPFake bot) {
+                MinecraftServer server = bot.getServer();
+                if (server != null) {
+                    server.getCommandManager().executeWithPrefix(
+                        server.getCommandSource().withSilent(),
+                        "player " + bot.getName().getString() + " kill"
+                    );
+                }
+            } else {
+                if (!player.hasPermissionLevel(2)) return false;
+                serverTarget.networkHandler.disconnect(Text.literal("Expulsado por un administrador."));
+            }
+            if (player instanceof ServerPlayerEntity viewer) {
+                viewer.closeHandledScreen();
+            }
+            return true;
+        }
         if (id >= 0 && id < 9) {
             if (serverTarget != null) {
                 serverTarget.getInventory().setSelectedSlot(id);
