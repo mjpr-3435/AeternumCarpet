@@ -45,10 +45,10 @@ public final class FinderCommand {
     public static void register(CommandDispatcher<ServerCommandSource> d) {
         d.register(literal("find").requires(s -> AeternumCarpetSettings.commandFinder)
             .then(argument("lugar", StringArgumentType.word()).suggests(FinderCommand::suggestQueryPlaces)
-                .then(argument("texto", StringArgumentType.greedyString()).executes(c -> query(c, false)))));
+                .then(argument("texto", StringArgumentType.greedyString()).suggests((c, b) -> FinderItemNames.suggest(b.getRemaining(), b)).executes(c -> query(c, false)))));
         d.register(literal("count").requires(s -> AeternumCarpetSettings.commandFinder)
             .then(argument("lugar", StringArgumentType.word()).suggests(FinderCommand::suggestQueryPlaces)
-                .then(argument("texto", StringArgumentType.greedyString()).executes(c -> query(c, true)))));
+                .then(argument("texto", StringArgumentType.greedyString()).suggests((c, b) -> FinderItemNames.suggest(b.getRemaining(), b)).executes(c -> query(c, true)))));
         d.register(literal("finder").requires(s -> AeternumCarpetSettings.commandFinder && s.hasPermissionLevel(2))
             .then(literal("help").executes(FinderCommand::help))
             .then(literal("list").executes(FinderCommand::list))

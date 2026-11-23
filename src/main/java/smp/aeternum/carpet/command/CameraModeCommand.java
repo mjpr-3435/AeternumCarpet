@@ -84,7 +84,6 @@ public final class CameraModeCommand {
             }
             player.changeGameMode(targetGameMode);
             player.fallDistance = 0f;
-            context.getSource().sendFeedback(() -> Text.literal("Modo cámara desactivado.").formatted(Formatting.GRAY), false);
             return 1;
         }
 
@@ -110,7 +109,6 @@ public final class CameraModeCommand {
             current.getId()
         ));
         player.changeGameMode(GameMode.SPECTATOR);
-        context.getSource().sendFeedback(() -> Text.literal("Modo cámara activado.").formatted(Formatting.GRAY), false);
         return 1;
     }
 

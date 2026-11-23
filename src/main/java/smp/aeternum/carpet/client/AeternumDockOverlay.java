@@ -208,13 +208,14 @@ public final class AeternumDockOverlay {
 
         if (showCs) {
             boolean active = client.player != null && client.player.isSpectator();
-            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cs", null, null, CS_ICON, 0xFF3FD8FF, active));
+            String tip = active ? "Modo cámara (/cs): ON" : "Modo cámara (/cs): OFF";
+            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cs", null, null, CS_ICON, 0xFF3FD8FF, active, tip));
             cursor += DIM_TILE_W;
         }
 
         if (showCb) {
             if (!items.isEmpty()) {
-                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false));
+                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false, null));
                 cursor += MICRO_SEP_W;
             }
             String mode = cachedState.carefulBreakMode == null ? "off" : cachedState.carefulBreakMode;
@@ -229,13 +230,14 @@ public final class AeternumDockOverlay {
                 case "sneak" -> "always";
                 default -> "off";
             };
-            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cb:" + nextMode, null, null, CB_ICON, accent, active));
+            String tip = "CarefulBreak: " + mode + " (clic: " + nextMode + ")";
+            items.add(new MicroItem(false, cursor, DIM_TILE_W, "cb:" + nextMode, null, null, CB_ICON, accent, active, tip));
             cursor += DIM_TILE_W;
         }
 
         if (showDim && client.player != null) {
             if (!items.isEmpty()) {
-                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false));
+                items.add(new MicroItem(true, cursor, MICRO_SEP_W, null, null, null, ItemStack.EMPTY, 0, false, null));
                 cursor += MICRO_SEP_W;
             }
             String currentDim = client.player.getWorld().getRegistryKey().getValue().toString();
@@ -243,7 +245,7 @@ public final class AeternumDockOverlay {
                 DimButton dim = DIMENSIONS[i];
                 if (i > 0) cursor += DIM_TILE_GAP;
                 boolean current = dim.worldId.equals(currentDim);
-                items.add(new MicroItem(false, cursor, DIM_TILE_W, "dim:" + dim.command, dim.worldId, dim.texture, ItemStack.EMPTY, dim.accent, current));
+                items.add(new MicroItem(false, cursor, DIM_TILE_W, "dim:" + dim.command, dim.worldId, dim.texture, ItemStack.EMPTY, dim.accent, current, dim.label));
                 cursor += DIM_TILE_W;
             }
         }
@@ -413,6 +415,17 @@ public final class AeternumDockOverlay {
                 renderCompactTodoPill(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.compactTodoLabel, mx, my);
             } else {
                 renderTodoCard(c, tr, l.todoX, l.todoY, l.todoW, l.todoH, l.todoLayout, true, mx, my);
+            }
+        }
+        if (interactive && !microItems.isEmpty()) {
+            int by = l.dimY;
+            for (MicroItem item : microItems) {
+                if (item.separator || item.tooltip == null || item.tooltip.isEmpty()) continue;
+                int bx = l.dimX + item.xOffset;
+                if (mx >= bx && mx < bx + item.width && my >= by && my < by + DIM_TILE_H) {
+                    c.drawTooltip(tr, Text.literal(item.tooltip), mx, my);
+                    break;
+                }
             }
         }
     }
@@ -812,7 +825,7 @@ public final class AeternumDockOverlay {
 
     private record DimButton(String label, String worldId, String command, Identifier texture, int accent) {}
 
-    private record MicroItem(boolean separator, int xOffset, int width, String action, String worldId, Identifier texture, ItemStack icon, int accent, boolean active) {}
+    private record MicroItem(boolean separator, int xOffset, int width, String action, String worldId, Identifier texture, ItemStack icon, int accent, boolean active, String tooltip) {}
 
     private record WrappedTodo(int index, String prefix, int prefixW, List<OrderedText> lines, int yOffset, int height) {}
 
