@@ -34,6 +34,8 @@ import smp.aeternum.carpet.network.StatsNetworking.CreateObjectiveRequest;
 import smp.aeternum.carpet.network.StatsNetworking.DeleteScoreEntryRequest;
 import smp.aeternum.carpet.network.StatsNetworking.EditObjectiveRequest;
 import smp.aeternum.carpet.network.StatsNetworking.ItemSlotSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.AccountSideSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.MigrationCheckResult;
 import smp.aeternum.carpet.network.StatsNetworking.PlayerDetailSnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.PlayerStatSnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.RegistryEntrySnapshot;
@@ -66,10 +68,10 @@ public final class StatsScreen extends UiScreen {
     }
 
     private enum Tab {
-        GUIDE,
         REGISTRY,
         SCOREBOARDS,
-        UNEXPECTED
+        UNEXPECTED,
+        GUIDE
     }
 
     private enum Filter {
@@ -168,6 +170,14 @@ public final class StatsScreen extends UiScreen {
     private UiTextField playerStatSearchField;
     private UiButton tpLastPosButton;
     private long armedTpLastPosUntilMs;
+    private String migrateMode = "PREMIUM";
+    private UiTextField migrateNameField;
+    private String migrateTargetNameInput = "";
+    private MigrationCheckResult migrationCheck;
+    private boolean migrationChecking;
+    private String migrateDataChoice = "KEEP_A";
+    private String migrateStatsChoice = "MERGE";
+    private String migrateAdvChoice = "MERGE";
     private String editingScoreOwner;
     private UiTextField inlineScoreField;
     private String armedDeleteScoreOwner;
@@ -193,7 +203,7 @@ public final class StatsScreen extends UiScreen {
     private int lookupDone;
     private int lookupTotal;
     private int lookupResolved;
-    private Tab activeTab = Tab.GUIDE;
+    private Tab activeTab = Tab.REGISTRY;
     private Filter activeFilter = Filter.ALL;
     private SortMode activeSort = SortMode.NAME;
 
@@ -430,6 +440,18 @@ public final class StatsScreen extends UiScreen {
                             init();
                         })
                 );
+                addDrawableChild(
+                    "MIGRATE".equals(playerDetailSubtab)
+                        ? UiButton.primary(contentX + 258, contentTop + 6, 54, 18, "Migrar", b -> {})
+                        : UiButton.secondary(contentX + 258, contentTop + 6, 54, 18, "Migrar", b -> {
+                            playerDetailSubtab = "MIGRATE";
+                            playerDetailScroll = targetPlayerDetailScroll = 0;
+                            if (migrateTargetNameInput.isEmpty() && inspectingPlayerDetail != null && inspectingPlayerDetail.name != null) {
+                                migrateTargetNameInput = inspectingPlayerDetail.name;
+                            }
+                            init();
+                        })
+                );
                 boolean tpArmed = System.currentTimeMillis() < armedTpLastPosUntilMs;
                 tpLastPosButton = tpArmed
                     ? UiButton.danger(contentX + contentW - 210, contentTop + 6, 98, 18, "Confirmar TP", b -> handleTpLastPosClick())
@@ -449,6 +471,8 @@ public final class StatsScreen extends UiScreen {
                         playerDetailScroll = 0;
                     });
                     addDrawableChild(playerStatSearchField);
+                } else if ("MIGRATE".equals(playerDetailSubtab)) {
+                    initMigrateSubtabWidgets(contentX, contentW, contentTop);
                 }
             } else {
                 int sortW = 132;
@@ -932,11 +956,11 @@ public final class StatsScreen extends UiScreen {
         c.fill(panelX + 1, ty + TAB_BAR_H - 1, panelX + panelW - 1, ty + TAB_BAR_H, AeternumTheme.BORDER_SUBTLE);
 
         int x = panelX + 10;
-        x += drawTabButton(c, x, ty + 3, "Guía", activeTab == Tab.GUIDE, false, mx, my) + 6;
         x += drawTabButton(c, x, ty + 3, "Registro (" + entries.size() + ")", activeTab == Tab.REGISTRY, false, mx, my) + 6;
         x += drawTabButton(c, x, ty + 3, "Scoreboards (" + scoreboards.size() + ")", activeTab == Tab.SCOREBOARDS, false, mx, my) + 6;
         String unexpLabel = "Archivos raros (" + unexpectedFiles.size() + ")";
-        drawTabButton(c, x, ty + 3, unexpLabel, activeTab == Tab.UNEXPECTED, !unexpectedFiles.isEmpty(), mx, my);
+        x += drawTabButton(c, x, ty + 3, unexpLabel, activeTab == Tab.UNEXPECTED, !unexpectedFiles.isEmpty(), mx, my) + 6;
+        drawTabButton(c, x, ty + 3, "Guía", activeTab == Tab.GUIDE, false, mx, my);
     }
 
     private int drawTabButton(DrawContext c, int x, int y, String label, boolean selected, boolean alert, int mx, int my) {
@@ -1213,52 +1237,61 @@ public final class StatsScreen extends UiScreen {
 
     private static final List<GuideSection> GUIDE_SECTIONS = List.of(
         new GuideSection(
-            "1. Por qué cada jugador tiene 3 archivos (y qué pasa si falta alguno)",
-            List.of(),
+            "1. Modelo de UUIDs en el servidor (v3 vs v4)",
             List.of(
-                "Cuando un jugador o bot se guarda en el mundo (al desconectarse o al guardar el servidor), Minecraft divide su estado en 3 archivos distintos identificados por su UUID:",
-                "\u2022 playerdata/<uuid>.dat: es el personaje en el mundo (inventario, Ender Chest, posición, dimensión, XP y modo de juego). A partir del 2.\u00BA guardado crea además <uuid>.dat_old como respaldo automático del guardado anterior.",
-                "\u2022 stats/<uuid>.json: sus estadísticas (bloques minados, tiempo jugado, muertes, crafteos, etc.).",
-                "\u2022 advancements/<uuid>.json: su progreso de logros y recetas.",
-                "¿Por qué importa? Porque Minecraft escribe los 3 archivos juntos en cada guardado normal. Si en el disco falta alguno de los 3, significa que hubo un guardado interrumpido, un borrado parcial o restos huérfanos: por eso aparece marcado como anomalía. (Excepción normal: alguien que entró por primera vez y sigue conectado antes del primer guardado.)"
-            )
-        ),
-        new GuideSection(
-            "2. Por qué hay UUIDs ONLINE y OFFLINE en un servidor online",
-            List.of(
-                new GuideBadge("ONLINE", 0xFF1A2A22, 0xFF8BE0B2),
-                new GuideBadge("OFFLINE", 0xFF24242D, 0xFFB8B8C8)
+                new GuideBadge("ONLINE v4", 0xFF1A2A22, 0xFF8BE0B2),
+                new GuideBadge("OFFLINE v3", 0xFF24242D, 0xFFB8B8C8)
             ),
             List.of(
-                "Aunque el servidor esté en online-mode=true, verás dos tipos de UUID en las carpetas:",
-                "\u2022 ONLINE (UUID v4): es la UUID oficial que Mojang asigna a cada cuenta premium. Aunque el jugador cambie de nick, su UUID v4 nunca cambia y sus datos siguen siendo los mismos.",
-                "\u2022 OFFLINE (UUID v3): se calcula matemáticamente a partir del nombre (OfflinePlayer:<nick>). En este servidor solo aparecen por dos razones:",
-                "  1) Bots de Carpet (/player <nick> spawn): si el nick del bot no existe en Mojang, Carpet le crea una UUID v3. (En cambio, si el nick sí existe en Mojang, Carpet usa su UUID v4 real porque el servidor está en modo online.)",
-                "  2) Jugadores antiguos del servidor: cuentas de épocas previas en modo offline/Waterfall. Muchas de esas personas hoy tienen cuenta Mojang v4 y sus datos podrían migrarse; otras nunca tuvieron cuenta premium (HTTP 404) y no tienen UUID v4 a la que mudarse."
+                "El servidor opera con dos tipos de UUID según el origen de la cuenta:",
+                "\u2022 ONLINE (UUID v4): aquí deben vivir únicamente los usuarios con cuenta Premium de Mojang y los bots de Carpet cuyo nick coincide con una cuenta Mojang existente.",
+                "\u2022 OFFLINE (UUID v3): calculada como OfflinePlayer:<nick>. Aquí quedan solo los bots de Carpet cuyos nombres no existen en Mojang y las cuentas antiguas que no tienen cuenta Premium a la cual migrarse."
             )
         ),
         new GuideSection(
-            "3. Cómo clasifica el Registro",
+            "2. Los 3 archivos por cuenta (data, stats y adv)",
+            List.of(),
+            List.of(
+                "Minecraft guarda el progreso de cada UUID en 3 archivos independientes dentro de world/:",
+                "\u2022 data (playerdata/<uuid>.dat): inventario, Ender Chest, posición, dimensión, XP y modo de juego (con respaldo automático <uuid>.dat_old).",
+                "\u2022 stats (stats/<uuid>.json): bloques minados, tiempo jugado, muertes, crafteos, etc.",
+                "\u2022 adv (advancements/<uuid>.json): logros y recetas desbloqueadas.",
+                "Si falta alguno de los 3 en disco se marca como anomalía para que puedas subsanarlo o limpiarlo."
+            )
+        ),
+        new GuideSection(
+            "3. Migrar cuentas por nombre (Premium / No Premium)",
+            List.of(
+                new GuideBadge("MIGRAR", 0xFF1C2738, 0xFF8EC8FF)
+            ),
+            List.of(
+                "Desde el detalle de cualquier jugador puedes abrir la subpestaña Migrar sin tocar UUIDs manualmente:",
+                "\u2022 Eliges el modo destino (Premium v4 o No Premium v3) y escribes el nombre destino.",
+                "\u2022 Comprobar: resuelve la UUID (consulta Mojang si es Premium), verifica que ambos estén desconectados y te muestra qué archivos tiene A (Origen) y B (Destino).",
+                "\u2022 Sin colisión: si B está vacío, ejecutas la migración en un clic.",
+                "\u2022 Con colisión: decides por separado qué hacer con data (Conservar A o B), stats (Fusionar A+B, Conservar A o B) y adv (Fusionar A+B, Conservar A o B). Para rescatar ítems de ambos inventarios, usa antes Abrir editor inv. Todo cambio crea respaldo automático en world/migrationbackup/."
+            )
+        ),
+        new GuideSection(
+            "4. Clasificación del Registro, /viewinv y TP última pos.",
             List.of(
                 new GuideBadge("HUMAN", 0xFF1A281E, 0xFF9DF0B4),
                 new GuideBadge("BOT", 0xFF18222C, 0xFF9CD0FF),
                 new GuideBadge("UNKNOWN", 0xFF1A1A20, AeternumTheme.TEXT_SECONDARY)
             ),
             List.of(
-                "El registro usa la UUID como identidad única (no el nombre), porque dos UUIDs distintas pueden compartir nick sin ser el mismo archivo:",
-                "\u2022 UNKNOWN: estado inicial de cualquier archivo viejo que ya estaba en disco antes de activar este registro. Se queda así hasta que entre en una sesión o un admin lo clasifique manualmente.",
-                "\u2022 HUMAN: se asigna automáticamente cuando entra una persona real. Un bot nunca puede degradar un HUMAN a BOT, aunque alguien invoque un bot con el nombre de un jugador real.",
-                "\u2022 BOT: se asigna cuando entra un bot de Carpet, siempre que la UUID fuera nueva o estuviera en UNKNOWN. Si más adelante entra una persona real con esa misma UUID, se promoverá a HUMAN."
+                "\u2022 Clasificación: HUMAN (jugador real; un bot nunca lo degrada), BOT (fake player de Carpet) y UNKNOWN (archivos previos sin clasificar).",
+                "\u2022 Abrir editor inv. (/viewinv): permite inspeccionar y editar inventario, armadura, offhand, Ender Chest y gamemode incluso si la cuenta está offline.",
+                "\u2022 TP última pos.: te teletransporta a la última dimensión y coordenada registrada del jugador o bot (pide confirmación si estás en Survival)."
             )
         ),
         new GuideSection(
-            "4. Reglas de seguridad antes de subsanar o borrar",
+            "5. Scoreboards, Reglas de seguridad y Archivos raros",
             List.of(),
             List.of(
-                "\u2022 Jugadores o bots conectados: Minecraft mantiene el inventario, las stats y los logros en RAM mientras están en el servidor y sobrescribiría el disco al guardar; por eso la interfaz bloquea u omite automáticamente cualquier borrado o subsanación sobre alguien conectado.",
-                "\u2022 Qué hace Subsanar (y qué NO hace): si falta .dat pero existe .dat_old, restaura el respaldo; si existe .dat, crea stats y advancements vacíos para quitar la anomalía. Nunca inventa inventarios ni crea un .dat desde cero (si falta .dat sin .dat_old, lo omite para que tú decidas si borrar esos restos).",
-                "\u2022 Qué hace Borrar (Shift + 2 clics): elimina la entrada del registro y borra sus archivos en disco (.dat, .dat_old, stats, advancements).",
-                "\u2022 Archivos raros: cualquier archivo o subcarpeta dentro de playerdata/, stats/ o advancements/ que no siga el formato <uuid>.dat, <uuid>.dat_old o <uuid>.json. Puedes limpiarlos uno a uno o con Shift + Borrar todo."
+                "\u2022 Scoreboards: permite crear objetivos custom (aeternum:dig_all, aeternum:placed_blocks, áreas Rectángulo/Custom), calcular Total sin bots y administrar objetivos ae-* generados por /stats scoreboard.",
+                "\u2022 Seguridad: nunca se borran, subsanan ni migran cuentas conectadas en RAM. Borrar (Shift + 2 clics) elimina registro y archivos en disco.",
+                "\u2022 Archivos raros: lista archivos o carpetas dentro de playerdata/, stats/ o advancements/ que no siguen el formato estándar <uuid>.dat/.json."
             )
         )
     );
@@ -2551,17 +2584,7 @@ public final class StatsScreen extends UiScreen {
         if (button == 0) {
             int ty = tabBarY();
             int tabY = ty + 3;
-            int tabX = panelX + 10;
-            int guideW = textRenderer.getWidth("Guía") + 18;
-            if (mx >= tabX && mx < tabX + guideW && my >= tabY && my < tabY + 18) {
-                if (activeTab != Tab.GUIDE) {
-                    activeTab = Tab.GUIDE;
-                    listScroll = targetListScroll = 0;
-                    init();
-                }
-                return true;
-            }
-            int regX = tabX + guideW + 6;
+            int regX = panelX + 10;
             int regW = textRenderer.getWidth("Registro (" + entries.size() + ")") + 18;
             if (mx >= regX && mx < regX + regW && my >= tabY && my < tabY + 18) {
                 if (activeTab != Tab.REGISTRY) {
@@ -2589,6 +2612,16 @@ public final class StatsScreen extends UiScreen {
             if (mx >= unexpX && mx < unexpX + unexpW && my >= tabY && my < tabY + 18) {
                 if (activeTab != Tab.UNEXPECTED) {
                     activeTab = Tab.UNEXPECTED;
+                    listScroll = targetListScroll = 0;
+                    init();
+                }
+                return true;
+            }
+            int guideX = unexpX + unexpW + 6;
+            int guideW = textRenderer.getWidth("Guía") + 18;
+            if (mx >= guideX && mx < guideX + guideW && my >= tabY && my < tabY + 18) {
+                if (activeTab != Tab.GUIDE) {
+                    activeTab = Tab.GUIDE;
                     listScroll = targetListScroll = 0;
                     init();
                 }
@@ -2984,6 +3017,28 @@ public final class StatsScreen extends UiScreen {
     };
 
     public void acceptPlayerDetail(String uuid, String json) {
+        if (uuid != null && uuid.startsWith("__migrate_check__:")) {
+            String targetUuid = uuid.substring("__migrate_check__:".length());
+            if (!targetUuid.equals(inspectingPlayerUuid)) return;
+            try {
+                MigrationCheckResult res = GSON.fromJson(json, MigrationCheckResult.class);
+                this.migrationCheck = res;
+                this.migrationChecking = false;
+                if (res != null && res.ok && res.source != null && res.target != null) {
+                    this.migrateDataChoice = res.source.hasData ? "KEEP_A" : "KEEP_B";
+                    this.migrateStatsChoice = (res.source.hasStats && res.target.hasStats)
+                        ? "MERGE"
+                        : (res.source.hasStats ? "KEEP_A" : "KEEP_B");
+                    this.migrateAdvChoice = (res.source.hasAdv && res.target.hasAdv)
+                        ? "MERGE"
+                        : (res.source.hasAdv ? "KEEP_A" : "KEEP_B");
+                }
+                init();
+            } catch (Exception ignored) {
+                this.migrationChecking = false;
+            }
+            return;
+        }
         if (uuid == null || !uuid.equals(inspectingPlayerUuid)) {
             return;
         }
@@ -3046,6 +3101,9 @@ public final class StatsScreen extends UiScreen {
         inspectingPlayerUuid = item.uuid;
         inspectingPlayerDetail = null;
         armedTpLastPosUntilMs = 0L;
+        migrationCheck = null;
+        migrationChecking = false;
+        migrateTargetNameInput = item.name != null ? item.name : "";
         inspectingInvStacks.clear();
         inspectingEnderStacks.clear();
         playerDetailSubtab = "STATS";
@@ -3059,6 +3117,10 @@ public final class StatsScreen extends UiScreen {
         inspectingPlayerDetail = null;
         armedTpLastPosUntilMs = 0L;
         tpLastPosButton = null;
+        migrationCheck = null;
+        migrationChecking = false;
+        migrateNameField = null;
+        migrateTargetNameInput = "";
         inspectingInvStacks.clear();
         inspectingEnderStacks.clear();
         playerDetailScroll = targetPlayerDetailScroll = 0;
@@ -3177,9 +3239,225 @@ public final class StatsScreen extends UiScreen {
                 AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
                     shown.size() * 22, viewH, playerDetailScroll, false);
             }
+        } else if ("MIGRATE".equals(playerDetailSubtab)) {
+            renderMigrateSubtab(c, contentX, topY + 76, contentW, lBottom);
         } else {
             renderPlayerDetailInventory(c, mx, my, delta, contentX, topY + 50, contentW, lBottom);
         }
+    }
+
+    private void initMigrateSubtabWidgets(int contentX, int contentW, int contentTop) {
+        int rowY = contentTop + 48;
+        int premW = 92;
+        int noPremW = 104;
+        int checkW = 80;
+        addDrawableChild(
+            "PREMIUM".equals(migrateMode)
+                ? UiButton.primary(contentX, rowY, premW, 18, "Premium (v4)", b -> {})
+                : UiButton.secondary(contentX, rowY, premW, 18, "Premium (v4)", b -> {
+                    migrateMode = "PREMIUM";
+                    migrationCheck = null;
+                    init();
+                })
+        );
+        addDrawableChild(
+            "NON_PREMIUM".equals(migrateMode)
+                ? UiButton.primary(contentX + premW + 4, rowY, noPremW, 18, "No Premium (v3)", b -> {})
+                : UiButton.secondary(contentX + premW + 4, rowY, noPremW, 18, "No Premium (v3)", b -> {
+                    migrateMode = "NON_PREMIUM";
+                    migrationCheck = null;
+                    init();
+                })
+        );
+        int fieldX = contentX + premW + noPremW + 10;
+        int fieldW = Math.max(80, contentW - (premW + noPremW + 10 + checkW + 6));
+        migrateNameField = new UiTextField(textRenderer, fieldX, rowY, fieldW, 18, "Nombre destino…");
+        migrateNameField.setMaxLength(16);
+        migrateNameField.setText(migrateTargetNameInput);
+        migrateNameField.setChangedListener(s -> migrateTargetNameInput = s);
+        addDrawableChild(migrateNameField);
+
+        UiButton checkBtn = UiButton.primary(contentX + contentW - checkW, rowY, checkW, 18,
+            migrationChecking ? "…" : "Comprobar", b -> triggerMigrationCheck());
+        checkBtn.active = !migrationChecking;
+        addDrawableChild(checkBtn);
+
+        if (migrationCheck == null || !migrationCheck.ok || migrationCheck.source == null || migrationCheck.target == null) {
+            return;
+        }
+        AccountSideSnapshot src = migrationCheck.source;
+        AccountSideSnapshot dst = migrationCheck.target;
+        if (!migrationCheck.hasCollision) {
+            int execY = contentTop + 178;
+            addDrawableChild(UiButton.primary(contentX, execY, 150, 20, "Ejecutar migración", b -> executeMigration()));
+            return;
+        }
+
+        int optStartY = contentTop + 188;
+        int optX = contentX + 128;
+
+        // 1. Playerdata (data)
+        UiButton dataA = "KEEP_A".equals(migrateDataChoice)
+            ? UiButton.primary(optX, optStartY, 92, 16, "Conservar A", b -> {})
+            : UiButton.secondary(optX, optStartY, 92, 16, "Conservar A", b -> { migrateDataChoice = "KEEP_A"; init(); });
+        dataA.active = src.hasData;
+        addDrawableChild(dataA);
+
+        UiButton dataB = "KEEP_B".equals(migrateDataChoice)
+            ? UiButton.primary(optX + 96, optStartY, 92, 16, "Conservar B", b -> {})
+            : UiButton.secondary(optX + 96, optStartY, 92, 16, "Conservar B", b -> { migrateDataChoice = "KEEP_B"; init(); });
+        dataB.active = dst.hasData;
+        addDrawableChild(dataB);
+
+        // 2. Stats (stats)
+        int statsY = optStartY + 22;
+        UiButton statsM = "MERGE".equals(migrateStatsChoice)
+            ? UiButton.primary(optX, statsY, 96, 16, "Fusionar (A+B)", b -> {})
+            : UiButton.secondary(optX, statsY, 96, 16, "Fusionar (A+B)", b -> { migrateStatsChoice = "MERGE"; init(); });
+        statsM.active = src.hasStats && dst.hasStats;
+        addDrawableChild(statsM);
+
+        UiButton statsA = "KEEP_A".equals(migrateStatsChoice)
+            ? UiButton.primary(optX + 100, statsY, 92, 16, "Conservar A", b -> {})
+            : UiButton.secondary(optX + 100, statsY, 92, 16, "Conservar A", b -> { migrateStatsChoice = "KEEP_A"; init(); });
+        statsA.active = src.hasStats;
+        addDrawableChild(statsA);
+
+        UiButton statsB = "KEEP_B".equals(migrateStatsChoice)
+            ? UiButton.primary(optX + 196, statsY, 92, 16, "Conservar B", b -> {})
+            : UiButton.secondary(optX + 196, statsY, 92, 16, "Conservar B", b -> { migrateStatsChoice = "KEEP_B"; init(); });
+        statsB.active = dst.hasStats;
+        addDrawableChild(statsB);
+
+        // 3. Advancements (adv)
+        int advY = optStartY + 44;
+        UiButton advM = "MERGE".equals(migrateAdvChoice)
+            ? UiButton.primary(optX, advY, 96, 16, "Fusionar (A+B)", b -> {})
+            : UiButton.secondary(optX, advY, 96, 16, "Fusionar (A+B)", b -> { migrateAdvChoice = "MERGE"; init(); });
+        advM.active = src.hasAdv && dst.hasAdv;
+        addDrawableChild(advM);
+
+        UiButton advA = "KEEP_A".equals(migrateAdvChoice)
+            ? UiButton.primary(optX + 100, advY, 92, 16, "Conservar A", b -> {})
+            : UiButton.secondary(optX + 100, advY, 92, 16, "Conservar A", b -> { migrateAdvChoice = "KEEP_A"; init(); });
+        advA.active = src.hasAdv;
+        addDrawableChild(advA);
+
+        UiButton advB = "KEEP_B".equals(migrateAdvChoice)
+            ? UiButton.primary(optX + 196, advY, 92, 16, "Conservar B", b -> {})
+            : UiButton.secondary(optX + 196, advY, 92, 16, "Conservar B", b -> { migrateAdvChoice = "KEEP_B"; init(); });
+        advB.active = dst.hasAdv;
+        addDrawableChild(advB);
+
+        int execY = advY + 26;
+        addDrawableChild(UiButton.primary(contentX, execY, 150, 20, "Ejecutar migración", b -> executeMigration()));
+    }
+
+    private void triggerMigrationCheck() {
+        if (inspectingPlayerUuid == null || migrationChecking) return;
+        String name = migrateNameField != null ? migrateNameField.getText().trim() : migrateTargetNameInput.trim();
+        if (name.isEmpty()) {
+            statusMessage = "Escribe el nombre destino antes de comprobar.";
+            statusError = true;
+            return;
+        }
+        migrationChecking = true;
+        migrationCheck = null;
+        com.google.gson.JsonObject req = new com.google.gson.JsonObject();
+        req.addProperty("mode", migrateMode);
+        req.addProperty("targetName", name);
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("check_migration", inspectingPlayerUuid, GSON.toJson(req)));
+        init();
+    }
+
+    private void executeMigration() {
+        if (inspectingPlayerUuid == null || migrationCheck == null || !migrationCheck.ok || migrationCheck.target == null) return;
+        com.google.gson.JsonObject req = new com.google.gson.JsonObject();
+        req.addProperty("mode", migrationCheck.mode);
+        req.addProperty("targetName", migrationCheck.targetName);
+        req.addProperty("targetUuid", migrationCheck.target.uuid);
+        req.addProperty("dataChoice", migrateDataChoice);
+        req.addProperty("statsChoice", migrateStatsChoice);
+        req.addProperty("advChoice", migrateAdvChoice);
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("execute_migration", inspectingPlayerUuid, GSON.toJson(req)));
+        closePlayerDetail();
+    }
+
+    private void renderMigrateSubtab(DrawContext c, int contentX, int y, int contentW, int lBottom) {
+        if (migrationChecking) {
+            c.drawTextWithShadow(textRenderer, "Comprobando cuenta destino y archivos en disco…",
+                contentX, y + 8, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+        if (migrationCheck == null) {
+            c.drawText(textRenderer, "Elige Premium (v4) o No Premium (v3), escribe el nombre destino y pulsa Comprobar.",
+                contentX, y + 8, AeternumTheme.TEXT_SECONDARY, false);
+            return;
+        }
+        if (!migrationCheck.ok) {
+            AeternumTheme.drawCard(c, contentX, y, contentW, 34, 0xFF28181A, 0xFFD96B6B);
+            c.drawTextWithShadow(textRenderer, "No se puede migrar:", contentX + 10, y + 6, 0xFFF29A9A);
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, migrationCheck.error, contentW - 20),
+                contentX + 10, y + 19, AeternumTheme.TEXT_PRIMARY, false);
+            return;
+        }
+
+        int cardGap = 8;
+        int cardW = (contentW - cardGap) / 2;
+        int cardH = 72;
+        drawMigrateSideCard(c, contentX, y, cardW, cardH, "A \u00B7 Origen", migrationCheck.source);
+        drawMigrateSideCard(c, contentX + cardW + cardGap, y, cardW, cardH, "B \u00B7 Destino", migrationCheck.target);
+
+        int infoY = y + cardH + 8;
+        if (!migrationCheck.hasCollision) {
+            c.drawTextWithShadow(textRenderer, "Sin colisiones en B. Se moverán todos los archivos existentes de A hacia B.",
+                contentX, infoY, 0xFF8BE0B2);
+            return;
+        }
+
+        c.drawTextWithShadow(textRenderer, "Colisión detectada en B. Elige qué conservar o fusionar en cada campo:",
+            contentX, infoY, 0xFFE59B53);
+        int optStartY = infoY + 18;
+        c.drawText(textRenderer, "Playerdata (data):", contentX, optStartY + 4, AeternumTheme.TEXT_PRIMARY, false);
+        c.drawText(textRenderer, "Estadísticas (stats):", contentX, optStartY + 26, AeternumTheme.TEXT_PRIMARY, false);
+        c.drawText(textRenderer, "Logros (adv):", contentX, optStartY + 48, AeternumTheme.TEXT_PRIMARY, false);
+
+        AccountSideSnapshot src = migrationCheck.source;
+        AccountSideSnapshot dst = migrationCheck.target;
+        if (src != null && dst != null && (src.invSlots + src.enderSlots) > 0 && (dst.invSlots + dst.enderSlots) > 0) {
+            c.drawText(textRenderer, "Tip: ambos tienen ítems; si quieres rescatar de los dos, usa antes 'Abrir editor inv.'",
+                contentX + 160, optStartY + 76, 0xFFE5C46B, false);
+        }
+    }
+
+    private void drawMigrateSideCard(DrawContext c, int x, int y, int w, int h, String heading, AccountSideSnapshot side) {
+        if (side == null) return;
+        AeternumTheme.drawCard(c, x, y, w, h, AeternumTheme.CARD_BG, AeternumTheme.BORDER_SUBTLE);
+        String ver = side.uuidVersion == 4 ? "v4" : (side.uuidVersion == 3 ? "v3" : "v?");
+        String title = heading + " · " + (side.name != null && !side.name.isEmpty() ? side.name : "(sin nick)") + " [" + ver + "]";
+        c.drawTextWithShadow(textRenderer, AeternumTheme.ellipsize(textRenderer, title, w - 16),
+            x + 8, y + 6, AeternumTheme.TEXT_PRIMARY);
+        c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, side.uuid, w - 16),
+            x + 8, y + 18, AeternumTheme.TEXT_MUTED, false);
+
+        int bx = x + 8;
+        int by = y + 31;
+        bx += drawPresenceBadge(c, bx, by, "data", side.hasData) + 4;
+        bx += drawPresenceBadge(c, bx, by, "stats", side.hasStats) + 4;
+        drawPresenceBadge(c, bx, by, "adv", side.hasAdv);
+
+        String statsLine = String.format(Locale.US, "Inv:%d Ender:%d · Min:%d · Adv:%d",
+            side.invSlots, side.enderSlots, side.mined, side.advDoneCount);
+        c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, statsLine, w - 16),
+            x + 8, y + 52, AeternumTheme.TEXT_SECONDARY, false);
+    }
+
+    private int drawPresenceBadge(DrawContext c, int x, int y, String label, boolean present) {
+        String txt = label + (present ? ": Sí" : ": No");
+        int bg = present ? 0xFF1A2A22 : 0xFF1E1E24;
+        int fg = present ? 0xFF8BE0B2 : AeternumTheme.TEXT_MUTED;
+        AeternumTheme.drawBadge(c, textRenderer, x, y, txt, bg, fg);
+        return textRenderer.getWidth(txt) + 10;
     }
 
     private void renderPlayerDetailInventory(
