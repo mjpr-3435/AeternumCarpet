@@ -1,5 +1,35 @@
 # Changelog · AeternumCarpet (1.21.6)
 
+## Versión 2.1.0
+
+### Sistema `/stats` y Scoreboards (`commandStats`)
+- **Registro de Jugadores (`StatsScreen`)**:
+  - Clasificación de UUIDs (`HUMAN`, `BOT`, `UNKNOWN`), detección de anomalías en `playerdata/` · `stats/` · `advancements/`, consulta individual o por lotes a la API de Mojang, subsanación y borrado atómico de entradas y archivos inesperados.
+  - Resumen cacheado por `mtime` en segundo plano (`E:` Ender Chest slots, `I:` Inventario slots, `T:` Tiempo jugado, `M:` Minados, `C:` Crafteados) y lectura en vivo para jugadores conectados.
+  - **Subvista de detalle de jugador**: al hacer clic en cualquier fila se abren sus estadísticas completas traducidas y formateadas (con icono por ítem/bloque/mob y buscador), vista de **Equipo + Inventario + Ender Chest** con tooltips completos y acceso directo a `/viewinv` (`Abrir editor inv.`).
+- **Scoreboards avanzados**:
+  - Creación y edición completa en caliente (ID interno sin tope de 16 chars con validación en vivo de duplicados, criterio con autocompletado, display name con formato MOTD, slot, alias de chat, **Poblar con stats previas**).
+  - Trackers custom: `aeternum:dig_all` (picos, palas, hachas, azadas y tijeras) y `aeternum:placed_blocks` (solo bloques).
+  - **Scoreboards de área**: modo `Ninguna`, `Rectángulo` (`X1/Z1/X2/Z2` + dimensión + `Pos1`/`Pos2`) y `Custom` (escaneo de contorno cerrado 2D hasta 1M de bloques con vista previa 2D y evaluación exacta por posición del bloque).
+  - **Cálculo de Total e inclusión**: separación de `Cálculo de Total` (`Total: ON/OFF` mostrado como fila `0. Total`) e `Incluir en scoreboard` (`Humans`, `Bots`, `Unknown`), con ranking `1. 2. 3.` sobre los incluidos, edición inline de puntajes y borrado de registros con confirmación.
+- **Consultas rápidas (`/stats scoreboard`) y RCON API**:
+  - Comando `/stats scoreboard <categoría> <stat>` (y `hide`) abierto a todos los jugadores: crea/reutiliza objetivos `ae-*` poblados solo con `HUMAN`s y sincronizados automáticamente al usar el comando o cambiar el tipo de un jugador.
+  - Toggle `ae-*: OFF/ON` y botón `Limpiar` en la UI (prefijo `ae-` reservado).
+  - Endpoints JSON por RCON (`/stats api list|get|stat`) para consultar y paginar scoreboards desde Discord (`aeternumbot`).
+
+### Nuevas Reglas y Comandos
+- **`aeStackableShulkers`**: las Shulker Boxes vacías del mismo color/componentes se apilan hasta `64` en inventarios y en el suelo, mientras los hoppers las mueven de `1` en `1` sin apilarlas ni romper sistemas de redstone.
+- **`commandWaypoints`**: comando `/waypoints` (`list`, `add`, `del`, `tp`) para waypoints globales entre dimensiones con `[TP]`/`[X]` clickeables en chat, usable en cualquier modo de juego.
+
+### Proyectos, Finder y Utilidades
+- **Proyectos / Litematica (`LitematicaBridge`)**: sincronización completa de colocación al compartir proyectos, incluyendo rotación/mirror raíz y estado de subregiones (`enabled`, `renderingEnabled`, posición relativa, rotación y mirror por subregión).
+- **Finder (`commandFinder`)**: autocompletado en `/find` y `/count` con IDs técnicos, nombres en inglés con espacios y nombres en español (`FinderItemNames`).
+- **`/cs` (`cameraMode`)**: eliminados los mensajes de feedback en chat al activar/desactivar cámara.
+- **`BotInventoryScreen`**: añadido botón de **Kick** para desconectar bots/jugadores desde la interfaz y mejoras de seguridad de sincronización.
+- **Documentación**: actualizado `README.md` con todas las features y tabla completa de las reglas de Carpet.
+
+---
+
 ## Versión 2.0.0
 
 ### Aeternum Dock y Tareas MOTD

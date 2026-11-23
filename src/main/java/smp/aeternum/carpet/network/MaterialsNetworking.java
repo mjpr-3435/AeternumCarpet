@@ -57,7 +57,7 @@ public final class MaterialsNetworking {
 			}
 			try {
 				MaterialList.PlacementInfo placement = p.hasPlacement()
-					? new MaterialList.PlacementInfo(p.dimension(), p.x(), p.y(), p.z(), p.rotation(), p.mirror())
+					? new MaterialList.PlacementInfo(p.dimension(), p.x(), p.y(), p.z(), p.rotation(), p.mirror(), p.subregionsJson())
 					: new MaterialList.PlacementInfo();
 				String savedName = MaterialsStore.uploadProject(p.name(), p.bytes(), player.getName().getString(), placement);
 				player.sendMessage(Text.literal("[Proyectos] Proyecto '" + savedName + "' cargado correctamente.").formatted(Formatting.GREEN), false);
@@ -105,7 +105,8 @@ public final class MaterialsNetworking {
 					pl.z,
 					pl.rotation,
 					pl.mirror,
-					p.loadInLitematica()
+					p.loadInLitematica(),
+					pl.subregionsJson != null ? pl.subregionsJson : "[]"
 				));
 			}
 		}));

@@ -100,7 +100,8 @@ public final class LitematicPickerScreen extends UiScreen {
                 selected.origin().getY(),
                 selected.origin().getZ(),
                 selected.rotation(),
-                selected.mirror()
+                selected.mirror(),
+                LitematicaBridge.serializeSubregions(selected.subregions())
             ));
             close();
         } catch (IOException e) {

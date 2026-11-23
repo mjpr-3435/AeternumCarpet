@@ -32,10 +32,15 @@ public class MaterialList {
 		public int z;
 		public String rotation = "NONE";
 		public String mirror = "NONE";
+		public String subregionsJson = "[]";
 
 		public PlacementInfo() {}
 
 		public PlacementInfo(String dimension, int x, int y, int z, String rotation, String mirror) {
+			this(dimension, x, y, z, rotation, mirror, "[]");
+		}
+
+		public PlacementInfo(String dimension, int x, int y, int z, String rotation, String mirror, String subregionsJson) {
 			this.configured = true;
 			this.dimension = dimension;
 			this.x = x;
@@ -43,6 +48,7 @@ public class MaterialList {
 			this.z = z;
 			this.rotation = rotation;
 			this.mirror = mirror;
+			this.subregionsJson = (subregionsJson != null && !subregionsJson.isBlank()) ? subregionsJson : "[]";
 		}
 	}
 

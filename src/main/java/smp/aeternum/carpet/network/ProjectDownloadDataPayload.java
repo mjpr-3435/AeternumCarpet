@@ -15,7 +15,8 @@ public record ProjectDownloadDataPayload(
 	int z,
 	String rotation,
 	String mirror,
-	boolean loadInLitematica
+	boolean loadInLitematica,
+	String subregionsJson
 ) implements CustomPayload {
 	public static final Id<ProjectDownloadDataPayload> ID = new Id<>(AeternumCarpet.id("project_download_data"));
 	public static final PacketCodec<RegistryByteBuf, ProjectDownloadDataPayload> CODEC = PacketCodec.of(
@@ -30,6 +31,7 @@ public record ProjectDownloadDataPayload(
 			b.writeString(p.rotation, 32);
 			b.writeString(p.mirror, 32);
 			b.writeBoolean(p.loadInLitematica);
+			b.writeString(p.subregionsJson != null ? p.subregionsJson : "[]", 262144);
 		},
 		b -> new ProjectDownloadDataPayload(
 			b.readString(64),
@@ -41,7 +43,8 @@ public record ProjectDownloadDataPayload(
 			b.readInt(),
 			b.readString(32),
 			b.readString(32),
-			b.readBoolean()
+			b.readBoolean(),
+			b.readString(262144)
 		)
 	);
 
