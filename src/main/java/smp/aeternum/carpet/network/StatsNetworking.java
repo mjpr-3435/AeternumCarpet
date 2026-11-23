@@ -333,6 +333,7 @@ public final class StatsNetworking {
                     return;
                 }
                 if (PlayerRegistryStore.setType(payload.uuid(), nextType)) {
+                    syncPlayerAcrossAeObjectives(server, payload.uuid(), nextType);
                     sendSnapshot(player, false, "Tipo actualizado a " + nextType.name() + ".", false);
                 } else {
                     sendSnapshot(player, false, "UUID no encontrada en el registro.", true);
@@ -748,6 +749,78 @@ public final class StatsNetworking {
             }
         }
         return count;
+    }
+
+    public static void syncAeObjective(MinecraftServer server, Scoreboard sb, ScoreboardObjective target, String criterionRaw) {
+        if (server == null || sb == null || target == null) {
+            return;
+        }
+        Set<String> humanNames = new java.util.HashSet<>();
+        for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
+            if (entry.type == EntryType.HUMAN && entry.name != null && !entry.name.isBlank()) {
+                humanNames.add(entry.name);
+            }
+        }
+        List<String> staleOwners = new ArrayList<>();
+        for (ScoreboardEntry e : sb.getScoreboardEntries(target)) {
+            if (!humanNames.contains(e.owner())) {
+                staleOwners.add(e.owner());
+            }
+        }
+        for (String owner : staleOwners) {
+            sb.removeScore(ScoreHolder.fromName(owner), target);
+        }
+        if (target.getCriterion() instanceof Stat<?> stat) {
+            String crit = (criterionRaw != null && !criterionRaw.isBlank())
+                ? criterionRaw
+                : target.getCriterion().getName();
+            populateObjectiveFromStats(server, sb, target, stat, crit, true);
+        }
+    }
+
+    private static void syncPlayerAcrossAeObjectives(MinecraftServer server, String uuidStr, EntryType nextType) {
+        if (server == null || uuidStr == null) {
+            return;
+        }
+        Entry entry = PlayerRegistryStore.getEntriesSnapshot().get(uuidStr);
+        if (entry == null || entry.name == null || entry.name.isBlank()) {
+            return;
+        }
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(entry.uuid);
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        ScoreHolder holder = ScoreHolder.fromName(entry.name);
+
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            if (!obj.getName().toLowerCase(Locale.ROOT).startsWith("ae-")) {
+                continue;
+            }
+            if (nextType != EntryType.HUMAN) {
+                sb.removeScore(holder, obj);
+                continue;
+            }
+            if (obj.getCriterion() instanceof Stat<?> stat) {
+                String criterionRaw = obj.getCriterion().getName();
+                int val = 0;
+                if (online != null) {
+                    val = online.getStatHandler().getStat(stat);
+                } else if (criterionRaw != null) {
+                    String[] parts = parseStatCriterionKeys(criterionRaw);
+                    if (parts != null) {
+                        val = readOfflineStatValue(statsDir.resolve(entry.uuid + ".json"), parts[0], parts[1]);
+                    }
+                }
+                if (val > 0) {
+                    sb.getOrCreateScore(holder, obj).setScore(val);
+                }
+            }
+        }
     }
 
     private static String[] parseStatCriterionKeys(String criterionRaw) {
