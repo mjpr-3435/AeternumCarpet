@@ -11,8 +11,14 @@ import java.util.Locale;
 import java.util.Map;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.entity.EntityType;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.item.SpawnEggItem;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -26,6 +32,9 @@ import smp.aeternum.carpet.network.AreaContourPreviewPayload;
 import smp.aeternum.carpet.network.StatsNetworking.CreateObjectiveRequest;
 import smp.aeternum.carpet.network.StatsNetworking.DeleteScoreEntryRequest;
 import smp.aeternum.carpet.network.StatsNetworking.EditObjectiveRequest;
+import smp.aeternum.carpet.network.StatsNetworking.ItemSlotSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.PlayerDetailSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.PlayerStatSnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.RegistryEntrySnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.ScanContourRequest;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardEntrySnapshot;
@@ -148,6 +157,14 @@ public final class StatsScreen extends UiScreen {
     private String armedObjectiveDelete;
     private long armedObjectiveDeleteUntilMs;
     private boolean showAeObjectives;
+    private String inspectingPlayerUuid;
+    private PlayerDetailSnapshot inspectingPlayerDetail;
+    private String playerDetailSubtab = "STATS";
+    private String playerStatCategory = "custom";
+    private double playerDetailScroll, targetPlayerDetailScroll;
+    private Map<Integer, ItemStack> inspectingInvStacks = new HashMap<>();
+    private Map<Integer, ItemStack> inspectingEnderStacks = new HashMap<>();
+    private UiTextField playerStatSearchField;
     private String editingScoreOwner;
     private UiTextField inlineScoreField;
     private String armedDeleteScoreOwner;
@@ -385,29 +402,66 @@ public final class StatsScreen extends UiScreen {
         areaSeedZField = null;
         sbSaveButton = null;
         sbCancelButton = null;
+        playerStatSearchField = null;
 
         if (activeTab == Tab.REGISTRY) {
             int contentX = panelX + SIDEBAR_W + 10;
             int contentW = panelW - SIDEBAR_W - 22;
-            int sortW = 132;
-            int searchW = Math.max(100, contentW - sortW - 6);
-            searchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar nombre o UUID…");
-            searchField.setMaxLength(80);
-            searchField.setText(prevQuery);
-            searchField.setChangedListener(s -> {
-                targetListScroll = 0;
-                listScroll = 0;
-            });
-            addDrawableChild(searchField);
+            if (inspectingPlayerUuid != null) {
+                addDrawableChild(UiButton.secondary(contentX, contentTop + 6, 62, 18, "\u2190 Volver", b -> closePlayerDetail()));
+                addDrawableChild(
+                    "STATS".equals(playerDetailSubtab)
+                        ? UiButton.primary(contentX + 68, contentTop + 6, 86, 18, "Estadísticas", b -> {})
+                        : UiButton.secondary(contentX + 68, contentTop + 6, 86, 18, "Estadísticas", b -> {
+                            playerDetailSubtab = "STATS";
+                            playerDetailScroll = targetPlayerDetailScroll = 0;
+                            init();
+                        })
+                );
+                addDrawableChild(
+                    "INVENTORY".equals(playerDetailSubtab)
+                        ? UiButton.primary(contentX + 158, contentTop + 6, 114, 18, "Inventario / Ender", b -> {})
+                        : UiButton.secondary(contentX + 158, contentTop + 6, 114, 18, "Inventario / Ender", b -> {
+                            playerDetailSubtab = "INVENTORY";
+                            playerDetailScroll = targetPlayerDetailScroll = 0;
+                            init();
+                        })
+                );
+                addDrawableChild(UiButton.primary(contentX + contentW - 108, contentTop + 6, 108, 18, "Abrir editor inv.", b -> {
+                    statusMessage = "Abriendo editor de inventario…";
+                    statusError = false;
+                    ClientPlayNetworking.send(new StatsRegistryActionPayload("open_player_inventory", inspectingPlayerUuid, ""));
+                }));
+                if ("STATS".equals(playerDetailSubtab)) {
+                    playerStatSearchField = new UiTextField(textRenderer, contentX, contentTop + 28, contentW, 18, "Buscar estadística…");
+                    playerStatSearchField.setMaxLength(64);
+                    playerStatSearchField.setChangedListener(s -> {
+                        targetPlayerDetailScroll = 0;
+                        playerDetailScroll = 0;
+                    });
+                    addDrawableChild(playerStatSearchField);
+                }
+            } else {
+                int sortW = 132;
+                int searchW = Math.max(100, contentW - sortW - 6);
+                searchField = new UiTextField(textRenderer, contentX, contentTop + 8, searchW, 20, "Buscar nombre o UUID…");
+                searchField.setMaxLength(80);
+                searchField.setText(prevQuery);
+                searchField.setChangedListener(s -> {
+                    targetListScroll = 0;
+                    listScroll = 0;
+                });
+                addDrawableChild(searchField);
 
-            sortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeSort.label, b -> {
-                activeSort = activeSort.next();
-                b.setLabel("Orden: " + activeSort.label);
-                recomputeDisplayOrder();
-                targetListScroll = 0;
-                listScroll = 0;
-            });
-            addDrawableChild(sortButton);
+                sortButton = UiButton.secondary(contentX + searchW + 6, contentTop + 8, sortW, 20, "Orden: " + activeSort.label, b -> {
+                    activeSort = activeSort.next();
+                    b.setLabel("Orden: " + activeSort.label);
+                    recomputeDisplayOrder();
+                    targetListScroll = 0;
+                    listScroll = 0;
+                });
+                addDrawableChild(sortButton);
+            }
 
             lookupAllButton = UiButton.secondary(panelX + 8, panelY + panelH - 114, SIDEBAR_W - 16, 22,
                 lookupRunning ? "Cancelar" : "Consultar online", b -> {
@@ -774,6 +828,9 @@ public final class StatsScreen extends UiScreen {
         if (objectiveSearchField != null) {
             objectiveSearchField.renderBox(c, objectiveSearchField.boxX(), objectiveSearchField.boxY(), objectiveSearchField.getWidth() + 12, 18, mx, my, delta);
         }
+        if (playerStatSearchField != null) {
+            playerStatSearchField.renderBox(c, playerStatSearchField.boxX(), playerStatSearchField.boxY(), playerStatSearchField.getWidth() + 12, 18, mx, my, delta);
+        }
         if (sbNameField != null) {
             sbNameField.renderBox(c, sbNameField.boxX(), sbNameField.boxY(), sbNameField.getWidth() + 12, 18, mx, my, delta);
         }
@@ -915,6 +972,11 @@ public final class StatsScreen extends UiScreen {
             c.drawTextWithShadow(textRenderer, f.label, panelX + 12, ry + 6, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
             c.drawText(textRenderer, countStr, panelX + SIDEBAR_W - 10 - countW, ry + 6,
                 (f == Filter.ANOMALY && cnt > 0) ? 0xFFE59B53 : AeternumTheme.TEXT_MUTED, false);
+        }
+
+        if (inspectingPlayerUuid != null) {
+            renderPlayerDetail(c, mx, my, delta);
+            return;
         }
 
         // List
@@ -2522,13 +2584,16 @@ public final class StatsScreen extends UiScreen {
                     activeFilter = filters[idx];
                     recomputeDisplayOrder();
                     listScroll = targetListScroll = 0;
+                    if (inspectingPlayerUuid != null) {
+                        closePlayerDetail();
+                    }
                     return true;
                 }
             }
 
             int lTop = listTop();
             int lBottom = listBottom();
-            if (my >= lTop && my < lBottom) {
+            if (inspectingPlayerUuid == null && my >= lTop && my < lBottom) {
                 List<RegistryEntrySnapshot> shown = filteredEntries();
                 int cardX = panelX + SIDEBAR_W + 10;
                 int cardW = panelW - SIDEBAR_W - 26;
@@ -2591,6 +2656,31 @@ public final class StatsScreen extends UiScreen {
                         statusError = false;
                         ClientPlayNetworking.send(new StatsRegistryActionPayload("lookup_name", item.uuid, ""));
                         return true;
+                    }
+                }
+                for (int i = 0; i < shown.size(); i++) {
+                    int cy = lTop + i * ROW_STRIDE - (int) Math.round(listScroll);
+                    if (cy + CARD_H < lTop || cy > lBottom) continue;
+                    if (mx >= cardX && mx < cardX + cardW && my >= cy && my < cy + CARD_H) {
+                        openPlayerDetail(shown.get(i));
+                        return true;
+                    }
+                }
+            }
+            if (inspectingPlayerUuid != null && "STATS".equals(playerDetailSubtab)) {
+                int detailTopY = tabBarY() + TAB_BAR_H;
+                int contentX = panelX + SIDEBAR_W + 10;
+                int chipY = detailTopY + 68;
+                if (my >= chipY && my < chipY + 16) {
+                    int cx = contentX;
+                    for (String[] cat : PLAYER_STAT_CATEGORIES) {
+                        int cw = textRenderer.getWidth(cat[1]) + 10;
+                        if (mx >= cx && mx < cx + cw) {
+                            playerStatCategory = cat[0];
+                            playerDetailScroll = targetPlayerDetailScroll = 0;
+                            return true;
+                        }
+                        cx += cw + 4;
                     }
                 }
             }
@@ -2761,6 +2851,12 @@ public final class StatsScreen extends UiScreen {
 
         if (button == 0 && mx >= panelX + panelW - 14 && mx <= panelX + panelW - 4 && my >= listTop() && my < listBottom()) {
             draggingScrollbar = true;
+            if (activeTab == Tab.REGISTRY && inspectingPlayerUuid != null) {
+                int dTop = tabBarY() + TAB_BAR_H + ("STATS".equals(playerDetailSubtab) ? 90 : 50);
+                int dBottom = listBottom();
+                double frac = Math.max(0.0, Math.min(1.0, (my - dTop) / Math.max(1.0, dBottom - dTop)));
+                targetPlayerDetailScroll = playerDetailScroll = frac * maxPlayerDetailScrollPx();
+            }
             return true;
         }
 
@@ -2853,6 +2949,361 @@ public final class StatsScreen extends UiScreen {
         return maxListScrollPx(count, stride);
     }
 
+    private static final String[][] PLAYER_STAT_CATEGORIES = {
+        {"custom", "General"},
+        {"mined", "Minados"},
+        {"used", "Usados"},
+        {"crafted", "Crafteados"},
+        {"broken", "Rotos"},
+        {"picked_up", "Recogidos"},
+        {"dropped", "Soltados"},
+        {"killed", "Mobs"},
+        {"killed_by", "Muertes"}
+    };
+
+    public void acceptPlayerDetail(String uuid, String json) {
+        if (uuid == null || !uuid.equals(inspectingPlayerUuid)) {
+            return;
+        }
+        try {
+            PlayerDetailSnapshot snap = GSON.fromJson(json, PlayerDetailSnapshot.class);
+            inspectingPlayerDetail = snap;
+            inspectingInvStacks.clear();
+            inspectingEnderStacks.clear();
+            if (snap != null) {
+                if (snap.inventory != null) {
+                    for (ItemSlotSnapshot s : snap.inventory) {
+                        inspectingInvStacks.put(s.slot, buildClientStack(s));
+                    }
+                }
+                if (snap.enderChest != null) {
+                    for (ItemSlotSnapshot s : snap.enderChest) {
+                        inspectingEnderStacks.put(s.slot, buildClientStack(s));
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static ItemStack buildClientStack(ItemSlotSnapshot s) {
+        if (s == null || s.itemId == null) return ItemStack.EMPTY;
+        Identifier id = Identifier.tryParse(s.itemId);
+        if (id == null || !Registries.ITEM.containsId(id)) return ItemStack.EMPTY;
+        Item item = Registries.ITEM.get(id);
+        ItemStack stack = new ItemStack(item, Math.max(1, s.count));
+        if (s.maxDamage > 0 && s.damage > 0) {
+            stack.setDamage(s.damage);
+        }
+        return stack;
+    }
+
+    private void openPlayerDetail(RegistryEntrySnapshot item) {
+        if (item == null || item.uuid == null) return;
+        inspectingPlayerUuid = item.uuid;
+        inspectingPlayerDetail = null;
+        inspectingInvStacks.clear();
+        inspectingEnderStacks.clear();
+        playerDetailSubtab = "STATS";
+        playerDetailScroll = targetPlayerDetailScroll = 0;
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("request_player_detail", item.uuid, ""));
+        init();
+    }
+
+    private void closePlayerDetail() {
+        inspectingPlayerUuid = null;
+        inspectingPlayerDetail = null;
+        inspectingInvStacks.clear();
+        inspectingEnderStacks.clear();
+        playerDetailScroll = targetPlayerDetailScroll = 0;
+        init();
+    }
+
+    private List<PlayerStatSnapshot> filteredPlayerStats() {
+        if (inspectingPlayerDetail == null || inspectingPlayerDetail.stats == null) {
+            return List.of();
+        }
+        String q = playerStatSearchField != null ? playerStatSearchField.getText().trim().toLowerCase(Locale.ROOT) : "";
+        List<PlayerStatSnapshot> out = new ArrayList<>();
+        for (PlayerStatSnapshot s : inspectingPlayerDetail.stats) {
+            if (!playerStatCategory.equals(s.category)) continue;
+            if (!q.isEmpty()) {
+                String label = resolveStatDisplayName(s.category, s.key).toLowerCase(Locale.ROOT);
+                if (!label.contains(q) && !s.key.toLowerCase(Locale.ROOT).contains(q)) {
+                    continue;
+                }
+            }
+            out.add(s);
+        }
+        return out;
+    }
+
+    private int maxPlayerDetailScrollPx() {
+        int topY = tabBarY() + TAB_BAR_H;
+        int lBottom = listBottom();
+        if ("STATS".equals(playerDetailSubtab)) {
+            int lTop = topY + 90;
+            int viewH = Math.max(1, lBottom - lTop);
+            int totalH = filteredPlayerStats().size() * 22;
+            return Math.max(0, totalH - viewH);
+        }
+        int lTop = topY + 52;
+        int viewH = Math.max(1, lBottom - lTop);
+        int contentH = 250;
+        return Math.max(0, contentH - viewH);
+    }
+
+    private void renderPlayerDetail(DrawContext c, int mx, int my, float delta) {
+        int topY = tabBarY() + TAB_BAR_H;
+        int contentX = panelX + SIDEBAR_W + 10;
+        int contentW = panelW - SIDEBAR_W - 22;
+        int lBottom = listBottom();
+
+        if (inspectingPlayerDetail == null) {
+            c.drawCenteredTextWithShadow(textRenderer, "Cargando datos de " + inspectingPlayerUuid + "…",
+                contentX + contentW / 2, topY + 120, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+
+        String title = (inspectingPlayerDetail.name != null && !inspectingPlayerDetail.name.isEmpty())
+            ? inspectingPlayerDetail.name
+            : inspectingPlayerDetail.uuid;
+        String headerInfo = title + "  \u00B7  " + inspectingPlayerDetail.type
+            + (inspectingPlayerDetail.online ? "  \u00B7  ONLINE" : "  \u00B7  OFFLINE");
+        int headerY = topY + ("STATS".equals(playerDetailSubtab) ? 52 : 32);
+        c.drawTextWithShadow(textRenderer, AeternumTheme.ellipsize(textRenderer, headerInfo, contentW),
+            contentX, headerY, AeternumTheme.TEXT_PRIMARY);
+
+        if ("STATS".equals(playerDetailSubtab)) {
+            int chipY = topY + 68;
+            int cx = contentX;
+            for (String[] cat : PLAYER_STAT_CATEGORIES) {
+                int cw = textRenderer.getWidth(cat[1]) + 10;
+                boolean sel = cat[0].equals(playerStatCategory);
+                boolean over = mx >= cx && mx < cx + cw && my >= chipY && my < chipY + 16;
+                AeternumTheme.drawCard(c, cx, chipY, cw, 16,
+                    sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
+                    sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
+                c.drawText(textRenderer, cat[1], cx + 5, chipY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+                cx += cw + 4;
+            }
+
+            int lTop = topY + 90;
+            int viewH = Math.max(1, lBottom - lTop);
+            List<PlayerStatSnapshot> shown = filteredPlayerStats();
+            int maxL = Math.max(0, shown.size() * 22 - viewH);
+            targetPlayerDetailScroll = Math.max(0, Math.min(targetPlayerDetailScroll, maxL));
+            playerDetailScroll += (targetPlayerDetailScroll - playerDetailScroll) * Math.min(1.0, delta * 0.45 + 0.25);
+            playerDetailScroll = Math.max(0, Math.min(playerDetailScroll, maxL));
+
+            if (shown.isEmpty()) {
+                c.drawCenteredTextWithShadow(textRenderer,
+                    inspectingPlayerDetail.hasStats ? "Sin registros en esta categoría." : "Sin archivo stats/*.json.",
+                    contentX + contentW / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
+                return;
+            }
+
+            c.enableScissor(panelX + SIDEBAR_W + 2, lTop, panelX + panelW - 8, lBottom);
+            for (int i = 0; i < shown.size(); i++) {
+                int ry = lTop + i * 22 - (int) Math.round(playerDetailScroll);
+                if (ry + 20 < lTop || ry > lBottom) continue;
+                PlayerStatSnapshot st = shown.get(i);
+                AeternumTheme.drawCard(c, contentX, ry, contentW - 6, 20,
+                    (i % 2 == 0) ? AeternumTheme.CARD_BG : AeternumTheme.CARD_ALT_BG,
+                    AeternumTheme.BORDER_SUBTLE);
+                String valStr = formatStatValue(st.category, st.key, st.value);
+                int vw = textRenderer.getWidth(valStr);
+                int vx = contentX + contentW - 14 - vw;
+                c.drawTextWithShadow(textRenderer, valStr, vx, ry + 6, AeternumTheme.ACCENT_GOLD);
+
+                ItemStack icon = resolveStatIconStack(st.category, st.key);
+                int labelX = contentX + 8;
+                if (!icon.isEmpty()) {
+                    c.drawItem(icon, contentX + 5, ry + 2);
+                    labelX = contentX + 26;
+                }
+                String label = resolveStatDisplayName(st.category, st.key);
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, label, Math.max(40, vx - labelX - 8)),
+                    labelX, ry + 6, AeternumTheme.TEXT_PRIMARY, false);
+            }
+            c.disableScissor();
+            if (maxL > 0) {
+                AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
+                    shown.size() * 22, viewH, playerDetailScroll, false);
+            }
+        } else {
+            renderPlayerDetailInventory(c, mx, my, delta, contentX, topY + 50, contentW, lBottom);
+        }
+    }
+
+    private void renderPlayerDetailInventory(
+        DrawContext c, int mx, int my, float delta, int contentX, int lTop, int contentW, int lBottom
+    ) {
+        if (!inspectingPlayerDetail.hasPlayerdata) {
+            c.drawCenteredTextWithShadow(textRenderer, "Sin archivo playerdata (.dat).",
+                contentX + contentW / 2, lTop + 80, AeternumTheme.TEXT_SECONDARY);
+            return;
+        }
+        int viewH = Math.max(1, lBottom - lTop);
+        int maxL = maxPlayerDetailScrollPx();
+        targetPlayerDetailScroll = Math.max(0, Math.min(targetPlayerDetailScroll, maxL));
+        playerDetailScroll += (targetPlayerDetailScroll - playerDetailScroll) * Math.min(1.0, delta * 0.45 + 0.25);
+        playerDetailScroll = Math.max(0, Math.min(playerDetailScroll, maxL));
+
+        ItemSlotSnapshot hoveredSnap = null;
+        int baseY = lTop - (int) Math.round(playerDetailScroll);
+        c.enableScissor(panelX + SIDEBAR_W + 2, lTop, panelX + panelW - 8, lBottom);
+
+        // Armor + Offhand row
+        c.drawText(textRenderer, "Equipo (Casco · Pechera · Pantalón · Botas · Offhand)", contentX, baseY + 2, AeternumTheme.TEXT_SECONDARY, false);
+        int[] eqSlots = {39, 38, 37, 36, 40};
+        for (int i = 0; i < eqSlots.length; i++) {
+            int sx = contentX + i * 20;
+            int sy = baseY + 13;
+            ItemSlotSnapshot found = drawSlotBox(c, sx, sy, eqSlots[i], inspectingInvStacks, inspectingPlayerDetail.inventory, mx, my, lTop, lBottom);
+            if (found != null) hoveredSnap = found;
+        }
+
+        // Main inventory (9x3) + Hotbar (9x1)
+        int invY = baseY + 38;
+        c.drawText(textRenderer, "Inventario", contentX, invY, AeternumTheme.TEXT_SECONDARY, false);
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slot = 9 + row * 9 + col;
+                ItemSlotSnapshot found = drawSlotBox(c, contentX + col * 20, invY + 11 + row * 20, slot,
+                    inspectingInvStacks, inspectingPlayerDetail.inventory, mx, my, lTop, lBottom);
+                if (found != null) hoveredSnap = found;
+            }
+        }
+        for (int col = 0; col < 9; col++) {
+            ItemSlotSnapshot found = drawSlotBox(c, contentX + col * 20, invY + 75, col,
+                inspectingInvStacks, inspectingPlayerDetail.inventory, mx, my, lTop, lBottom);
+            if (found != null) hoveredSnap = found;
+        }
+
+        // Ender Chest (9x3) - to the right if wide enough, else below
+        int enderX = (contentW >= 380) ? (contentX + 196) : contentX;
+        int enderY = (contentW >= 380) ? invY : (invY + 102);
+        c.drawText(textRenderer, "Ender Chest", enderX, enderY, AeternumTheme.TEXT_SECONDARY, false);
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slot = row * 9 + col;
+                ItemSlotSnapshot found = drawSlotBox(c, enderX + col * 20, enderY + 11 + row * 20, slot,
+                    inspectingEnderStacks, inspectingPlayerDetail.enderChest, mx, my, lTop, lBottom);
+                if (found != null) hoveredSnap = found;
+            }
+        }
+
+        c.disableScissor();
+        if (hoveredSnap != null && hoveredSnap.tooltip != null && !hoveredSnap.tooltip.isEmpty()) {
+            List<Text> tipLines = new ArrayList<>(hoveredSnap.tooltip.size());
+            for (String line : hoveredSnap.tooltip) {
+                tipLines.add(Text.literal(line));
+            }
+            c.drawTooltip(textRenderer, tipLines, mx, my);
+        }
+    }
+
+    private ItemSlotSnapshot drawSlotBox(
+        DrawContext c, int sx, int sy, int slot,
+        Map<Integer, ItemStack> stacks, List<ItemSlotSnapshot> snapshots,
+        int mx, int my, int lTop, int lBottom
+    ) {
+        AeternumTheme.drawCard(c, sx, sy, 18, 18, 0xFF121218, 0xFF2D2D38);
+        ItemStack stack = stacks.getOrDefault(slot, ItemStack.EMPTY);
+        if (!stack.isEmpty()) {
+            c.drawItem(stack, sx + 1, sy + 1);
+            c.drawStackOverlay(textRenderer, stack, sx + 1, sy + 1);
+            if (mx >= sx && mx < sx + 18 && my >= sy && my < sy + 18 && my >= lTop && my < lBottom) {
+                if (snapshots != null) {
+                    for (ItemSlotSnapshot snap : snapshots) {
+                        if (snap.slot == slot) return snap;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ItemStack resolveStatIconStack(String category, String rawKey) {
+        Identifier id = Identifier.tryParse(rawKey);
+        if (id == null) return ItemStack.EMPTY;
+        if ("mined".equals(category) && Registries.BLOCK.containsId(id)) {
+            Item asItem = Registries.BLOCK.get(id).asItem();
+            return asItem != Items.AIR ? new ItemStack(asItem) : ItemStack.EMPTY;
+        }
+        if (("used".equals(category) || "crafted".equals(category) || "broken".equals(category)
+            || "picked_up".equals(category) || "dropped".equals(category)) && Registries.ITEM.containsId(id)) {
+            Item item = Registries.ITEM.get(id);
+            return item != Items.AIR ? new ItemStack(item) : ItemStack.EMPTY;
+        }
+        if (("killed".equals(category) || "killed_by".equals(category)) && Registries.ENTITY_TYPE.containsId(id)) {
+            EntityType<?> et = Registries.ENTITY_TYPE.get(id);
+            SpawnEggItem egg = SpawnEggItem.forEntity(et);
+            if (egg != null) return new ItemStack(egg);
+            if (et == EntityType.PLAYER) return new ItemStack(Items.PLAYER_HEAD);
+            if (et == EntityType.ENDER_DRAGON) return new ItemStack(Items.DRAGON_HEAD);
+            if (et == EntityType.WITHER) return new ItemStack(Items.WITHER_SKELETON_SKULL);
+            return new ItemStack(Items.IRON_SWORD);
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private static String resolveStatDisplayName(String category, String rawKey) {
+        Identifier id = Identifier.tryParse(rawKey);
+        if (id != null) {
+            if ("mined".equals(category) && Registries.BLOCK.containsId(id)) {
+                return Registries.BLOCK.get(id).getName().getString();
+            }
+            if (("used".equals(category) || "crafted".equals(category) || "broken".equals(category)
+                || "picked_up".equals(category) || "dropped".equals(category)) && Registries.ITEM.containsId(id)) {
+                return Registries.ITEM.get(id).getName().getString();
+            }
+            if (("killed".equals(category) || "killed_by".equals(category)) && Registries.ENTITY_TYPE.containsId(id)) {
+                return Registries.ENTITY_TYPE.get(id).getName().getString();
+            }
+            if ("custom".equals(category)) {
+                String transKey = "stat." + id.getNamespace() + "." + id.getPath();
+                String translated = Text.translatable(transKey).getString();
+                if (!translated.equals(transKey)) {
+                    return translated;
+                }
+            }
+        }
+        return rawKey != null ? rawKey : "";
+    }
+
+    private static String formatStatValue(String category, String rawKey, int value) {
+        if ("custom".equals(category) && rawKey != null) {
+            String path = rawKey.contains(":") ? rawKey.substring(rawKey.indexOf(':') + 1) : rawKey;
+            if ("play_time".equals(path) || "total_world_time".equals(path) || "time_since_death".equals(path)
+                || "time_since_rest".equals(path) || "sneak_time".equals(path)) {
+                long secs = Math.max(0L, value) / 20L;
+                if (secs < 60L) return secs + "s";
+                long mins = secs / 60L;
+                if (mins < 60L) return mins + "m " + (secs % 60L) + "s";
+                long hours = mins / 60L;
+                if (hours < 24L) return hours + "h " + (mins % 60L) + "m";
+                long days = hours / 24L;
+                return days + "d " + (hours % 24L) + "h";
+            }
+            if (path.endsWith("_one_cm")) {
+                double meters = value / 100.0;
+                if (meters >= 1000.0) {
+                    return String.format(Locale.US, "%.2f km", meters / 1000.0);
+                }
+                if (meters >= 1.0) {
+                    return String.format(Locale.US, "%.1f m", meters);
+                }
+                return value + " cm";
+            }
+            if (path.startsWith("damage_")) {
+                return String.format(Locale.US, "%.1f \u2764", value / 20.0);
+            }
+        }
+        return String.format(Locale.US, "%,d", value);
+    }
+
     @Override
     public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
         if (draggingCriterionScrollbar && sbCriterionField != null) {
@@ -2874,6 +3325,14 @@ public final class StatsScreen extends UiScreen {
             return true;
         }
         if (draggingScrollbar) {
+            if (activeTab == Tab.REGISTRY && inspectingPlayerUuid != null) {
+                int lTop = tabBarY() + TAB_BAR_H + ("STATS".equals(playerDetailSubtab) ? 90 : 50);
+                int lBottom = listBottom();
+                int maxL = maxPlayerDetailScrollPx();
+                double frac = Math.max(0.0, Math.min(1.0, (my - lTop) / Math.max(1.0, lBottom - lTop)));
+                targetPlayerDetailScroll = playerDetailScroll = frac * maxL;
+                return true;
+            }
             int lTop = listTop();
             int lBottom = listBottom();
             int maxL = maxActiveScrollPx();
@@ -2908,6 +3367,15 @@ public final class StatsScreen extends UiScreen {
             if (my >= sTop && my < sBottom) {
                 int maxSb = Math.max(0, filteredObjectives().size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
                 targetSbSidebarScroll = Math.max(0, Math.min(maxSb, targetSbSidebarScroll - vAmt * 22.0));
+                return true;
+            }
+        }
+        if (activeTab == Tab.REGISTRY && inspectingPlayerUuid != null) {
+            int lTop = tabBarY() + TAB_BAR_H + ("STATS".equals(playerDetailSubtab) ? 90 : 50);
+            int lBottom = listBottom();
+            if (my >= lTop && my < lBottom && mx >= panelX + SIDEBAR_W) {
+                int maxDetail = maxPlayerDetailScrollPx();
+                targetPlayerDetailScroll = Math.max(0.0, Math.min(maxDetail, targetPlayerDetailScroll - vAmt * 24.0));
                 return true;
             }
         }

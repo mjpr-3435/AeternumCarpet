@@ -1,7 +1,10 @@
 package smp.aeternum.carpet.network;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mojang.authlib.GameProfile;
 import java.io.Reader;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,10 +28,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.Block;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.scoreboard.Scoreboard;
@@ -47,6 +53,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.bot.BotInventoryOpener;
+import smp.aeternum.carpet.bot.OfflinePlayerSession;
 import smp.aeternum.carpet.motd.MotdMarkup;
 import smp.aeternum.carpet.stats.AreaRegion;
 import smp.aeternum.carpet.stats.AreaScanner;
@@ -80,6 +88,7 @@ public final class StatsNetworking {
         PayloadTypeRegistry.playS2C().register(StatsDataPayload.ID, StatsDataPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ScoreboardDetailPayload.ID, ScoreboardDetailPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(AreaContourPreviewPayload.ID, AreaContourPreviewPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(PlayerDetailPayload.ID, PlayerDetailPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(StatsRegistryActionPayload.ID, StatsRegistryActionPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(StatsRegistryActionPayload.ID, (payload, context) ->
@@ -324,6 +333,8 @@ public final class StatsNetworking {
             case "scan_area_contour" -> handleScanAreaContour(player, payload.value());
             case "set_score" -> handleSetScore(server, player, payload.value());
             case "delete_score_entry" -> handleDeleteScoreEntry(server, player, payload.value());
+            case "request_player_detail" -> sendPlayerDetail(server, player, payload.uuid());
+            case "open_player_inventory" -> openPlayerInventory(server, player, payload.uuid());
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -1285,5 +1296,191 @@ public final class StatsNetworking {
     public static final class DeleteScoreEntryRequest {
         public String objective = "";
         public String owner = "";
+    }
+
+    public static final class PlayerStatSnapshot {
+        public String category = "";
+        public String key = "";
+        public int value;
+    }
+
+    public static final class ItemSlotSnapshot {
+        public int slot;
+        public String itemId = "minecraft:air";
+        public int count;
+        public String customName = "";
+        public int damage;
+        public int maxDamage;
+        public List<String> tooltip = List.of();
+    }
+
+    public static final class PlayerDetailSnapshot {
+        public String uuid = "";
+        public String name = "";
+        public String type = "UNKNOWN";
+        public boolean online;
+        public boolean hasPlayerdata;
+        public boolean hasStats;
+        public List<PlayerStatSnapshot> stats = new ArrayList<>();
+        public List<ItemSlotSnapshot> inventory = new ArrayList<>();
+        public List<ItemSlotSnapshot> enderChest = new ArrayList<>();
+    }
+
+    private static void openPlayerInventory(MinecraftServer server, ServerPlayerEntity viewer, String uuidStr) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException ignored) {
+            sendSnapshot(viewer, false, "UUID inválida.", true);
+            return;
+        }
+        ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+        if (online != null) {
+            BotInventoryOpener.openOnline(viewer, online);
+            return;
+        }
+        Entry entry = PlayerRegistryStore.getEntriesSnapshot().get(uuidStr);
+        String label = (entry != null && entry.name != null && !entry.name.isBlank()) ? entry.name : uuidStr;
+        OfflinePlayerSession session = OfflinePlayerSession.load(server, new GameProfile(uuid, label));
+        if (session == null) {
+            sendSnapshot(viewer, false, "No existe playerdata (.dat) para " + label + ".", true);
+            return;
+        }
+        BotInventoryOpener.openOffline(viewer, label, session);
+    }
+
+    private static void sendPlayerDetail(MinecraftServer server, ServerPlayerEntity viewer, String uuidStr) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+        Entry entry = PlayerRegistryStore.getEntriesSnapshot().get(uuidStr);
+        PlayerDetailSnapshot detail = new PlayerDetailSnapshot();
+        detail.uuid = uuidStr;
+        detail.name = (entry != null && entry.name != null) ? entry.name : "";
+        detail.type = (entry != null && entry.type != null) ? entry.type.name() : EntryType.UNKNOWN.name();
+
+        ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+        detail.online = online != null;
+        if (online != null) {
+            if (detail.name.isEmpty()) detail.name = online.getName().getString();
+            detail.hasPlayerdata = true;
+            detail.hasStats = true;
+            collectOnlineStats(online, detail.stats);
+            collectInventorySlots(server, viewer, online.getInventory(), 41, detail.inventory);
+            collectInventorySlots(server, viewer, online.getEnderChestInventory(), 27, detail.enderChest);
+        } else {
+            detail.hasPlayerdata = entry != null && entry.files != null && entry.files.playerdata;
+            detail.hasStats = entry != null && entry.files != null && entry.files.stats;
+            if (detail.hasStats) {
+                collectOfflineStats(server.getSavePath(WorldSavePath.STATS).resolve(uuidStr + ".json"), detail.stats);
+            }
+            if (detail.hasPlayerdata) {
+                String label = !detail.name.isEmpty() ? detail.name : uuidStr;
+                OfflinePlayerSession session = OfflinePlayerSession.load(server, new GameProfile(uuid, label));
+                if (session != null) {
+                    collectInventorySlots(server, viewer, session.inventory, 41, detail.inventory);
+                    collectInventorySlots(server, viewer, session.enderChest, 27, detail.enderChest);
+                }
+            }
+        }
+        detail.stats.sort(Comparator.comparingInt((PlayerStatSnapshot s) -> s.value).reversed()
+            .thenComparing(s -> s.key, String.CASE_INSENSITIVE_ORDER));
+        ServerPlayNetworking.send(viewer, new PlayerDetailPayload(uuidStr, GSON.toJson(detail)));
+    }
+
+    private static void collectOnlineStats(ServerPlayerEntity player, List<PlayerStatSnapshot> out) {
+        collectStatCategory(player, "custom", Stats.CUSTOM, Registries.CUSTOM_STAT, out, id -> id.toString());
+        collectStatCategory(player, "mined", Stats.MINED, Registries.BLOCK, out, b -> Registries.BLOCK.getId(b).toString());
+        collectStatCategory(player, "used", Stats.USED, Registries.ITEM, out, i -> Registries.ITEM.getId(i).toString());
+        collectStatCategory(player, "crafted", Stats.CRAFTED, Registries.ITEM, out, i -> Registries.ITEM.getId(i).toString());
+        collectStatCategory(player, "broken", Stats.BROKEN, Registries.ITEM, out, i -> Registries.ITEM.getId(i).toString());
+        collectStatCategory(player, "picked_up", Stats.PICKED_UP, Registries.ITEM, out, i -> Registries.ITEM.getId(i).toString());
+        collectStatCategory(player, "dropped", Stats.DROPPED, Registries.ITEM, out, i -> Registries.ITEM.getId(i).toString());
+        collectStatCategory(player, "killed", Stats.KILLED, Registries.ENTITY_TYPE, out, e -> Registries.ENTITY_TYPE.getId(e).toString());
+        collectStatCategory(player, "killed_by", Stats.KILLED_BY, Registries.ENTITY_TYPE, out, e -> Registries.ENTITY_TYPE.getId(e).toString());
+    }
+
+    private static <T> void collectStatCategory(
+        ServerPlayerEntity player,
+        String category,
+        StatType<T> type,
+        Iterable<T> keys,
+        List<PlayerStatSnapshot> out,
+        java.util.function.Function<T, String> idFn
+    ) {
+        for (T key : keys) {
+            int val = player.getStatHandler().getStat(type.getOrCreateStat(key));
+            if (val > 0) {
+                PlayerStatSnapshot s = new PlayerStatSnapshot();
+                s.category = category;
+                s.key = idFn.apply(key);
+                s.value = val;
+                out.add(s);
+            }
+        }
+    }
+
+    private static void collectOfflineStats(Path statsPath, List<PlayerStatSnapshot> out) {
+        if (!Files.isRegularFile(statsPath)) return;
+        try (Reader reader = Files.newBufferedReader(statsPath)) {
+            JsonElement parsed = JsonParser.parseReader(reader);
+            if (!parsed.isJsonObject()) return;
+            JsonObject root = parsed.getAsJsonObject();
+            if (!root.has("stats") || !root.get("stats").isJsonObject()) return;
+            JsonObject statsObj = root.getAsJsonObject("stats");
+            for (String cat : List.of("custom", "mined", "used", "crafted", "broken", "picked_up", "dropped", "killed", "killed_by")) {
+                String mcCat = "minecraft:" + cat;
+                if (!statsObj.has(mcCat) || !statsObj.get(mcCat).isJsonObject()) continue;
+                JsonObject sec = statsObj.getAsJsonObject(mcCat);
+                for (Map.Entry<String, JsonElement> e : sec.entrySet()) {
+                    if (e.getValue() == null || !e.getValue().isJsonPrimitive()) continue;
+                    int val = e.getValue().getAsInt();
+                    if (val > 0) {
+                        PlayerStatSnapshot s = new PlayerStatSnapshot();
+                        s.category = cat;
+                        s.key = e.getKey();
+                        s.value = val;
+                        out.add(s);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void collectInventorySlots(
+        MinecraftServer server,
+        ServerPlayerEntity viewer,
+        Inventory inv,
+        int maxSlots,
+        List<ItemSlotSnapshot> out
+    ) {
+        if (inv == null) return;
+        Item.TooltipContext ctx = Item.TooltipContext.create(server.getRegistryManager());
+        int limit = Math.min(maxSlots, inv.size());
+        for (int i = 0; i < limit; i++) {
+            ItemStack stack = inv.getStack(i);
+            if (stack.isEmpty()) continue;
+            ItemSlotSnapshot snap = new ItemSlotSnapshot();
+            snap.slot = i;
+            snap.itemId = Registries.ITEM.getId(stack.getItem()).toString();
+            snap.count = stack.getCount();
+            snap.customName = stack.contains(DataComponentTypes.CUSTOM_NAME) ? stack.getName().getString() : "";
+            snap.damage = stack.isDamageable() ? stack.getDamage() : 0;
+            snap.maxDamage = stack.isDamageable() ? stack.getMaxDamage() : 0;
+            List<String> tips = new ArrayList<>();
+            try {
+                for (Text line : stack.getTooltip(ctx, viewer, TooltipType.BASIC)) {
+                    String s = line.getString();
+                    if (!s.isBlank()) tips.add(s);
+                }
+            } catch (Exception ignored) {
+            }
+            snap.tooltip = tips;
+            out.add(snap);
+        }
     }
 }
