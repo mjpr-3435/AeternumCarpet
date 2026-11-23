@@ -82,7 +82,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandViewInventory.name", "Command View Inventory"),
             Map.entry("carpet.rule.commandViewInventory.desc", "Enables /viewinv <player> for OPs to inspect and edit inventories, ender chests, and gamemodes of online, bot, and offline players."),
             Map.entry("carpet.rule.commandStats.name", "Command Stats"),
-            Map.entry("carpet.rule.commandStats.desc", "Enables /stats and the Quick Dock Stats button for OPs to manage the player/bot registry and statistics.")
+            Map.entry("carpet.rule.commandStats.desc", "Enables /stats and the Quick Dock Stats button for OPs to manage the player/bot registry and statistics."),
+            Map.entry("carpet.rule.aeStackableShulkers.name", "AE Stackable Shulkers"),
+            Map.entry("carpet.rule.aeStackableShulkers.desc", "Empty shulker boxes of the same color/components stack up to 64 in inventories and on the ground, while hoppers process them 1 by 1 without stacking.")
         );
     }
 }

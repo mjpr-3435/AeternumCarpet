@@ -25,7 +25,8 @@
 		"MinecraftServerMixin",
 		"PlayerManagerMixin",
 		"StatHandlerMixin",
-		"BlockItemMixin"
+		"BlockItemMixin",
+		"ItemStackMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",

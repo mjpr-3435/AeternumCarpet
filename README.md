@@ -79,6 +79,7 @@ Todas las reglas se configuran con `/carpet <regla> <valor>` o desde `/rules`.
 | Regla | Default | Opciones | Descripción |
 | --- | --- | --- | --- |
 | `openShulkerInHand` | `false` | `true`, `false` | Permite abrir una shulker box directamente desde la mano al usarla en el aire. |
+| `aeStackableShulkers` | `false` | `true`, `false` | Permite stackear shulkers vacías del mismo color/componentes hasta 64 en inventarios y suelo; los hoppers las mueven de 1 en 1 sin apilarlas. |
 | `openEnderChestInHand` | `false` | `true`, `false` | Permite abrir un Ender Chest directamente desde la mano al usarlo en el aire. |
 | `instamineDeepslate` | `false` | `true`, `false` | Permite minar deepslate instantáneamente con pico de netherite Eficiencia V y Prisa II+. |
 | `fastObsidian` | `false` | `true`, `false` | Obsidiana y obsidiana llorosa se pican a velocidad de piedra con pico de netherite Eficiencia V. |
