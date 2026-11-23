@@ -147,6 +147,7 @@ public final class StatsScreen extends UiScreen {
     private String hoveredObjectiveEdit;
     private String armedObjectiveDelete;
     private long armedObjectiveDeleteUntilMs;
+    private boolean showAeObjectives;
     private String editingScoreOwner;
     private UiTextField inlineScoreField;
     private String armedDeleteScoreOwner;
@@ -454,6 +455,26 @@ public final class StatsScreen extends UiScreen {
             sbCreateButton = UiButton.primary(panelX + SIDEBAR_W - 26, contentTop + 6, 18, 18, "+", b -> openCreateObjectiveForm());
             addDrawableChild(sbCreateButton);
 
+            int aeHalfW = (SIDEBAR_W - 20) / 2;
+            UiButton toggleAeBtn = UiButton.secondary(panelX + 8, panelY + panelH - 88, aeHalfW, 22,
+                showAeObjectives ? "ae-*: ON" : "ae-*: OFF", b -> {
+                    showAeObjectives = !showAeObjectives;
+                    targetSbSidebarScroll = 0;
+                    sbSidebarScroll = 0;
+                    init();
+                });
+            addDrawableChild(toggleAeBtn);
+
+            boolean hasAe = scoreboards.stream().anyMatch(o -> o.name != null && o.name.toLowerCase(Locale.ROOT).startsWith("ae-"));
+            UiButton clearAeBtn = UiButton.danger(panelX + 12 + aeHalfW, panelY + panelH - 88, SIDEBAR_W - 20 - aeHalfW, 22,
+                "Limpiar", b -> {
+                    statusMessage = "Limpiando scoreboards ae-*…";
+                    statusError = false;
+                    ClientPlayNetworking.send(new StatsRegistryActionPayload("clear_ae_objectives", "", ""));
+                });
+            clearAeBtn.active = hasAe;
+            addDrawableChild(clearAeBtn);
+
             scoreRefreshButton = UiButton.secondary(panelX + 8, panelY + panelH - 62, SIDEBAR_W - 16, 22, "Refrescar", b -> {
                 statusMessage = "Actualizando scoreboards…";
                 statusError = false;
@@ -487,7 +508,7 @@ public final class StatsScreen extends UiScreen {
             } else {
                 int dispLabelY = formDisplayLabelY(contentTop);
                 sbNameField = new UiTextField(textRenderer, contentX, contentTop + 35, contentW, 18, "ej: dig_diamantes");
-                sbNameField.setMaxLength(16);
+                sbNameField.setMaxLength(128);
                 sbNameField.setText(prevSbName);
                 addDrawableChild(sbNameField);
 
@@ -1304,12 +1325,16 @@ public final class StatsScreen extends UiScreen {
 
     private List<ScoreboardObjectiveSnapshot> filteredObjectives() {
         String q = objectiveSearchField != null ? objectiveSearchField.getText().trim().toLowerCase(Locale.ROOT) : "";
-        if (q.isEmpty()) return scoreboards;
         List<ScoreboardObjectiveSnapshot> out = new ArrayList<>();
         for (ScoreboardObjectiveSnapshot obj : scoreboards) {
-            if (obj.name != null && obj.name.toLowerCase(Locale.ROOT).contains(q)) {
-                out.add(obj);
+            if (obj == null || obj.name == null) continue;
+            if (!showAeObjectives && obj.name.toLowerCase(Locale.ROOT).startsWith("ae-")) {
+                continue;
             }
+            if (!q.isEmpty() && !obj.name.toLowerCase(Locale.ROOT).contains(q)) {
+                continue;
+            }
+            out.add(obj);
         }
         return out;
     }
@@ -1391,6 +1416,12 @@ public final class StatsScreen extends UiScreen {
         }
         if (id.contains(" ")) {
             return "El ID interno no puede tener espacios.";
+        }
+        boolean isSameExistingAe = sbPanelMode == SbPanelMode.EDIT
+            && editingObjectiveName != null
+            && editingObjectiveName.equalsIgnoreCase(id);
+        if (!isSameExistingAe && id.toLowerCase(Locale.ROOT).startsWith("ae-")) {
+            return "El prefijo 'ae-' está reservado.";
         }
         if (scoreboards != null) {
             for (ScoreboardObjectiveSnapshot obj : scoreboards) {
@@ -1501,7 +1532,7 @@ public final class StatsScreen extends UiScreen {
         int topY = tabBarY() + TAB_BAR_H;
         int footerY = panelY + panelH - 36;
         int sTop = topY + 28;
-        int sBottom = footerY - 34;
+        int sBottom = footerY - 60;
 
         // Sidebar: list of objectives
         c.fill(panelX + 1, topY, panelX + SIDEBAR_W, footerY, AeternumTheme.SIDEBAR_BG);
@@ -2569,7 +2600,7 @@ public final class StatsScreen extends UiScreen {
             int topY = tabBarY() + TAB_BAR_H;
             int footerY = panelY + panelH - 36;
             int sTop = topY + 28;
-            int sBottom = footerY - 34;
+            int sBottom = footerY - 60;
 
             if (mx >= panelX + SIDEBAR_W - 8 && mx <= panelX + SIDEBAR_W && my >= sTop && my < sBottom) {
                 draggingSbSidebarScrollbar = true;
@@ -2836,7 +2867,7 @@ public final class StatsScreen extends UiScreen {
         }
         if (draggingSbSidebarScrollbar) {
             int sTop = tabBarY() + TAB_BAR_H + 28;
-            int sBottom = panelY + panelH - 36 - 34;
+            int sBottom = panelY + panelH - 36 - 60;
             int maxSb = Math.max(0, filteredObjectives().size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
             double frac = Math.max(0.0, Math.min(1.0, (my - sTop) / Math.max(1.0, sBottom - sTop)));
             targetSbSidebarScroll = sbSidebarScroll = frac * maxSb;
@@ -2873,7 +2904,7 @@ public final class StatsScreen extends UiScreen {
         }
         if (activeTab == Tab.SCOREBOARDS && mx >= panelX + 4 && mx < panelX + SIDEBAR_W) {
             int sTop = tabBarY() + TAB_BAR_H + 28;
-            int sBottom = panelY + panelH - 36 - 34;
+            int sBottom = panelY + panelH - 36 - 60;
             if (my >= sTop && my < sBottom) {
                 int maxSb = Math.max(0, filteredObjectives().size() * SB_SIDEBAR_ROW_H - (sBottom - sTop));
                 targetSbSidebarScroll = Math.max(0, Math.min(maxSb, targetSbSidebarScroll - vAmt * 22.0));

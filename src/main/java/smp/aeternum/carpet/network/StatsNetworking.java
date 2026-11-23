@@ -284,6 +284,22 @@ public final class StatsNetworking {
             case "lookup_all_online" -> startBatchLookup(server, player);
             case "cancel_lookup_all" -> cancelBatchLookup(server, player);
             case "refresh_scoreboards" -> sendSnapshot(player, false, "Scoreboards actualizadas.", false);
+            case "clear_ae_objectives" -> {
+                Scoreboard sb = server.getScoreboard();
+                List<ScoreboardObjective> toRemove = new ArrayList<>();
+                for (ScoreboardObjective obj : sb.getObjectives()) {
+                    if (obj.getName().toLowerCase(Locale.ROOT).startsWith("ae-")) {
+                        toRemove.add(obj);
+                    }
+                }
+                for (ScoreboardObjective obj : toRemove) {
+                    sb.removeObjective(obj);
+                    ScoreboardConfigStore.remove(obj.getName());
+                }
+                sendSnapshot(player, false,
+                    toRemove.isEmpty() ? "No hay scoreboards ae-* que limpiar." : ("Limpiadas " + toRemove.size() + " scoreboards ae-*."),
+                    false);
+            }
             case "select_objective" -> sendObjectiveDetail(player, server, payload.value());
             case "delete_objective" -> {
                 String objName = payload.value();
@@ -537,6 +553,10 @@ public final class StatsNetworking {
             sendSnapshot(player, false, "El ID interno no puede tener espacios.", true);
             return;
         }
+        if (objName.toLowerCase(Locale.ROOT).startsWith("ae-")) {
+            sendSnapshot(player, false, "El prefijo 'ae-' está reservado para /stats scoreboard.", true);
+            return;
+        }
         Scoreboard sb = server.getScoreboard();
         for (ScoreboardObjective existing : sb.getObjectives()) {
             if (existing.getName().equalsIgnoreCase(objName)) {
@@ -597,7 +617,7 @@ public final class StatsNetworking {
             if (isCustomTracker) {
                 filled = populateTrackerFromStats(server, sb, created, criterionRaw);
             } else if (parsedCriterion instanceof Stat<?> stat) {
-                filled = populateObjectiveFromStats(server, sb, created, stat, criterionRaw);
+                filled = populateObjectiveFromStats(server, sb, created, stat, criterionRaw, false);
             }
         }
         String msg = filled > 0
@@ -686,12 +706,13 @@ public final class StatsNetworking {
         }
     }
 
-    private static int populateObjectiveFromStats(
+    public static int populateObjectiveFromStats(
         MinecraftServer server,
         Scoreboard sb,
         ScoreboardObjective objective,
         Stat<?> stat,
-        String criterionRaw
+        String criterionRaw,
+        boolean humansOnly
     ) {
         String[] parts = parseStatCriterionKeys(criterionRaw);
         String catKey = parts != null ? parts[0] : null;
@@ -701,6 +722,9 @@ public final class StatsNetworking {
 
         for (Entry entry : PlayerRegistryStore.getEntriesSnapshot().values()) {
             if (entry.name == null || entry.name.isBlank()) {
+                continue;
+            }
+            if (humansOnly && entry.type != EntryType.HUMAN) {
                 continue;
             }
             UUID uuid;
@@ -792,6 +816,10 @@ public final class StatsNetworking {
         String nextName = (req.name == null || req.name.isBlank()) ? target.getName() : req.name.trim();
         if (nextName.contains(" ")) {
             sendSnapshot(player, false, "El ID interno no puede tener espacios.", true);
+            return;
+        }
+        if (!nextName.equalsIgnoreCase(target.getName()) && nextName.toLowerCase(Locale.ROOT).startsWith("ae-")) {
+            sendSnapshot(player, false, "El prefijo 'ae-' está reservado para /stats scoreboard.", true);
             return;
         }
         if (!nextName.equals(target.getName())) {
