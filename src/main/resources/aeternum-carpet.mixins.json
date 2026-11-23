@@ -24,7 +24,8 @@
 		"NeighborUpdaterMixin",
 		"MinecraftServerMixin",
 		"PlayerManagerMixin",
-		"StatHandlerMixin"
+		"StatHandlerMixin",
+		"BlockItemMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",

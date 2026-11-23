@@ -86,7 +86,14 @@ public class ServerPlayerInteractionManagerMixin {
     private void aeternum$breakCustomBlocks(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (aeternum$portalFrameMiningPos != null && aeternum$portalFrameMiningPos.equals(pos)) {
             cir.setReturnValue(false);
+            return;
         }
+        smp.aeternum.carpet.stats.ScoreboardConfigStore.setBlockPos(pos);
+    }
+
+    @Inject(method = "tryBreakBlock", at = @At("RETURN"))
+    private void aeternum$afterTryBreakBlock(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+        smp.aeternum.carpet.stats.ScoreboardConfigStore.clearBlockPos();
     }
 
     @Unique

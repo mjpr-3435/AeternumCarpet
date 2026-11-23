@@ -16,6 +16,7 @@ import smp.aeternum.carpet.network.ExplorationMapTilePayload;
 import smp.aeternum.carpet.network.MaterialsDataPayload;
 import smp.aeternum.carpet.network.MaterialsOverlayPayload;
 import smp.aeternum.carpet.network.ProjectDownloadDataPayload;
+import smp.aeternum.carpet.network.AreaContourPreviewPayload;
 import smp.aeternum.carpet.network.CarpetRulesDataPayload;
 import smp.aeternum.carpet.network.ScoreboardDetailPayload;
 import smp.aeternum.carpet.network.StatsDataPayload;
@@ -106,6 +107,11 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ScoreboardDetailPayload.ID, (payload, context) -> context.client().execute(() -> {
             if (context.client().currentScreen instanceof StatsScreen screen) {
                 screen.replaceScoreboardDetail(payload.objectiveName(), payload.json());
+            }
+        }));
+        ClientPlayNetworking.registerGlobalReceiver(AreaContourPreviewPayload.ID, (payload, context) -> context.client().execute(() -> {
+            if (context.client().currentScreen instanceof StatsScreen screen) {
+                screen.acceptAreaContourPreview(payload);
             }
         }));
         ClientPlayNetworking.registerGlobalReceiver(ProjectDownloadDataPayload.ID, (payload, context) -> context.client().execute(() ->

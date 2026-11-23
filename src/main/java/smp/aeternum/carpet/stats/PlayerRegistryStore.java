@@ -3,6 +3,9 @@ package smp.aeternum.carpet.stats;
 import carpet.patches.EntityPlayerMPFake;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import java.io.IOException;
 import java.io.Reader;
@@ -20,8 +23,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.NbtSizeTracker;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.UserCache;
@@ -35,6 +43,7 @@ public final class PlayerRegistryStore {
     private static Path unexpectedFilePath;
     private static Map<String, Entry> entries = new LinkedHashMap<>();
     private static List<String> unexpectedFiles = new ArrayList<>();
+    private static final AtomicBoolean SUMMARY_REFRESH_RUNNING = new AtomicBoolean(false);
 
     private PlayerRegistryStore() {
     }
@@ -72,11 +81,52 @@ public final class PlayerRegistryStore {
         }
     }
 
+    public static final class EntrySummary {
+        public long datMtime;
+        public int enderSlots = -1;
+        public int invSlots = -1;
+        public long statsMtime;
+        public long playTimeTicks = -1L;
+        public long mined = -1L;
+        public long crafted = -1L;
+
+        public EntrySummary copy() {
+            EntrySummary c = new EntrySummary();
+            c.datMtime = datMtime;
+            c.enderSlots = enderSlots;
+            c.invSlots = invSlots;
+            c.statsMtime = statsMtime;
+            c.playTimeTicks = playTimeTicks;
+            c.mined = mined;
+            c.crafted = crafted;
+            return c;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof EntrySummary that)) return false;
+            return datMtime == that.datMtime
+                && enderSlots == that.enderSlots
+                && invSlots == that.invSlots
+                && statsMtime == that.statsMtime
+                && playTimeTicks == that.playTimeTicks
+                && mined == that.mined
+                && crafted == that.crafted;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(datMtime, enderSlots, invSlots, statsMtime, playTimeTicks, mined, crafted);
+        }
+    }
+
     public static final class Entry {
         public String uuid;
         public String name;
         public EntryType type = EntryType.UNKNOWN;
         public FilePresence files = new FilePresence();
+        public EntrySummary summary;
 
         public boolean hasAnomaly() {
             return files == null || !files.playerdata || !files.stats || !files.advancements;
@@ -633,6 +683,7 @@ public final class PlayerRegistryStore {
         copy.files = source.files != null
             ? new FilePresence(source.files.playerdata, source.files.stats, source.files.advancements)
             : new FilePresence();
+        copy.summary = source.summary != null ? source.summary.copy() : null;
         return copy;
     }
 
@@ -649,6 +700,7 @@ public final class PlayerRegistryStore {
         clean.name = raw.name;
         clean.type = raw.type != null ? raw.type : EntryType.UNKNOWN;
         clean.files = raw.files != null ? raw.files : new FilePresence();
+        clean.summary = raw.summary != null ? raw.summary.copy() : null;
         return clean;
     }
 
@@ -664,7 +716,8 @@ public final class PlayerRegistryStore {
             Entry cur = item.getValue();
             if (!Objects.equals(cur.name, other.name)
                 || cur.type != other.type
-                || !Objects.equals(cur.files, other.files)) {
+                || !Objects.equals(cur.files, other.files)
+                || !Objects.equals(cur.summary, other.summary)) {
                 return false;
             }
         }
@@ -701,5 +754,154 @@ public final class PlayerRegistryStore {
         } catch (IOException exception) {
             AeternumCarpet.LOGGER.error("Failed to save unexpected files report to {}", unexpectedFilePath, exception);
         }
+    }
+
+    public static void refreshSummariesAsync(MinecraftServer server, Runnable onUpdated) {
+        if (server == null || !SUMMARY_REFRESH_RUNNING.compareAndSet(false, true)) {
+            return;
+        }
+        Path playerdataDir = server.getSavePath(WorldSavePath.PLAYERDATA);
+        Path statsDir = server.getSavePath(WorldSavePath.STATS);
+        List<Entry> snapshot;
+        synchronized (PlayerRegistryStore.class) {
+            snapshot = new ArrayList<>(entries.size());
+            for (Entry e : entries.values()) {
+                snapshot.add(copyEntry(e));
+            }
+        }
+        Thread worker = new Thread(() -> {
+            try {
+                Map<String, EntrySummary> updates = new LinkedHashMap<>();
+                for (Entry e : snapshot) {
+                    if (e.uuid == null) continue;
+                    boolean hasDat = e.files != null && e.files.playerdata;
+                    boolean hasStats = e.files != null && e.files.stats;
+                    Path datPath = playerdataDir.resolve(e.uuid + ".dat");
+                    Path statsPath = statsDir.resolve(e.uuid + ".json");
+                    long datMtime = (hasDat && Files.isRegularFile(datPath)) ? safeMtime(datPath) : 0L;
+                    long statsMtime = (hasStats && Files.isRegularFile(statsPath)) ? safeMtime(statsPath) : 0L;
+
+                    EntrySummary prev = e.summary;
+                    boolean needDat = (prev == null && datMtime > 0L) || (prev != null && prev.datMtime != datMtime);
+                    boolean needStats = (prev == null && statsMtime > 0L) || (prev != null && prev.statsMtime != statsMtime);
+                    if (!needDat && !needStats) {
+                        continue;
+                    }
+
+                    EntrySummary next = prev != null ? prev.copy() : new EntrySummary();
+                    if (needDat) {
+                        next.datMtime = datMtime;
+                        if (datMtime > 0L) {
+                            readDatSummary(datPath, next);
+                        } else {
+                            next.enderSlots = -1;
+                            next.invSlots = -1;
+                        }
+                    }
+                    if (needStats) {
+                        next.statsMtime = statsMtime;
+                        if (statsMtime > 0L) {
+                            readStatsSummary(statsPath, next);
+                        } else {
+                            next.playTimeTicks = -1L;
+                            next.mined = -1L;
+                            next.crafted = -1L;
+                        }
+                    }
+                    updates.put(e.uuid, next);
+                }
+
+                if (!updates.isEmpty()) {
+                    synchronized (PlayerRegistryStore.class) {
+                        for (Map.Entry<String, EntrySummary> u : updates.entrySet()) {
+                            Entry target = entries.get(u.getKey());
+                            if (target != null) {
+                                target.summary = u.getValue();
+                            }
+                        }
+                        save();
+                    }
+                    if (onUpdated != null) {
+                        server.execute(onUpdated);
+                    }
+                }
+            } catch (Exception ex) {
+                AeternumCarpet.LOGGER.warn("Failed refreshing player registry summaries", ex);
+            } finally {
+                SUMMARY_REFRESH_RUNNING.set(false);
+            }
+        }, "aeternum-registry-summary");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static long safeMtime(Path path) {
+        try {
+            return Files.getLastModifiedTime(path).toMillis();
+        } catch (IOException ignored) {
+            return 0L;
+        }
+    }
+
+    private static void readDatSummary(Path datPath, EntrySummary out) {
+        try {
+            NbtCompound root = NbtIo.readCompressed(datPath, NbtSizeTracker.ofUnlimitedBytes());
+            if (root == null) return;
+            NbtList inv = root.getListOrEmpty("Inventory");
+            NbtList ender = root.getListOrEmpty("EnderItems");
+            out.invSlots = inv.size();
+            out.enderSlots = ender.size();
+        } catch (Exception ignored) {
+            out.invSlots = -1;
+            out.enderSlots = -1;
+        }
+    }
+
+    private static void readStatsSummary(Path statsPath, EntrySummary out) {
+        try (Reader reader = Files.newBufferedReader(statsPath)) {
+            JsonElement parsed = JsonParser.parseReader(reader);
+            if (!parsed.isJsonObject()) return;
+            JsonObject root = parsed.getAsJsonObject();
+            JsonObject statsObj = root.has("stats") && root.get("stats").isJsonObject()
+                ? root.getAsJsonObject("stats")
+                : null;
+            if (statsObj == null) {
+                out.playTimeTicks = 0L;
+                out.mined = 0L;
+                out.crafted = 0L;
+                return;
+            }
+            long playTime = 0L;
+            if (statsObj.has("minecraft:custom") && statsObj.get("minecraft:custom").isJsonObject()) {
+                JsonObject custom = statsObj.getAsJsonObject("minecraft:custom");
+                if (custom.has("minecraft:play_time") && custom.get("minecraft:play_time").isJsonPrimitive()) {
+                    playTime = Math.max(0L, custom.get("minecraft:play_time").getAsLong());
+                }
+            }
+            out.playTimeTicks = playTime;
+            out.mined = sumJsonSection(statsObj, "minecraft:mined");
+            out.crafted = sumJsonSection(statsObj, "minecraft:crafted");
+        } catch (Exception ignored) {
+            out.playTimeTicks = -1L;
+            out.mined = -1L;
+            out.crafted = -1L;
+        }
+    }
+
+    private static long sumJsonSection(JsonObject statsObj, String section) {
+        if (!statsObj.has(section) || !statsObj.get(section).isJsonObject()) {
+            return 0L;
+        }
+        long sum = 0L;
+        JsonObject sec = statsObj.getAsJsonObject(section);
+        for (Map.Entry<String, JsonElement> item : sec.entrySet()) {
+            if (item.getValue() != null && item.getValue().isJsonPrimitive()) {
+                try {
+                    sum += Math.max(0L, item.getValue().getAsLong());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return sum;
     }
 }

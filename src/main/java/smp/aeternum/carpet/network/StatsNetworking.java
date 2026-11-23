@@ -24,6 +24,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.block.Block;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
@@ -38,12 +40,16 @@ import net.minecraft.scoreboard.ScoreHolder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.stat.Stat;
+import net.minecraft.stat.StatType;
 import net.minecraft.stat.Stats;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
+import net.minecraft.util.math.BlockPos;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.motd.MotdMarkup;
+import smp.aeternum.carpet.stats.AreaRegion;
+import smp.aeternum.carpet.stats.AreaScanner;
 import smp.aeternum.carpet.stats.PlayerRegistryStore;
 import smp.aeternum.carpet.stats.PlayerRegistryStore.Entry;
 import smp.aeternum.carpet.stats.PlayerRegistryStore.EntryType;
@@ -57,6 +63,7 @@ public final class StatsNetworking {
         .build();
     private static final Set<String> IN_FLIGHT_LOOKUPS = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> ACTIVE_VIEWERS = ConcurrentHashMap.newKeySet();
+    private static final Map<UUID, AreaRegion> PENDING_AREA_SCANS = new ConcurrentHashMap<>();
 
     private static final Deque<String> BATCH_QUEUE = new ArrayDeque<>();
     private static boolean batchRunning;
@@ -72,6 +79,7 @@ public final class StatsNetworking {
     public static void registerPayloads() {
         PayloadTypeRegistry.playS2C().register(StatsDataPayload.ID, StatsDataPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ScoreboardDetailPayload.ID, ScoreboardDetailPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(AreaContourPreviewPayload.ID, AreaContourPreviewPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(StatsRegistryActionPayload.ID, StatsRegistryActionPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(StatsRegistryActionPayload.ID, (payload, context) ->
@@ -89,6 +97,8 @@ public final class StatsNetworking {
         }
         if (openScreen) {
             ACTIVE_VIEWERS.add(player.getUuid());
+            MinecraftServer server = player.getServer();
+            PlayerRegistryStore.refreshSummariesAsync(server, () -> broadcastProgress(server, "Resúmenes de jugadores actualizados.", false));
         }
         StatsSnapshot snapshot = buildSnapshot(player.getServer());
         ServerPlayNetworking.send(player, new StatsDataPayload(GSON.toJson(snapshot), openScreen, status, error));
@@ -126,6 +136,7 @@ public final class StatsNetworking {
                 item.advancements = entry.files.advancements;
             }
             item.anomaly = entry.hasAnomaly();
+            populateEntrySummary(server, entry, item);
             list.add(item);
 
             if (!item.name.isEmpty()) {
@@ -181,6 +192,17 @@ public final class StatsNetworking {
             snap.totalHumans = cfg.totalHumans;
             snap.totalBots = cfg.totalBots;
             snap.totalUnknown = cfg.totalUnknown;
+            AreaRegion area = cfg.area != null ? cfg.area : new AreaRegion();
+            snap.areaMode = area.mode != null ? area.mode.name() : "NONE";
+            snap.areaDimension = area.dimension != null ? area.dimension : "minecraft:overworld";
+            snap.areaX1 = area.x1;
+            snap.areaZ1 = area.z1;
+            snap.areaX2 = area.x2;
+            snap.areaZ2 = area.z2;
+            snap.areaColumnCount = area.columnCount;
+            snap.areaPreviewSize = area.previewSize;
+            snap.areaPreviewGrid = area.previewGrid != null ? area.previewGrid : "";
+            snap.areaBlockId = area.blockId != null ? area.blockId : "";
             out.add(snap);
         }
         out.sort(Comparator.comparing((ScoreboardObjectiveSnapshot o) -> o.name, String.CASE_INSENSITIVE_ORDER));
@@ -257,6 +279,7 @@ public final class StatsNetworking {
             case "rescan" -> {
                 PlayerRegistryStore.scanFull(server);
                 sendSnapshot(player, false, "Escaneo completado.", false);
+                PlayerRegistryStore.refreshSummariesAsync(server, () -> broadcastProgress(server, "Resúmenes de jugadores actualizados.", false));
             }
             case "lookup_all_online" -> startBatchLookup(server, player);
             case "cancel_lookup_all" -> cancelBatchLookup(server, player);
@@ -282,6 +305,9 @@ public final class StatsNetworking {
             }
             case "create_objective" -> handleCreateObjective(server, player, payload.value());
             case "edit_objective" -> handleEditObjective(server, player, payload.value());
+            case "scan_area_contour" -> handleScanAreaContour(player, payload.value());
+            case "set_score" -> handleSetScore(server, player, payload.value());
+            case "delete_score_entry" -> handleDeleteScoreEntry(server, player, payload.value());
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -521,13 +547,23 @@ public final class StatsNetworking {
         String criterionRaw = (req.criterion == null || req.criterion.isBlank()) ? "dummy" : req.criterion.trim();
         boolean isCustomTracker = ScoreboardConfigStore.TRACKER_DIG_ALL.equals(criterionRaw)
             || ScoreboardConfigStore.TRACKER_PLACED_BLOCKS.equals(criterionRaw);
-        ScoreboardCriterion criterion = isCustomTracker
+        ScoreboardCriterion parsedCriterion = isCustomTracker
             ? ScoreboardCriterion.DUMMY
             : ScoreboardCriterion.getOrCreateStatCriterion(criterionRaw).orElse(null);
-        if (criterion == null) {
+        if (parsedCriterion == null) {
             sendSnapshot(player, false, "Criterio inválido: " + criterionRaw, true);
             return;
         }
+
+        AreaRegion area = resolveAreaFromRequest(player, req.areaMode, req.areaDimension, req.areaX1, req.areaZ1, req.areaX2, req.areaZ2, null);
+        if (area == null) {
+            sendSnapshot(player, false, "Primero escanea un contorno válido para el área Custom.", true);
+            return;
+        }
+
+        boolean needsTracker = isCustomTracker || (area.isActive() && parsedCriterion instanceof Stat<?>);
+        ScoreboardCriterion effectiveCriterion = needsTracker ? ScoreboardCriterion.DUMMY : parsedCriterion;
+
         String alias = ScoreboardConfigStore.normalizeAlias(req.chatAlias);
         String conflict = ScoreboardConfigStore.findAliasConflict(objName, alias);
         if (conflict != null) {
@@ -537,9 +573,9 @@ public final class StatsNetworking {
         String disp = (req.displayName == null || req.displayName.isBlank()) ? objName : req.displayName.trim();
         ScoreboardObjective created = sb.addObjective(
             objName,
-            criterion,
+            effectiveCriterion,
             MotdMarkup.parse(disp),
-            criterion.getDefaultRenderType(),
+            effectiveCriterion.getDefaultRenderType(),
             false,
             null
         );
@@ -552,14 +588,15 @@ public final class StatsNetworking {
         cfg.totalUnknown = req.totalUnknown;
         cfg.chatAlias = alias;
         cfg.displayNameMarkup = disp;
-        cfg.tracker = isCustomTracker ? criterionRaw : "";
+        cfg.tracker = needsTracker ? criterionRaw : "";
+        cfg.area = area;
         ScoreboardConfigStore.put(objName, cfg);
 
         int filled = 0;
         if (req.fillFromStats) {
             if (isCustomTracker) {
                 filled = populateTrackerFromStats(server, sb, created, criterionRaw);
-            } else if (criterion instanceof Stat<?> stat) {
+            } else if (parsedCriterion instanceof Stat<?> stat) {
                 filled = populateObjectiveFromStats(server, sb, created, stat, criterionRaw);
             }
         }
@@ -773,13 +810,22 @@ public final class StatsNetworking {
         String nextCriterionRaw = (req.criterion == null || req.criterion.isBlank()) ? "dummy" : req.criterion.trim();
         boolean isCustomTracker = ScoreboardConfigStore.TRACKER_DIG_ALL.equals(nextCriterionRaw)
             || ScoreboardConfigStore.TRACKER_PLACED_BLOCKS.equals(nextCriterionRaw);
-        ScoreboardCriterion nextCriterion = isCustomTracker
+        ScoreboardCriterion parsedCriterion = isCustomTracker
             ? ScoreboardCriterion.DUMMY
             : ScoreboardCriterion.getOrCreateStatCriterion(nextCriterionRaw).orElse(null);
-        if (nextCriterion == null) {
+        if (parsedCriterion == null) {
             sendSnapshot(player, false, "Criterio inválido: " + nextCriterionRaw, true);
             return;
         }
+
+        AreaRegion area = resolveAreaFromRequest(player, req.areaMode, req.areaDimension, req.areaX1, req.areaZ1, req.areaX2, req.areaZ2, prev.area);
+        if (area == null) {
+            sendSnapshot(player, false, "Primero escanea un contorno válido para el área Custom.", true);
+            return;
+        }
+
+        boolean needsTracker = isCustomTracker || (area.isActive() && parsedCriterion instanceof Stat<?>);
+        ScoreboardCriterion effectiveCriterion = needsTracker ? ScoreboardCriterion.DUMMY : parsedCriterion;
 
         String alias = ScoreboardConfigStore.normalizeAlias(req.chatAlias);
         String conflict = ScoreboardConfigStore.findAliasConflict(target.getName(), alias);
@@ -789,7 +835,11 @@ public final class StatsNetworking {
         }
 
         String disp = (req.displayName == null || req.displayName.isBlank()) ? nextName : req.displayName.trim();
-        boolean needsRecreate = !nextName.equals(target.getName()) || !nextCriterionRaw.equals(currentEffectiveCriterion);
+        String currentVanillaCriterion = target.getCriterion() != null ? target.getCriterion().getName() : "dummy";
+        String targetVanillaCriterion = effectiveCriterion.getName();
+        boolean needsRecreate = !nextName.equals(target.getName())
+            || !nextCriterionRaw.equals(currentEffectiveCriterion)
+            || !targetVanillaCriterion.equals(currentVanillaCriterion);
 
         ScoreboardObjective finalObj = target;
         if (needsRecreate) {
@@ -804,9 +854,9 @@ public final class StatsNetworking {
 
             finalObj = sb.addObjective(
                 nextName,
-                nextCriterion,
+                effectiveCriterion,
                 MotdMarkup.parse(disp),
-                nextCriterion.getDefaultRenderType(),
+                effectiveCriterion.getDefaultRenderType(),
                 false,
                 null
             );
@@ -826,10 +876,79 @@ public final class StatsNetworking {
         cfg.totalUnknown = req.totalUnknown;
         cfg.chatAlias = alias;
         cfg.displayNameMarkup = disp;
-        cfg.tracker = isCustomTracker ? nextCriterionRaw : "";
+        cfg.tracker = needsTracker ? nextCriterionRaw : "";
+        cfg.area = area;
         ScoreboardConfigStore.put(nextName, cfg);
 
         sendSnapshot(player, false, "Scoreboard '" + nextName + "' actualizada.", false);
+    }
+
+    private static void handleScanAreaContour(ServerPlayerEntity player, String json) {
+        ScanContourRequest req;
+        try {
+            req = GSON.fromJson(json, ScanContourRequest.class);
+        } catch (Exception ex) {
+            ServerPlayNetworking.send(player, new AreaContourPreviewPayload(false, "Coordenadas inválidas.", "", 0, 0, "", ""));
+            return;
+        }
+        if (req == null) {
+            ServerPlayNetworking.send(player, new AreaContourPreviewPayload(false, "Coordenadas inválidas.", "", 0, 0, "", ""));
+            return;
+        }
+        AreaScanner.ScanResult res = AreaScanner.scanCustomContour(player.getWorld(), new BlockPos(req.x, req.y, req.z));
+        if (!res.ok()) {
+            ServerPlayNetworking.send(player, new AreaContourPreviewPayload(false, res.error(), "", 0, 0, "", ""));
+            return;
+        }
+        AreaRegion region = res.region();
+        PENDING_AREA_SCANS.put(player.getUuid(), region);
+        ServerPlayNetworking.send(player, new AreaContourPreviewPayload(
+            true,
+            "Contorno escaneado: " + region.columnCount + " columnas (" + region.blockId + ")",
+            region.dimension,
+            region.columnCount,
+            region.previewSize,
+            region.previewGrid,
+            region.blockId
+        ));
+    }
+
+    private static AreaRegion resolveAreaFromRequest(
+        ServerPlayerEntity player,
+        String areaMode,
+        String dimension,
+        int x1,
+        int z1,
+        int x2,
+        int z2,
+        AreaRegion existingArea
+    ) {
+        if (areaMode == null || "NONE".equalsIgnoreCase(areaMode)) {
+            PENDING_AREA_SCANS.remove(player.getUuid());
+            return new AreaRegion();
+        }
+        if ("RECTANGLE".equalsIgnoreCase(areaMode)) {
+            PENDING_AREA_SCANS.remove(player.getUuid());
+            AreaRegion r = new AreaRegion();
+            r.mode = AreaRegion.Mode.RECTANGLE;
+            r.dimension = (dimension != null && !dimension.isBlank()) ? dimension : "minecraft:overworld";
+            r.x1 = x1;
+            r.z1 = z1;
+            r.x2 = x2;
+            r.z2 = z2;
+            return r;
+        }
+        if ("CUSTOM".equalsIgnoreCase(areaMode)) {
+            AreaRegion scanned = PENDING_AREA_SCANS.remove(player.getUuid());
+            if (scanned != null) {
+                return scanned;
+            }
+            if (existingArea != null && existingArea.mode == AreaRegion.Mode.CUSTOM) {
+                return existingArea.copy();
+            }
+            return null;
+        }
+        return new AreaRegion();
     }
 
     private static void applyObjectiveSlot(Scoreboard sb, ScoreboardObjective target, String slotName) {
@@ -851,6 +970,12 @@ public final class StatsNetworking {
         }
     }
 
+    public static final class ScanContourRequest {
+        public int x;
+        public int y;
+        public int z;
+    }
+
     public static final class CreateObjectiveRequest {
         public String name = "";
         public String displayName = "";
@@ -862,6 +987,12 @@ public final class StatsNetworking {
         public boolean totalHumans = true;
         public boolean totalBots;
         public boolean totalUnknown;
+        public String areaMode = "NONE";
+        public String areaDimension = "minecraft:overworld";
+        public int areaX1;
+        public int areaZ1;
+        public int areaX2;
+        public int areaZ2;
     }
 
     public static final class EditObjectiveRequest {
@@ -875,6 +1006,12 @@ public final class StatsNetworking {
         public boolean totalHumans = true;
         public boolean totalBots;
         public boolean totalUnknown;
+        public String areaMode = "NONE";
+        public String areaDimension = "minecraft:overworld";
+        public int areaX1;
+        public int areaZ1;
+        public int areaX2;
+        public int areaZ2;
     }
 
     public static final class StatsSnapshot {
@@ -899,12 +1036,127 @@ public final class StatsNetworking {
         public boolean totalHumans = true;
         public boolean totalBots;
         public boolean totalUnknown;
+        public String areaMode = "NONE";
+        public String areaDimension = "minecraft:overworld";
+        public int areaX1;
+        public int areaZ1;
+        public int areaX2;
+        public int areaZ2;
+        public int areaColumnCount;
+        public int areaPreviewSize;
+        public String areaPreviewGrid = "";
+        public String areaBlockId = "";
+    }
+
+    private static void handleSetScore(MinecraftServer server, ServerPlayerEntity player, String json) {
+        SetScoreRequest req;
+        try {
+            req = GSON.fromJson(json, SetScoreRequest.class);
+        } catch (Exception ex) {
+            sendSnapshot(player, false, "Datos inválidos al actualizar score.", true);
+            return;
+        }
+        if (req == null || req.objective == null || req.objective.isBlank() || req.owner == null || req.owner.isBlank()) {
+            sendSnapshot(player, false, "Entrada o scoreboard inválida.", true);
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        ScoreboardObjective target = null;
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            if (obj.getName().equals(req.objective.trim())) {
+                target = obj;
+                break;
+            }
+        }
+        if (target == null) {
+            sendSnapshot(player, false, "Scoreboard no encontrada: " + req.objective, true);
+            return;
+        }
+        sb.getOrCreateScore(ScoreHolder.fromName(req.owner), target).setScore(req.score);
+        sendObjectiveDetail(player, server, target.getName());
+        sendSnapshot(player, false, "Score de " + req.owner + " actualizado a " + String.format(Locale.US, "%,d", req.score) + ".", false);
+    }
+
+    private static void handleDeleteScoreEntry(MinecraftServer server, ServerPlayerEntity player, String json) {
+        DeleteScoreEntryRequest req;
+        try {
+            req = GSON.fromJson(json, DeleteScoreEntryRequest.class);
+        } catch (Exception ex) {
+            sendSnapshot(player, false, "Datos inválidos al borrar registro.", true);
+            return;
+        }
+        if (req == null || req.objective == null || req.objective.isBlank() || req.owner == null || req.owner.isBlank()) {
+            sendSnapshot(player, false, "Entrada o scoreboard inválida.", true);
+            return;
+        }
+        Scoreboard sb = server.getScoreboard();
+        ScoreboardObjective target = null;
+        for (ScoreboardObjective obj : sb.getObjectives()) {
+            if (obj.getName().equals(req.objective.trim())) {
+                target = obj;
+                break;
+            }
+        }
+        if (target == null) {
+            sendSnapshot(player, false, "Scoreboard no encontrada: " + req.objective, true);
+            return;
+        }
+        sb.removeScore(ScoreHolder.fromName(req.owner), target);
+        sendObjectiveDetail(player, server, target.getName());
+        sendSnapshot(player, false, "Registro eliminado de " + target.getName() + ": " + req.owner, false);
     }
 
     public static final class ScoreboardEntrySnapshot {
         public String owner = "";
         public int score;
         public String badge = "UNKNOWN";
+    }
+
+    private static void populateEntrySummary(MinecraftServer server, Entry entry, RegistryEntrySnapshot item) {
+        ServerPlayerEntity online = null;
+        if (server != null && entry.uuid != null) {
+            try {
+                online = server.getPlayerManager().getPlayer(UUID.fromString(entry.uuid));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        if (online != null) {
+            item.invSlots = countNonEmpty(online.getInventory());
+            item.enderSlots = countNonEmpty(online.getEnderChestInventory());
+            item.playTimeTicks = Math.max(0L, online.getStatHandler().getStat(Stats.CUSTOM.getOrCreateStat(Stats.PLAY_TIME)));
+            item.mined = sumPlayerStat(online, Stats.MINED, Registries.BLOCK);
+            item.crafted = sumPlayerStat(online, Stats.CRAFTED, Registries.ITEM);
+            return;
+        }
+        if (entry.summary != null) {
+            item.enderSlots = entry.summary.enderSlots;
+            item.invSlots = entry.summary.invSlots;
+            item.playTimeTicks = entry.summary.playTimeTicks;
+            item.mined = entry.summary.mined;
+            item.crafted = entry.summary.crafted;
+        }
+    }
+
+    private static int countNonEmpty(Inventory inv) {
+        if (inv == null) return -1;
+        int count = 0;
+        for (int i = 0; i < inv.size(); i++) {
+            if (!inv.getStack(i).isEmpty()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static <T> long sumPlayerStat(ServerPlayerEntity player, StatType<T> statType, Iterable<T> registry) {
+        long total = 0L;
+        for (T key : registry) {
+            int val = player.getStatHandler().getStat(statType.getOrCreateStat(key));
+            if (val > 0) {
+                total += val;
+            }
+        }
+        return total;
     }
 
     public static final class RegistryEntrySnapshot {
@@ -916,5 +1168,21 @@ public final class StatsNetworking {
         public boolean stats;
         public boolean advancements;
         public boolean anomaly;
+        public int enderSlots = -1;
+        public int invSlots = -1;
+        public long playTimeTicks = -1L;
+        public long mined = -1L;
+        public long crafted = -1L;
+    }
+
+    public static final class SetScoreRequest {
+        public String objective = "";
+        public String owner = "";
+        public int score;
+    }
+
+    public static final class DeleteScoreEntryRequest {
+        public String objective = "";
+        public String owner = "";
     }
 }

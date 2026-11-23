@@ -13,16 +13,24 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import org.lwjgl.glfw.GLFW;
 import smp.aeternum.carpet.client.ui.AeternumTheme;
 import smp.aeternum.carpet.client.ui.UiButton;
 import smp.aeternum.carpet.client.ui.UiScreen;
 import smp.aeternum.carpet.client.ui.UiTextField;
 import smp.aeternum.carpet.motd.MotdMarkup;
+import smp.aeternum.carpet.network.AreaContourPreviewPayload;
 import smp.aeternum.carpet.network.StatsNetworking.CreateObjectiveRequest;
+import smp.aeternum.carpet.network.StatsNetworking.DeleteScoreEntryRequest;
 import smp.aeternum.carpet.network.StatsNetworking.EditObjectiveRequest;
 import smp.aeternum.carpet.network.StatsNetworking.RegistryEntrySnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.ScanContourRequest;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardEntrySnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardObjectiveSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.SetScoreRequest;
 import smp.aeternum.carpet.network.StatsNetworking.StatsSnapshot;
 import smp.aeternum.carpet.network.StatsRegistryActionPayload;
 
@@ -139,6 +147,10 @@ public final class StatsScreen extends UiScreen {
     private String hoveredObjectiveEdit;
     private String armedObjectiveDelete;
     private long armedObjectiveDeleteUntilMs;
+    private String editingScoreOwner;
+    private UiTextField inlineScoreField;
+    private String armedDeleteScoreOwner;
+    private long armedDeleteScoreUntilMs;
     private SbPanelMode sbPanelMode = SbPanelMode.VIEW;
     private String editingObjectiveName = "";
     private String editingObjectiveCriterion = "dummy";
@@ -148,6 +160,12 @@ public final class StatsScreen extends UiScreen {
     private boolean formTotalHumans = true;
     private boolean formTotalBots;
     private boolean formTotalUnknown;
+    private String formAreaMode = "NONE";
+    private String formAreaDimension = "minecraft:overworld";
+    private int formAreaPreviewCols;
+    private int formAreaPreviewSize;
+    private String formAreaPreviewGrid = "";
+    private String formAreaBlockId = "";
     private int criterionSugScroll;
     private boolean draggingCriterionScrollbar;
     private boolean lookupRunning;
@@ -180,6 +198,13 @@ public final class StatsScreen extends UiScreen {
     private UiTextField sbDisplayField;
     private UiTextField sbCriterionField;
     private UiTextField sbAliasField;
+    private UiTextField areaX1Field;
+    private UiTextField areaZ1Field;
+    private UiTextField areaX2Field;
+    private UiTextField areaZ2Field;
+    private UiTextField areaSeedXField;
+    private UiTextField areaSeedYField;
+    private UiTextField areaSeedZField;
     private UiButton sbSaveButton;
     private UiButton sbCancelButton;
     private String hoveredUnexpectedDelete;
@@ -221,6 +246,19 @@ public final class StatsScreen extends UiScreen {
             return;
         }
         ClientPlayNetworking.send(new StatsRegistryActionPayload("select_objective", "", selectedObjectiveName));
+    }
+
+    public void acceptAreaContourPreview(AreaContourPreviewPayload payload) {
+        if (payload == null) return;
+        this.statusMessage = payload.message();
+        this.statusError = !payload.ok();
+        if (payload.ok()) {
+            this.formAreaDimension = payload.dimension();
+            this.formAreaPreviewCols = payload.columnCount();
+            this.formAreaPreviewSize = payload.previewSize();
+            this.formAreaPreviewGrid = payload.previewGrid();
+            this.formAreaBlockId = payload.blockId();
+        }
     }
 
     private void applySnapshot(String json) {
@@ -311,6 +349,13 @@ public final class StatsScreen extends UiScreen {
         String prevSbDisplay = sbDisplayField != null ? sbDisplayField.getText() : "";
         String prevSbCriterion = sbCriterionField != null ? sbCriterionField.getText() : "";
         String prevSbAlias = sbAliasField != null ? sbAliasField.getText() : "";
+        String prevAreaX1 = areaX1Field != null ? areaX1Field.getText() : "0";
+        String prevAreaZ1 = areaZ1Field != null ? areaZ1Field.getText() : "0";
+        String prevAreaX2 = areaX2Field != null ? areaX2Field.getText() : "0";
+        String prevAreaZ2 = areaZ2Field != null ? areaZ2Field.getText() : "0";
+        String prevSeedX = areaSeedXField != null ? areaSeedXField.getText() : "";
+        String prevSeedY = areaSeedYField != null ? areaSeedYField.getText() : "";
+        String prevSeedZ = areaSeedZField != null ? areaSeedZField.getText() : "";
         clearChildren();
         computePanel(Math.min(780, (int) (width * 0.88)), Math.min(470, (int) (height * 0.85)));
 
@@ -330,6 +375,13 @@ public final class StatsScreen extends UiScreen {
         sbDisplayField = null;
         sbCriterionField = null;
         sbAliasField = null;
+        areaX1Field = null;
+        areaZ1Field = null;
+        areaX2Field = null;
+        areaZ2Field = null;
+        areaSeedXField = null;
+        areaSeedYField = null;
+        areaSeedZField = null;
         sbSaveButton = null;
         sbCancelButton = null;
 
@@ -385,6 +437,11 @@ public final class StatsScreen extends UiScreen {
             healAnomaliesButton.active = countFor(Filter.ANOMALY) > 0;
             addDrawableChild(healAnomaliesButton);
         } else if (activeTab == Tab.SCOREBOARDS) {
+            inlineScoreField = new UiTextField(textRenderer, 0, 0, 82, 18, "Score");
+            inlineScoreField.setMaxLength(16);
+            inlineScoreField.setVisible(editingScoreOwner != null && sbPanelMode == SbPanelMode.VIEW);
+            addDrawableChild(inlineScoreField);
+
             objectiveSearchField = new UiTextField(textRenderer, panelX + 8, contentTop + 6, SIDEBAR_W - 38, 18, "Buscar objetivo…");
             objectiveSearchField.setMaxLength(64);
             objectiveSearchField.setText(prevObjQuery);
@@ -445,11 +502,51 @@ public final class StatsScreen extends UiScreen {
                 sbDisplayField.setText(prevSbDisplay);
                 addDrawableChild(sbDisplayField);
 
-                int aliasFieldY = dispLabelY + 60;
-                sbAliasField = new UiTextField(textRenderer, contentX, aliasFieldY, 150, 18, "ej: gold (vacío = sin atajo)");
+                int aliasY = dispLabelY + 60;
+                sbAliasField = new UiTextField(textRenderer, contentX, aliasY, 150, 18, "ej: gold (vacío = sin atajo)");
                 sbAliasField.setMaxLength(32);
                 sbAliasField.setText(prevSbAlias);
                 addDrawableChild(sbAliasField);
+
+                if ("RECTANGLE".equals(formAreaMode)) {
+                    int rectY = contentTop + 278;
+                    areaX1Field = new UiTextField(textRenderer, contentX + 16, rectY, 54, 18, "X1");
+                    areaX1Field.setMaxLength(10);
+                    areaX1Field.setText(prevAreaX1);
+                    addDrawableChild(areaX1Field);
+
+                    areaZ1Field = new UiTextField(textRenderer, contentX + 88, rectY, 54, 18, "Z1");
+                    areaZ1Field.setMaxLength(10);
+                    areaZ1Field.setText(prevAreaZ1);
+                    addDrawableChild(areaZ1Field);
+
+                    int x2Start = contentX + 196;
+                    areaX2Field = new UiTextField(textRenderer, x2Start + 16, rectY, 54, 18, "X2");
+                    areaX2Field.setMaxLength(10);
+                    areaX2Field.setText(prevAreaX2);
+                    addDrawableChild(areaX2Field);
+
+                    areaZ2Field = new UiTextField(textRenderer, x2Start + 88, rectY, 54, 18, "Z2");
+                    areaZ2Field.setMaxLength(10);
+                    areaZ2Field.setText(prevAreaZ2);
+                    addDrawableChild(areaZ2Field);
+                } else if ("CUSTOM".equals(formAreaMode)) {
+                    int seedY = contentTop + 254;
+                    areaSeedXField = new UiTextField(textRenderer, contentX + 12, seedY, 56, 18, "X");
+                    areaSeedXField.setMaxLength(10);
+                    areaSeedXField.setText(prevSeedX);
+                    addDrawableChild(areaSeedXField);
+
+                    areaSeedYField = new UiTextField(textRenderer, contentX + 82, seedY, 48, 18, "Y");
+                    areaSeedYField.setMaxLength(6);
+                    areaSeedYField.setText(prevSeedY);
+                    addDrawableChild(areaSeedYField);
+
+                    areaSeedZField = new UiTextField(textRenderer, contentX + 144, seedY, 56, 18, "Z");
+                    areaSeedZField.setMaxLength(10);
+                    areaSeedZField.setText(prevSeedZ);
+                    addDrawableChild(areaSeedZField);
+                }
 
                 int btnY = panelY + panelH - 64;
                 sbSaveButton = UiButton.primary(contentX + contentW - 156, btnY, 76, 20,
@@ -668,6 +765,13 @@ public final class StatsScreen extends UiScreen {
         if (sbAliasField != null) {
             sbAliasField.renderBox(c, sbAliasField.boxX(), sbAliasField.boxY(), sbAliasField.getWidth() + 12, 18, mx, my, delta);
         }
+        if (areaX1Field != null) areaX1Field.renderBox(c, areaX1Field.boxX(), areaX1Field.boxY(), areaX1Field.getWidth() + 12, 18, mx, my, delta);
+        if (areaZ1Field != null) areaZ1Field.renderBox(c, areaZ1Field.boxX(), areaZ1Field.boxY(), areaZ1Field.getWidth() + 12, 18, mx, my, delta);
+        if (areaX2Field != null) areaX2Field.renderBox(c, areaX2Field.boxX(), areaX2Field.boxY(), areaX2Field.getWidth() + 12, 18, mx, my, delta);
+        if (areaZ2Field != null) areaZ2Field.renderBox(c, areaZ2Field.boxX(), areaZ2Field.boxY(), areaZ2Field.getWidth() + 12, 18, mx, my, delta);
+        if (areaSeedXField != null) areaSeedXField.renderBox(c, areaSeedXField.boxX(), areaSeedXField.boxY(), areaSeedXField.getWidth() + 12, 18, mx, my, delta);
+        if (areaSeedYField != null) areaSeedYField.renderBox(c, areaSeedYField.boxX(), areaSeedYField.boxY(), areaSeedYField.getWidth() + 12, 18, mx, my, delta);
+        if (areaSeedZField != null) areaSeedZField.renderBox(c, areaSeedZField.boxX(), areaSeedZField.boxY(), areaSeedZField.getWidth() + 12, 18, mx, my, delta);
         if (activeTab == Tab.SCOREBOARDS && sbPanelMode != SbPanelMode.VIEW && sbCriterionField != null && sbCriterionField.isFocused()) {
             renderCriterionSuggestions(c, mx, my);
         }
@@ -945,10 +1049,19 @@ public final class StatsScreen extends UiScreen {
                 AeternumTheme.drawBadge(c, textRenderer, cursorX, cy + 5, verText, verBg, verFg);
             }
 
-            // Description row: anomaly / files summary
+            // Description row: anomaly / files summary + cached player metrics on the right
             String desc = buildFileSummary(item);
             int descColor = item.anomaly ? 0xFFE59B53 : AeternumTheme.TEXT_SECONDARY;
-            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, desc, cardW - 20), cardX + 10, cy + 27, descColor, false);
+            String metrics = buildPlayerMetrics(item);
+            if (!metrics.isEmpty()) {
+                int metricsW = textRenderer.getWidth(metrics);
+                int metricsX = cardX + cardW - metricsW - 8;
+                int descMaxW = Math.max(40, metricsX - (cardX + 10) - 8);
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, desc, descMaxW), cardX + 10, cy + 27, descColor, false);
+                c.drawText(textRenderer, metrics, metricsX, cy + 27, 0xFFB8C0CC, false);
+            } else {
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, desc, cardW - 20), cardX + 10, cy + 27, descColor, false);
+            }
         }
         c.disableScissor();
 
@@ -956,6 +1069,35 @@ public final class StatsScreen extends UiScreen {
             AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
                 shown.size() * ROW_STRIDE, viewH, listScroll, draggingScrollbar);
         }
+    }
+
+    private static String buildPlayerMetrics(RegistryEntrySnapshot item) {
+        StringBuilder sb = new StringBuilder();
+        if (item.playerdata && item.enderSlots >= 0 && item.invSlots >= 0) {
+            sb.append("E:").append(item.enderSlots).append(" I:").append(item.invSlots);
+        }
+        if (item.stats && item.playTimeTicks >= 0) {
+            if (!sb.isEmpty()) sb.append("  \u00B7  ");
+            sb.append("T:").append(formatPlayTime(item.playTimeTicks))
+              .append(" M:").append(String.format(Locale.US, "%,d", Math.max(0L, item.mined)))
+              .append(" C:").append(String.format(Locale.US, "%,d", Math.max(0L, item.crafted)));
+        }
+        return sb.toString();
+    }
+
+    private static String formatPlayTime(long ticks) {
+        long mins = Math.max(0L, ticks) / 1200L;
+        if (mins < 60L) {
+            return mins + "m";
+        }
+        double hours = mins / 60.0;
+        if (hours < 24.0) {
+            return hours < 10.0
+                ? String.format(Locale.US, "%.1fh", hours)
+                : Math.round(hours) + "h";
+        }
+        double days = hours / 24.0;
+        return String.format(Locale.US, "%.1fd", days);
     }
 
     private record GuideBadge(String text, int bg, int fg) {
@@ -1102,7 +1244,7 @@ public final class StatsScreen extends UiScreen {
         List<ScoreboardEntrySnapshot> out = new ArrayList<>();
         for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
             boolean matchFilter = switch (activeScoreFilter) {
-                case ALL -> true;
+                case ALL -> isIncludedInScoreboard(obj, e);
                 case HUMAN -> "HUMAN".equals(e.badge);
                 case BOT -> "BOT".equals(e.badge);
                 case BOTH -> "AMBOS".equals(e.badge);
@@ -1131,16 +1273,25 @@ public final class StatsScreen extends UiScreen {
         return out;
     }
 
+    private static boolean isIncludedInScoreboard(ScoreboardObjectiveSnapshot obj, ScoreboardEntrySnapshot e) {
+        if (obj == null || e == null) return true;
+        return switch (e.badge) {
+            case "HUMAN" -> obj.totalHumans;
+            case "BOT" -> obj.totalBots;
+            case "AMBOS" -> obj.totalHumans || obj.totalBots;
+            default -> obj.totalUnknown;
+        };
+    }
+
     private int countScoreFilter(ScoreboardObjectiveSnapshot obj, ScoreFilter filter) {
         if (obj == null) return 0;
         if (!obj.name.equals(loadedObjectiveName)) {
             return filter == ScoreFilter.ALL ? obj.entryCount : 0;
         }
-        if (filter == ScoreFilter.ALL) return selectedObjectiveEntries.size();
         int count = 0;
         for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
             boolean match = switch (filter) {
-                case ALL -> true;
+                case ALL -> isIncludedInScoreboard(obj, e);
                 case HUMAN -> "HUMAN".equals(e.badge);
                 case BOT -> "BOT".equals(e.badge);
                 case BOTH -> "AMBOS".equals(e.badge);
@@ -1173,6 +1324,12 @@ public final class StatsScreen extends UiScreen {
         formTotalHumans = true;
         formTotalBots = false;
         formTotalUnknown = false;
+        formAreaMode = "NONE";
+        formAreaDimension = "minecraft:overworld";
+        formAreaPreviewCols = 0;
+        formAreaPreviewSize = 0;
+        formAreaPreviewGrid = "";
+        formAreaBlockId = "";
         init();
         if (sbNameField != null) sbNameField.setText("");
         if (sbCriterionField != null) sbCriterionField.setText("");
@@ -1190,6 +1347,12 @@ public final class StatsScreen extends UiScreen {
         formTotalHumans = obj.totalHumans;
         formTotalBots = obj.totalBots;
         formTotalUnknown = obj.totalUnknown;
+        formAreaMode = obj.areaMode != null ? obj.areaMode : "NONE";
+        formAreaDimension = obj.areaDimension != null && !obj.areaDimension.isEmpty() ? obj.areaDimension : "minecraft:overworld";
+        formAreaPreviewCols = obj.areaColumnCount;
+        formAreaPreviewSize = obj.areaPreviewSize;
+        formAreaPreviewGrid = obj.areaPreviewGrid != null ? obj.areaPreviewGrid : "";
+        formAreaBlockId = obj.areaBlockId != null ? obj.areaBlockId : "";
         init();
         if (sbNameField != null) {
             sbNameField.setText(obj.name != null ? obj.name : "");
@@ -1206,13 +1369,54 @@ public final class StatsScreen extends UiScreen {
         if (sbAliasField != null) {
             sbAliasField.setText(obj.chatAlias != null ? obj.chatAlias : "");
         }
+        if (areaX1Field != null) areaX1Field.setText(String.valueOf(obj.areaX1));
+        if (areaZ1Field != null) areaZ1Field.setText(String.valueOf(obj.areaZ1));
+        if (areaX2Field != null) areaX2Field.setText(String.valueOf(obj.areaX2));
+        if (areaZ2Field != null) areaZ2Field.setText(String.valueOf(obj.areaZ2));
+    }
+
+    private static int parseIntOrZero(UiTextField field) {
+        if (field == null) return 0;
+        try {
+            return Integer.parseInt(field.getText().trim());
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private String validateObjectiveId(String raw) {
+        String id = raw == null ? "" : raw.trim();
+        if (id.isEmpty()) {
+            return "El ID interno no puede estar vacío.";
+        }
+        if (id.contains(" ")) {
+            return "El ID interno no puede tener espacios.";
+        }
+        if (scoreboards != null) {
+            for (ScoreboardObjectiveSnapshot obj : scoreboards) {
+                if (obj == null || obj.name == null) continue;
+                if (sbPanelMode == SbPanelMode.EDIT && editingObjectiveName != null && obj.name.equals(editingObjectiveName)) {
+                    continue;
+                }
+                if (obj.name.equalsIgnoreCase(id)) {
+                    return "Ya existe una scoreboard con ID '" + obj.name + "'.";
+                }
+            }
+        }
+        return null;
     }
 
     private void submitScoreboardForm() {
         if (sbPanelMode == SbPanelMode.CREATE) {
             String name = sbNameField != null ? sbNameField.getText().trim() : "";
-            if (name.isEmpty()) {
-                statusMessage = "Escribe un ID interno para la scoreboard.";
+            String idErr = validateObjectiveId(name);
+            if (idErr != null) {
+                statusMessage = idErr;
+                statusError = true;
+                return;
+            }
+            if ("CUSTOM".equals(formAreaMode) && formAreaPreviewCols <= 0) {
+                statusMessage = "Escanea un contorno válido antes de crear el área Custom.";
                 statusError = true;
                 return;
             }
@@ -1227,6 +1431,12 @@ public final class StatsScreen extends UiScreen {
             req.totalHumans = formTotalHumans;
             req.totalBots = formTotalBots;
             req.totalUnknown = formTotalUnknown;
+            req.areaMode = formAreaMode;
+            req.areaDimension = formAreaDimension;
+            req.areaX1 = parseIntOrZero(areaX1Field);
+            req.areaZ1 = parseIntOrZero(areaZ1Field);
+            req.areaX2 = parseIntOrZero(areaX2Field);
+            req.areaZ2 = parseIntOrZero(areaZ2Field);
             selectedObjectiveName = name;
             loadedObjectiveName = null;
             sbPanelMode = SbPanelMode.VIEW;
@@ -1236,8 +1446,14 @@ public final class StatsScreen extends UiScreen {
             init();
         } else if (sbPanelMode == SbPanelMode.EDIT) {
             String nextName = sbNameField != null ? sbNameField.getText().trim() : "";
-            if (nextName.isEmpty()) {
-                statusMessage = "El ID interno no puede estar vacío.";
+            String idErr = validateObjectiveId(nextName);
+            if (idErr != null) {
+                statusMessage = idErr;
+                statusError = true;
+                return;
+            }
+            if ("CUSTOM".equals(formAreaMode) && formAreaPreviewCols <= 0) {
+                statusMessage = "Escanea un contorno válido antes de guardar el área Custom.";
                 statusError = true;
                 return;
             }
@@ -1252,6 +1468,12 @@ public final class StatsScreen extends UiScreen {
             req.totalHumans = formTotalHumans;
             req.totalBots = formTotalBots;
             req.totalUnknown = formTotalUnknown;
+            req.areaMode = formAreaMode;
+            req.areaDimension = formAreaDimension;
+            req.areaX1 = parseIntOrZero(areaX1Field);
+            req.areaZ1 = parseIntOrZero(areaZ1Field);
+            req.areaX2 = parseIntOrZero(areaX2Field);
+            req.areaZ2 = parseIntOrZero(areaZ2Field);
             selectedObjectiveName = nextName;
             loadedObjectiveName = null;
             sbPanelMode = SbPanelMode.VIEW;
@@ -1268,13 +1490,7 @@ public final class StatsScreen extends UiScreen {
         }
         long sum = 0L;
         for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
-            boolean include = switch (e.badge) {
-                case "HUMAN" -> obj.totalHumans;
-                case "BOT" -> obj.totalBots;
-                case "AMBOS" -> obj.totalHumans || obj.totalBots;
-                default -> obj.totalUnknown;
-            };
-            if (include) {
+            if (isIncludedInScoreboard(obj, e)) {
                 sum += e.score;
             }
         }
@@ -1376,16 +1592,6 @@ public final class StatsScreen extends UiScreen {
             c.drawText(textRenderer, chipLabel, chipX + 6, chipY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
             chipX += cw + 4;
         }
-        if (selected != null && selected.totalEnabled && selected.name.equals(loadedObjectiveName)) {
-            String totStr = "Total: " + String.format(Locale.US, "%,d", computeObjectiveTotal(selected));
-            int tw = textRenderer.getWidth(totStr) + 12;
-            int tx = panelX + panelW - tw - 12;
-            if (tx > chipX + 4) {
-                AeternumTheme.drawCard(c, tx, chipY, tw, 16, 0xFF1E1A12, AeternumTheme.ACCENT_GOLD);
-                c.drawTextWithShadow(textRenderer, totStr, tx + 6, chipY + 4, AeternumTheme.ACCENT_GOLD);
-            }
-        }
-
         int lTop = listTop();
         int lBottom = listBottom();
         int viewH = Math.max(1, lBottom - lTop);
@@ -1402,19 +1608,54 @@ public final class StatsScreen extends UiScreen {
         }
 
         List<ScoreboardEntrySnapshot> shown = filteredScoreEntries(selected);
-        int maxL = maxListScrollPx(shown.size(), SB_ENTRY_STRIDE);
+        boolean showTotalRow = hasTotalRow(selected);
+        int totalRows = shown.size() + (showTotalRow ? 1 : 0);
+        int maxL = maxListScrollPx(totalRows, SB_ENTRY_STRIDE);
         targetListScroll = Math.max(0, Math.min(targetListScroll, maxL));
         listScroll += (targetListScroll - listScroll) * Math.min(1.0, delta * 0.45 + 0.25);
         listScroll = Math.max(0, Math.min(listScroll, maxL));
 
-        if (shown.isEmpty()) {
+        if (totalRows == 0) {
+            if (inlineScoreField != null) inlineScoreField.setVisible(false);
             c.drawCenteredTextWithShadow(textRenderer, "Sin entradas en esta scoreboard.", cardX + cardW / 2, lTop + viewH / 2 - 4, AeternumTheme.TEXT_SECONDARY);
             return;
         }
 
+        if (armedDeleteScoreOwner != null && System.currentTimeMillis() > armedDeleteScoreUntilMs) {
+            armedDeleteScoreOwner = null;
+        }
+        Map<String, Integer> globalRank = new HashMap<>();
+        if (selectedObjectiveEntries != null) {
+            int nextRank = 1;
+            for (ScoreboardEntrySnapshot e : selectedObjectiveEntries) {
+                if (e != null && e.owner != null && isIncludedInScoreboard(selected, e)) {
+                    if (!globalRank.containsKey(e.owner)) {
+                        globalRank.put(e.owner, nextRank++);
+                    }
+                }
+            }
+        }
+        if (inlineScoreField != null) {
+            inlineScoreField.setVisible(false);
+        }
+
         c.enableScissor(panelX + SIDEBAR_W + 2, lTop, panelX + panelW - 8, lBottom);
+        if (showTotalRow) {
+            int cy = lTop - (int) Math.round(listScroll);
+            if (cy + SB_ENTRY_H >= lTop && cy <= lBottom) {
+                AeternumTheme.drawCard(c, cardX, cy, cardW, SB_ENTRY_H, 0xFF1E1A12, AeternumTheme.ACCENT_GOLD);
+                String rankZero = "0. ";
+                c.drawTextWithShadow(textRenderer, rankZero, cardX + 10, cy + 9, AeternumTheme.ACCENT_GOLD);
+                int labelX = cardX + 10 + textRenderer.getWidth(rankZero);
+                c.drawTextWithShadow(textRenderer, "Total", labelX, cy + 9, AeternumTheme.TEXT_PRIMARY);
+                String totStr = String.format(Locale.US, "%,d", computeObjectiveTotal(selected));
+                int scoreRight = cardX + cardW - 30;
+                c.drawTextWithShadow(textRenderer, totStr, scoreRight - textRenderer.getWidth(totStr), cy + 9, AeternumTheme.ACCENT_GOLD);
+            }
+        }
         for (int i = 0; i < shown.size(); i++) {
-            int cy = lTop + i * SB_ENTRY_STRIDE - (int) Math.round(listScroll);
+            int rowIdx = i + (showTotalRow ? 1 : 0);
+            int cy = lTop + rowIdx * SB_ENTRY_STRIDE - (int) Math.round(listScroll);
             if (cy + SB_ENTRY_H < lTop || cy > lBottom) continue;
 
             ScoreboardEntrySnapshot item = shown.get(i);
@@ -1423,17 +1664,57 @@ public final class StatsScreen extends UiScreen {
             AeternumTheme.drawCard(c, cardX, cy, cardW, SB_ENTRY_H, over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_BG,
                 over ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
 
-            String scoreStr = String.format(Locale.US, "%,d", item.score);
-            int scoreW = textRenderer.getWidth(scoreStr);
-            int scoreX = cardX + cardW - scoreW - 10;
-            c.drawTextWithShadow(textRenderer, scoreStr, scoreX, cy + 9, AeternumTheme.ACCENT_GOLD);
+            int delX = cardX + cardW - 22;
+            int delY = cy + 5;
+            boolean armedDel = item.owner.equals(armedDeleteScoreOwner) && System.currentTimeMillis() <= armedDeleteScoreUntilMs;
+            boolean overDel = inArea && mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16;
+            AeternumTheme.drawCard(c, delX, delY, 16, 16,
+                armedDel ? 0xFF5A1D22 : (overDel ? 0xFF3A1A1F : AeternumTheme.CARD_ALT_BG),
+                (armedDel || overDel) ? 0xFFFF6B6B : AeternumTheme.BORDER_SUBTLE);
+            c.drawCenteredTextWithShadow(textRenderer, armedDel ? "!" : "x", delX + 8, delY + 4,
+                (armedDel || overDel) ? 0xFFFF6B6B : AeternumTheme.TEXT_MUTED);
 
+            int scoreRight = delX - 8;
+            int scoreLeftBound;
+            if (item.owner.equals(editingScoreOwner) && inlineScoreField != null) {
+                int fieldW = 82;
+                int fieldX = scoreRight - fieldW;
+                inlineScoreField.setX(fieldX);
+                inlineScoreField.setY(cy + 4);
+                inlineScoreField.setWidth(fieldW);
+                inlineScoreField.setVisible(cy >= lTop - 2 && cy + SB_ENTRY_H <= lBottom + 2);
+                scoreLeftBound = fieldX;
+            } else {
+                String scoreStr = String.format(Locale.US, "%,d", item.score);
+                int scoreW = textRenderer.getWidth(scoreStr);
+                int scoreX = scoreRight - scoreW;
+                boolean overScore = inArea && mx >= scoreX - 6 && mx < scoreRight + 2 && my >= cy + 2 && my < cy + SB_ENTRY_H - 2;
+                c.drawTextWithShadow(textRenderer, scoreStr, scoreX, cy + 9,
+                    overScore ? 0xFFFFE599 : AeternumTheme.ACCENT_GOLD);
+                if (overScore) {
+                    c.fill(scoreX, cy + 18, scoreRight, cy + 19, 0xFFFFE599);
+                }
+                scoreLeftBound = scoreX;
+            }
+
+            Integer rank = globalRank.get(item.owner);
+            String rankStr = rank != null ? (rank + ". ") : "- ";
+            int rankW = textRenderer.getWidth(rankStr);
+            int rankColor = rank == null ? AeternumTheme.TEXT_MUTED : switch (rank) {
+                case 1 -> 0xFFFFD166;
+                case 2 -> 0xFFD8DEE9;
+                case 3 -> 0xFFE59866;
+                default -> AeternumTheme.TEXT_MUTED;
+            };
+            c.drawTextWithShadow(textRenderer, rankStr, cardX + 10, cy + 9, rankColor);
+
+            int ownerX = cardX + 10 + rankW;
             int badgeW = textRenderer.getWidth(item.badge) + 10;
-            int ownerMaxW = Math.max(40, scoreX - cardX - badgeW - 22);
+            int ownerMaxW = Math.max(40, scoreLeftBound - ownerX - badgeW - 14);
             String ownerShown = AeternumTheme.ellipsize(textRenderer, item.owner, ownerMaxW);
-            c.drawTextWithShadow(textRenderer, ownerShown, cardX + 10, cy + 9, AeternumTheme.TEXT_PRIMARY);
+            c.drawTextWithShadow(textRenderer, ownerShown, ownerX, cy + 9, AeternumTheme.TEXT_PRIMARY);
 
-            int badgeX = cardX + 16 + textRenderer.getWidth(ownerShown);
+            int badgeX = ownerX + 6 + textRenderer.getWidth(ownerShown);
             int badgeBg = switch (item.badge) {
                 case "HUMAN" -> 0xFF1A281E;
                 case "BOT" -> 0xFF18222C;
@@ -1446,7 +1727,7 @@ public final class StatsScreen extends UiScreen {
                 case "AMBOS" -> 0xFFFFC57A;
                 default -> AeternumTheme.TEXT_SECONDARY;
             };
-            if (badgeX + badgeW < scoreX - 6) {
+            if (badgeX + badgeW < scoreLeftBound - 6) {
                 AeternumTheme.drawBadge(c, textRenderer, badgeX, cy + 6, item.badge, badgeBg, badgeFg);
             }
         }
@@ -1454,8 +1735,12 @@ public final class StatsScreen extends UiScreen {
 
         if (maxL > 0) {
             AeternumTheme.drawScrollbar(c, panelX + panelW - 9, lTop, lBottom,
-                shown.size() * SB_ENTRY_STRIDE, viewH, listScroll, draggingScrollbar);
+                totalRows * SB_ENTRY_STRIDE, viewH, listScroll, draggingScrollbar);
         }
+    }
+
+    private boolean hasTotalRow(ScoreboardObjectiveSnapshot selected) {
+        return selected != null && selected.totalEnabled && selected.name.equals(loadedObjectiveName);
     }
 
     private static final String[][] CRITERION_PRESETS = {
@@ -1480,6 +1765,18 @@ public final class StatsScreen extends UiScreen {
         return contentTop + 111;
     }
 
+    private static final String[][] AREA_MODES = {
+        {"NONE", "Ninguna"},
+        {"RECTANGLE", "Rectángulo"},
+        {"CUSTOM", "Custom"}
+    };
+
+    private static final String[][] AREA_DIMENSIONS = {
+        {"minecraft:overworld", "Overworld"},
+        {"minecraft:the_nether", "Nether"},
+        {"minecraft:the_end", "End"}
+    };
+
     private void renderScoreboardForm(DrawContext c, int mx, int my) {
         int contentTop = panelY + 44 + TAB_BAR_H;
         int contentX = panelX + SIDEBAR_W + 10;
@@ -1490,7 +1787,33 @@ public final class StatsScreen extends UiScreen {
             : ("Editando: " + editingObjectiveName);
         c.drawTextWithShadow(textRenderer, header, contentX, contentTop + 8, AeternumTheme.TEXT_PRIMARY);
 
-        c.drawText(textRenderer, "ID interno (sin espacios)", contentX, contentTop + 24, AeternumTheme.TEXT_SECONDARY, false);
+        String idLabel = "ID interno (sin espacios)";
+        c.drawText(textRenderer, idLabel, contentX, contentTop + 24, AeternumTheme.TEXT_SECONDARY, false);
+        String currentIdText = sbNameField != null ? sbNameField.getText() : "";
+        String idErr = validateObjectiveId(currentIdText);
+        if (sbSaveButton != null) {
+            sbSaveButton.active = (idErr == null);
+        }
+        int idStatusX = contentX + textRenderer.getWidth(idLabel) + 6;
+        int idStatusAvail = contentX + contentW - idStatusX;
+        if (idErr != null && idStatusAvail > 24) {
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, "\u00B7 " + idErr, idStatusAvail),
+                idStatusX, contentTop + 24, 0xFFFF6B6B, false);
+            if (sbNameField != null) {
+                int fx = sbNameField.getX(), fy = sbNameField.getY(), fw = sbNameField.getWidth(), fh = sbNameField.getHeight();
+                c.fill(fx, fy, fx + fw, fy + 1, 0xFFFF6B6B);
+                c.fill(fx, fy + fh - 1, fx + fw, fy + fh, 0xFFFF6B6B);
+                c.fill(fx, fy, fx + 1, fy + fh, 0xFFFF6B6B);
+                c.fill(fx + fw - 1, fy, fx + fw, fy + fh, 0xFFFF6B6B);
+            }
+        } else if (idStatusAvail > 24) {
+            String trimmedId = currentIdText.trim();
+            boolean showAvailable = sbPanelMode == SbPanelMode.CREATE
+                || (editingObjectiveName != null && !trimmedId.equals(editingObjectiveName));
+            if (showAvailable) {
+                c.drawText(textRenderer, "\u00B7 Disponible", idStatusX, contentTop + 24, 0xFF4BA378, false);
+            }
+        }
         c.drawText(textRenderer, "Criterio", contentX, contentTop + 58, AeternumTheme.TEXT_SECONDARY, false);
 
         int pillY = contentTop + 90;
@@ -1542,13 +1865,101 @@ public final class StatsScreen extends UiScreen {
         }
 
         int totalLabelY = aliasLabelY + 37;
+        int includeX = contentX + 108;
         c.drawText(textRenderer, "Cálculo de Total", contentX, totalLabelY, AeternumTheme.TEXT_SECONDARY, false);
+        c.drawText(textRenderer, "Incluir en scoreboard", includeX, totalLabelY, AeternumTheme.TEXT_SECONDARY, false);
         int ty = totalLabelY + 11;
-        int tx = contentX;
-        tx += drawTogglePill(c, tx, ty, "Total: " + (formTotalEnabled ? "ON" : "OFF"), formTotalEnabled, 0xFF7AD694, mx, my) + 8;
+        drawTogglePill(c, contentX, ty, "Total: " + (formTotalEnabled ? "ON" : "OFF"), formTotalEnabled, 0xFF7AD694, mx, my);
+        int tx = includeX;
         tx += drawTogglePill(c, tx, ty, "Humans", formTotalHumans, 0xFF9DF0B4, mx, my) + 4;
         tx += drawTogglePill(c, tx, ty, "Bots", formTotalBots, 0xFF9CD0FF, mx, my) + 4;
         drawTogglePill(c, tx, ty, "Unknown", formTotalUnknown, AeternumTheme.ACCENT_GOLD, mx, my);
+
+        // Area scoreboard section
+        int areaHeaderY = contentTop + 233;
+        c.drawText(textRenderer, "Scoreboard de área", contentX, areaHeaderY + 3, AeternumTheme.TEXT_SECONDARY, false);
+        int amx = contentX + textRenderer.getWidth("Scoreboard de área") + 8;
+        for (String[] modeOpt : AREA_MODES) {
+            int mw = textRenderer.getWidth(modeOpt[1]) + 10;
+            boolean sel = modeOpt[0].equals(formAreaMode);
+            boolean over = mx >= amx && mx < amx + mw && my >= areaHeaderY && my < areaHeaderY + 16;
+            AeternumTheme.drawCard(c, amx, areaHeaderY, mw, 16,
+                sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
+                sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
+            c.drawText(textRenderer, modeOpt[1], amx + 5, areaHeaderY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+            amx += mw + 4;
+        }
+
+        if ("RECTANGLE".equals(formAreaMode)) {
+            int dimY = contentTop + 254;
+            int dx = contentX;
+            c.drawText(textRenderer, "Dim:", dx, dimY + 4, AeternumTheme.TEXT_MUTED, false);
+            dx += textRenderer.getWidth("Dim:") + 6;
+            for (String[] dimOpt : AREA_DIMENSIONS) {
+                int dw = textRenderer.getWidth(dimOpt[1]) + 10;
+                boolean sel = dimOpt[0].equals(formAreaDimension);
+                boolean over = mx >= dx && mx < dx + dw && my >= dimY && my < dimY + 16;
+                AeternumTheme.drawCard(c, dx, dimY, dw, 16,
+                    sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
+                    sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
+                c.drawText(textRenderer, dimOpt[1], dx + 5, dimY + 4, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
+                dx += dw + 4;
+            }
+
+            int rectY = contentTop + 278;
+            c.drawText(textRenderer, "X1", contentX, rectY + 5, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(textRenderer, "Z1", contentX + 74, rectY + 5, AeternumTheme.TEXT_MUTED, false);
+            drawSmallActionButton(c, contentX + 150, rectY + 1, 36, 16, "Pos1", mx, my);
+
+            int x2Start = contentX + 196;
+            c.drawText(textRenderer, "X2", x2Start, rectY + 5, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(textRenderer, "Z2", x2Start + 74, rectY + 5, AeternumTheme.TEXT_MUTED, false);
+            drawSmallActionButton(c, x2Start + 150, rectY + 1, 36, 16, "Pos2", mx, my);
+        } else if ("CUSTOM".equals(formAreaMode)) {
+            int seedY = contentTop + 254;
+            c.drawText(textRenderer, "X", contentX, seedY + 5, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(textRenderer, "Y", contentX + 72, seedY + 5, AeternumTheme.TEXT_MUTED, false);
+            c.drawText(textRenderer, "Z", contentX + 134, seedY + 5, AeternumTheme.TEXT_MUTED, false);
+
+            int btnRowY = contentTop + 278;
+            int bx = contentX;
+            bx += drawSmallActionButton(c, bx, btnRowY, 82, 17, "Bloque mirado", mx, my) + 4;
+            bx += drawSmallActionButton(c, bx, btnRowY, 80, 17, "Bajo mis pies", mx, my) + 4;
+            drawSmallActionButton(c, bx, btnRowY, 102, 17, "Escanear contorno", mx, my);
+
+            int infoY = contentTop + 302;
+            if (formAreaPreviewCols > 0) {
+                String dimShort = shortDimName(formAreaDimension);
+                String info = formAreaPreviewCols + " cols \u00B7 " + dimShort
+                    + (formAreaBlockId.isEmpty() ? "" : (" \u00B7 " + formAreaBlockId.replace("minecraft:", "")));
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, info, contentW - 84), contentX, infoY, 0xFF9DF0B4, false);
+            } else {
+                c.drawText(textRenderer, "Sin contorno escaneado", contentX, infoY, AeternumTheme.TEXT_MUTED, false);
+            }
+
+            // 2D mini preview on the right
+            int boxSize = 72;
+            int boxX = contentX + contentW - boxSize;
+            int boxY = contentTop + 254;
+            AeternumTheme.drawCard(c, boxX, boxY, boxSize, boxSize, 0xFF0A0A0D, AeternumTheme.BORDER_BRIGHT);
+            if (formAreaPreviewSize > 0 && formAreaPreviewGrid != null && formAreaPreviewGrid.length() == formAreaPreviewSize * formAreaPreviewSize) {
+                int inner = boxSize - 4;
+                for (int gy = 0; gy < formAreaPreviewSize; gy++) {
+                    int y0 = boxY + 2 + (gy * inner) / formAreaPreviewSize;
+                    int y1 = boxY + 2 + ((gy + 1) * inner) / formAreaPreviewSize;
+                    for (int gx = 0; gx < formAreaPreviewSize; gx++) {
+                        char ch = formAreaPreviewGrid.charAt(gy * formAreaPreviewSize + gx);
+                        if (ch == '.') continue;
+                        int x0 = boxX + 2 + (gx * inner) / formAreaPreviewSize;
+                        int x1 = boxX + 2 + ((gx + 1) * inner) / formAreaPreviewSize;
+                        int col = (ch == '#') ? 0xFFFFD166 : 0xFF4BA378;
+                        c.fill(x0, y0, Math.max(x0 + 1, x1), Math.max(y0 + 1, y1), col);
+                    }
+                }
+            } else {
+                c.drawCenteredTextWithShadow(textRenderer, "2D", boxX + boxSize / 2, boxY + boxSize / 2 - 4, AeternumTheme.TEXT_MUTED);
+            }
+        }
 
         if (sbPanelMode == SbPanelMode.CREATE) {
             int btnY = panelY + panelH - 64;
@@ -1563,6 +1974,21 @@ public final class StatsScreen extends UiScreen {
             AeternumTheme.drawCard(c, contentX, btnY, fw, 20, bg, border);
             c.drawTextWithShadow(textRenderer, lbl, contentX + 7, btnY + 6, fg);
         }
+    }
+
+    private int drawSmallActionButton(DrawContext c, int x, int y, int w, int h, String label, int mx, int my) {
+        boolean over = mx >= x && mx < x + w && my >= y && my < y + h;
+        AeternumTheme.drawCard(c, x, y, w, h, over ? 0xFF2B2B36 : 0xFF1A1A22,
+            over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.BORDER_BRIGHT);
+        c.drawTextWithShadow(textRenderer, label, x + (w - textRenderer.getWidth(label)) / 2, y + (h - 8) / 2,
+            over ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
+        return w;
+    }
+
+    private static String shortDimName(String dim) {
+        if ("minecraft:the_nether".equals(dim)) return "Nether";
+        if ("minecraft:the_end".equals(dim)) return "End";
+        return "Overworld";
     }
 
     private int drawTogglePill(DrawContext c, int x, int y, String label, boolean on, int accent, int mx, int my) {
@@ -1636,13 +2062,12 @@ public final class StatsScreen extends UiScreen {
         int totalLabelY = aliasLabelY + 37;
         int ty = totalLabelY + 11;
         if (my >= ty && my < ty + 18) {
-            int tx = contentX;
             int wTot = textRenderer.getWidth("Total: " + (formTotalEnabled ? "ON" : "OFF")) + 14;
-            if (mx >= tx && mx < tx + wTot) {
+            if (mx >= contentX && mx < contentX + wTot) {
                 formTotalEnabled = !formTotalEnabled;
                 return true;
             }
-            tx += wTot + 8;
+            int tx = contentX + 108;
             int wHum = textRenderer.getWidth("Humans") + 14;
             if (mx >= tx && mx < tx + wHum) {
                 formTotalHumans = !formTotalHumans;
@@ -1659,6 +2084,112 @@ public final class StatsScreen extends UiScreen {
             if (mx >= tx && mx < tx + wUnk) {
                 formTotalUnknown = !formTotalUnknown;
                 return true;
+            }
+        }
+
+        int areaHeaderY = contentTop + 233;
+        if (my >= areaHeaderY && my < areaHeaderY + 16) {
+            int amx = contentX + textRenderer.getWidth("Scoreboard de área") + 8;
+            for (String[] modeOpt : AREA_MODES) {
+                int mw = textRenderer.getWidth(modeOpt[1]) + 10;
+                if (mx >= amx && mx < amx + mw) {
+                    if (!modeOpt[0].equals(formAreaMode)) {
+                        formAreaMode = modeOpt[0];
+                        if ("RECTANGLE".equals(formAreaMode) && client != null && client.player != null) {
+                            formAreaDimension = client.player.getWorld().getRegistryKey().getValue().toString();
+                        }
+                        init();
+                    }
+                    return true;
+                }
+                amx += mw + 4;
+            }
+        }
+
+        if ("RECTANGLE".equals(formAreaMode)) {
+            int dimY = contentTop + 254;
+            if (my >= dimY && my < dimY + 16) {
+                int dx = contentX + textRenderer.getWidth("Dim:") + 6;
+                for (String[] dimOpt : AREA_DIMENSIONS) {
+                    int dw = textRenderer.getWidth(dimOpt[1]) + 10;
+                    if (mx >= dx && mx < dx + dw) {
+                        formAreaDimension = dimOpt[0];
+                        return true;
+                    }
+                    dx += dw + 4;
+                }
+            }
+            int rectY = contentTop + 278;
+            if (my >= rectY + 1 && my < rectY + 17 && client != null && client.player != null) {
+                if (mx >= contentX + 150 && mx < contentX + 186) {
+                    if (areaX1Field != null) areaX1Field.setText(String.valueOf(client.player.getBlockX()));
+                    if (areaZ1Field != null) areaZ1Field.setText(String.valueOf(client.player.getBlockZ()));
+                    formAreaDimension = client.player.getWorld().getRegistryKey().getValue().toString();
+                    return true;
+                }
+                int x2Start = contentX + 196;
+                if (mx >= x2Start + 150 && mx < x2Start + 186) {
+                    if (areaX2Field != null) areaX2Field.setText(String.valueOf(client.player.getBlockX()));
+                    if (areaZ2Field != null) areaZ2Field.setText(String.valueOf(client.player.getBlockZ()));
+                    formAreaDimension = client.player.getWorld().getRegistryKey().getValue().toString();
+                    return true;
+                }
+            }
+        } else if ("CUSTOM".equals(formAreaMode)) {
+            int btnRowY = contentTop + 278;
+            if (my >= btnRowY && my < btnRowY + 17) {
+                int bx = contentX;
+                if (mx >= bx && mx < bx + 82) {
+                    if (client != null && client.crosshairTarget instanceof BlockHitResult hit
+                        && client.crosshairTarget.getType() == HitResult.Type.BLOCK) {
+                        BlockPos pos = hit.getBlockPos();
+                        if (areaSeedXField != null) areaSeedXField.setText(String.valueOf(pos.getX()));
+                        if (areaSeedYField != null) areaSeedYField.setText(String.valueOf(pos.getY()));
+                        if (areaSeedZField != null) areaSeedZField.setText(String.valueOf(pos.getZ()));
+                        statusMessage = "Bloque mirado: " + pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
+                        statusError = false;
+                    } else {
+                        statusMessage = "No estás mirando ningún bloque.";
+                        statusError = true;
+                    }
+                    return true;
+                }
+                bx += 86;
+                if (mx >= bx && mx < bx + 80) {
+                    if (client != null && client.player != null) {
+                        BlockPos pos = client.player.getBlockPos().down();
+                        if (areaSeedXField != null) areaSeedXField.setText(String.valueOf(pos.getX()));
+                        if (areaSeedYField != null) areaSeedYField.setText(String.valueOf(pos.getY()));
+                        if (areaSeedZField != null) areaSeedZField.setText(String.valueOf(pos.getZ()));
+                        statusMessage = "Bajo tus pies: " + pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
+                        statusError = false;
+                    }
+                    return true;
+                }
+                bx += 84;
+                if (mx >= bx && mx < bx + 102) {
+                    if (areaSeedXField == null || areaSeedYField == null || areaSeedZField == null
+                        || areaSeedXField.getText().trim().isEmpty()
+                        || areaSeedYField.getText().trim().isEmpty()
+                        || areaSeedZField.getText().trim().isEmpty()) {
+                        statusMessage = "Indica X, Y, Z de un bloque del contorno.";
+                        statusError = true;
+                        return true;
+                    }
+                    try {
+                        ScanContourRequest scanReq = new ScanContourRequest();
+                        scanReq.x = Integer.parseInt(areaSeedXField.getText().trim());
+                        scanReq.y = Integer.parseInt(areaSeedYField.getText().trim());
+                        scanReq.z = Integer.parseInt(areaSeedZField.getText().trim());
+                        statusMessage = "Escaneando contorno…";
+                        statusError = false;
+                        ClientPlayNetworking.send(new StatsRegistryActionPayload("scan_area_contour", "", GSON.toJson(scanReq)));
+                    } catch (NumberFormatException ex) {
+                        statusMessage = "Coordenadas X, Y, Z inválidas.";
+                        statusError = true;
+                    }
+                    return true;
+                }
             }
         }
         return false;
@@ -1799,7 +2330,12 @@ public final class StatsScreen extends UiScreen {
     }
 
     private void clearTextFieldFocusIfOutside(double mx, double my) {
-        UiTextField[] fields = { searchField, scoreSearchField, objectiveSearchField, sbNameField, sbCriterionField, sbDisplayField, sbAliasField };
+        UiTextField[] fields = {
+            searchField, scoreSearchField, objectiveSearchField,
+            sbNameField, sbCriterionField, sbDisplayField, sbAliasField,
+            areaX1Field, areaZ1Field, areaX2Field, areaZ2Field,
+            areaSeedXField, areaSeedYField, areaSeedZField
+        };
         for (UiTextField tf : fields) {
             if (tf == null || !tf.isFocused()) continue;
             int bx = tf.boxX();
@@ -2106,12 +2642,66 @@ public final class StatsScreen extends UiScreen {
                         String chipLabel = sf.label + " (" + countScoreFilter(selected, sf) + ")";
                         int cw = textRenderer.getWidth(chipLabel) + 12;
                         if (mx >= chipX && mx < chipX + cw) {
+                            clearInlineScoreEdit();
                             activeScoreFilter = sf;
                             listScroll = targetListScroll = 0;
                             return true;
                         }
                         chipX += cw + 4;
                     }
+                }
+                int lTop = listTop();
+                int lBottom = listBottom();
+                if (selected != null && selected.name.equals(loadedObjectiveName)
+                    && my >= lTop && my < lBottom && mx >= panelX + SIDEBAR_W + 6 && mx < panelX + panelW - 14) {
+                    if (editingScoreOwner != null && inlineScoreField != null && inlineScoreField.isVisible()
+                        && mx >= inlineScoreField.getX() && mx < inlineScoreField.getX() + inlineScoreField.getWidth()
+                        && my >= inlineScoreField.getY() && my < inlineScoreField.getY() + inlineScoreField.getHeight()) {
+                        return super.mouseClicked(mx, my, button);
+                    }
+                    int cardX = panelX + SIDEBAR_W + 10;
+                    int cardW = panelW - SIDEBAR_W - 26;
+                    int delX = cardX + cardW - 22;
+                    List<ScoreboardEntrySnapshot> shown = filteredScoreEntries(selected);
+                    boolean showTotalRow = hasTotalRow(selected);
+                    for (int i = 0; i < shown.size(); i++) {
+                        int rowIdx = i + (showTotalRow ? 1 : 0);
+                        int cy = lTop + rowIdx * SB_ENTRY_STRIDE - (int) Math.round(listScroll);
+                        if (cy + SB_ENTRY_H < lTop || cy > lBottom) continue;
+                        if (my < cy || my >= cy + SB_ENTRY_H) continue;
+                        ScoreboardEntrySnapshot item = shown.get(i);
+                        int delY = cy + 5;
+                        if (mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16) {
+                            clearInlineScoreEdit();
+                            if (item.owner.equals(armedDeleteScoreOwner) && System.currentTimeMillis() <= armedDeleteScoreUntilMs) {
+                                armedDeleteScoreOwner = null;
+                                DeleteScoreEntryRequest req = new DeleteScoreEntryRequest();
+                                req.objective = selected.name;
+                                req.owner = item.owner;
+                                statusMessage = "Eliminando registro de " + item.owner + "…";
+                                statusError = false;
+                                ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_score_entry", "", GSON.toJson(req)));
+                            } else {
+                                armedDeleteScoreOwner = item.owner;
+                                armedDeleteScoreUntilMs = System.currentTimeMillis() + 5000L;
+                                statusMessage = "Clic de nuevo en x para confirmar borrar a " + item.owner;
+                                statusError = true;
+                            }
+                            return true;
+                        }
+                        int scoreRight = delX - 8;
+                        String scoreStr = String.format(Locale.US, "%,d", item.score);
+                        int scoreX = scoreRight - textRenderer.getWidth(scoreStr);
+                        if (mx >= scoreX - 6 && mx < scoreRight + 2 && my >= cy + 2 && my < cy + SB_ENTRY_H - 2) {
+                            armedDeleteScoreOwner = null;
+                            startInlineScoreEdit(item.owner, item.score);
+                            return true;
+                        }
+                        break;
+                    }
+                }
+                if (editingScoreOwner != null) {
+                    clearInlineScoreEdit();
                 }
             }
         }
@@ -2146,6 +2736,66 @@ public final class StatsScreen extends UiScreen {
         return super.mouseClicked(mx, my, button);
     }
 
+    private void startInlineScoreEdit(String owner, int currentScore) {
+        editingScoreOwner = owner;
+        if (inlineScoreField != null) {
+            inlineScoreField.setText(String.valueOf(currentScore));
+            inlineScoreField.setVisible(true);
+            setFocused(inlineScoreField);
+            inlineScoreField.setFocused(true);
+            inlineScoreField.setCursorToEnd(false);
+        }
+    }
+
+    private void clearInlineScoreEdit() {
+        editingScoreOwner = null;
+        if (inlineScoreField != null) {
+            inlineScoreField.setVisible(false);
+            inlineScoreField.setFocused(false);
+        }
+    }
+
+    private void commitInlineScoreEdit() {
+        if (editingScoreOwner == null || inlineScoreField == null) return;
+        ScoreboardObjectiveSnapshot selected = selectedObjectiveSnapshot();
+        if (selected == null) {
+            clearInlineScoreEdit();
+            return;
+        }
+        String raw = inlineScoreField.getText().trim().replace(",", "");
+        int nextScore;
+        try {
+            nextScore = Integer.parseInt(raw);
+        } catch (NumberFormatException ex) {
+            statusMessage = "Número inválido: " + inlineScoreField.getText();
+            statusError = true;
+            return;
+        }
+        SetScoreRequest req = new SetScoreRequest();
+        req.objective = selected.name;
+        req.owner = editingScoreOwner;
+        req.score = nextScore;
+        statusMessage = "Actualizando score de " + editingScoreOwner + "…";
+        statusError = false;
+        clearInlineScoreEdit();
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("set_score", "", GSON.toJson(req)));
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (editingScoreOwner != null && inlineScoreField != null && inlineScoreField.isFocused()) {
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+                commitInlineScoreEdit();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                clearInlineScoreEdit();
+                return true;
+            }
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
         draggingScrollbar = false;
@@ -2163,7 +2813,8 @@ public final class StatsScreen extends UiScreen {
             return Math.max(0, measureGuideContentHeight(wrapW) - viewH);
         }
         if (activeTab == Tab.SCOREBOARDS) {
-            int count = filteredScoreEntries(selectedObjectiveSnapshot()).size();
+            ScoreboardObjectiveSnapshot sel = selectedObjectiveSnapshot();
+            int count = filteredScoreEntries(sel).size() + (hasTotalRow(sel) ? 1 : 0);
             return maxListScrollPx(count, SB_ENTRY_STRIDE);
         }
         int count = activeTab == Tab.REGISTRY ? filteredEntries().size() : unexpectedFiles.size();
