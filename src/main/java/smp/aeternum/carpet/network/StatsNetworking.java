@@ -730,35 +730,95 @@ public final class StatsNetworking {
             sendSnapshot(player, false, "Datos inválidos al editar scoreboard.", true);
             return;
         }
-        if (req == null || req.name == null || req.name.isBlank()) {
+        if (req == null) {
+            sendSnapshot(player, false, "Scoreboard inválida.", true);
+            return;
+        }
+        String lookupName = (req.originalName != null && !req.originalName.isBlank()) ? req.originalName.trim() : (req.name != null ? req.name.trim() : "");
+        if (lookupName.isEmpty()) {
             sendSnapshot(player, false, "Scoreboard inválida.", true);
             return;
         }
         Scoreboard sb = server.getScoreboard();
         ScoreboardObjective target = null;
         for (ScoreboardObjective obj : sb.getObjectives()) {
-            if (obj.getName().equals(req.name)) {
+            if (obj.getName().equals(lookupName)) {
                 target = obj;
                 break;
             }
         }
         if (target == null) {
-            sendSnapshot(player, false, "Scoreboard no encontrada: " + req.name, true);
+            sendSnapshot(player, false, "Scoreboard no encontrada: " + lookupName, true);
+            return;
+        }
+
+        String nextName = (req.name == null || req.name.isBlank()) ? target.getName() : req.name.trim();
+        if (nextName.contains(" ")) {
+            sendSnapshot(player, false, "El ID interno no puede tener espacios.", true);
+            return;
+        }
+        if (!nextName.equals(target.getName())) {
+            for (ScoreboardObjective existing : sb.getObjectives()) {
+                if (existing != target && existing.getName().equalsIgnoreCase(nextName)) {
+                    sendSnapshot(player, false, "Ya existe una scoreboard con ID: " + nextName, true);
+                    return;
+                }
+            }
+        }
+
+        ObjectiveConfig prev = ScoreboardConfigStore.getOrDefault(target.getName());
+        String currentEffectiveCriterion = (prev.tracker != null && !prev.tracker.isEmpty())
+            ? prev.tracker
+            : (target.getCriterion() != null ? target.getCriterion().getName() : "dummy");
+        String nextCriterionRaw = (req.criterion == null || req.criterion.isBlank()) ? "dummy" : req.criterion.trim();
+        boolean isCustomTracker = ScoreboardConfigStore.TRACKER_DIG_ALL.equals(nextCriterionRaw)
+            || ScoreboardConfigStore.TRACKER_PLACED_BLOCKS.equals(nextCriterionRaw);
+        ScoreboardCriterion nextCriterion = isCustomTracker
+            ? ScoreboardCriterion.DUMMY
+            : ScoreboardCriterion.getOrCreateStatCriterion(nextCriterionRaw).orElse(null);
+        if (nextCriterion == null) {
+            sendSnapshot(player, false, "Criterio inválido: " + nextCriterionRaw, true);
             return;
         }
 
         String alias = ScoreboardConfigStore.normalizeAlias(req.chatAlias);
-        String conflict = ScoreboardConfigStore.findAliasConflict(req.name, alias);
-        if (conflict != null) {
+        String conflict = ScoreboardConfigStore.findAliasConflict(target.getName(), alias);
+        if (conflict != null && !conflict.equals(nextName)) {
             sendSnapshot(player, false, "Alias !!" + alias + " ya está usado por: " + conflict, true);
             return;
         }
 
-        String disp = (req.displayName == null || req.displayName.isBlank()) ? req.name : req.displayName.trim();
-        target.setDisplayName(MotdMarkup.parse(disp));
-        applyObjectiveSlot(sb, target, req.slot);
+        String disp = (req.displayName == null || req.displayName.isBlank()) ? nextName : req.displayName.trim();
+        boolean needsRecreate = !nextName.equals(target.getName()) || !nextCriterionRaw.equals(currentEffectiveCriterion);
 
-        ObjectiveConfig prev = ScoreboardConfigStore.getOrDefault(req.name);
+        ScoreboardObjective finalObj = target;
+        if (needsRecreate) {
+            List<ScoreboardEntry> oldEntries = List.copyOf(sb.getScoreboardEntries(target));
+            for (ScoreboardDisplaySlot slot : ScoreboardDisplaySlot.values()) {
+                if (sb.getObjectiveForSlot(slot) == target) {
+                    sb.setObjectiveSlot(slot, null);
+                }
+            }
+            sb.removeObjective(target);
+            ScoreboardConfigStore.remove(target.getName());
+
+            finalObj = sb.addObjective(
+                nextName,
+                nextCriterion,
+                MotdMarkup.parse(disp),
+                nextCriterion.getDefaultRenderType(),
+                false,
+                null
+            );
+            for (ScoreboardEntry entry : oldEntries) {
+                sb.getOrCreateScore(ScoreHolder.fromName(entry.owner()), finalObj).setScore(entry.value());
+            }
+        } else {
+            finalObj.setDisplayName(MotdMarkup.parse(disp));
+        }
+
+        applyObjectiveSlot(sb, finalObj, req.slot);
+
         ObjectiveConfig cfg = new ObjectiveConfig();
         cfg.totalEnabled = req.totalEnabled;
         cfg.totalHumans = req.totalHumans;
@@ -766,10 +826,10 @@ public final class StatsNetworking {
         cfg.totalUnknown = req.totalUnknown;
         cfg.chatAlias = alias;
         cfg.displayNameMarkup = disp;
-        cfg.tracker = prev.tracker;
-        ScoreboardConfigStore.put(req.name, cfg);
+        cfg.tracker = isCustomTracker ? nextCriterionRaw : "";
+        ScoreboardConfigStore.put(nextName, cfg);
 
-        sendSnapshot(player, false, "Scoreboard '" + req.name + "' actualizada.", false);
+        sendSnapshot(player, false, "Scoreboard '" + nextName + "' actualizada.", false);
     }
 
     private static void applyObjectiveSlot(Scoreboard sb, ScoreboardObjective target, String slotName) {
@@ -805,7 +865,9 @@ public final class StatsNetworking {
     }
 
     public static final class EditObjectiveRequest {
+        public String originalName = "";
         public String name = "";
+        public String criterion = "dummy";
         public String displayName = "";
         public String slot = "";
         public String chatAlias = "";

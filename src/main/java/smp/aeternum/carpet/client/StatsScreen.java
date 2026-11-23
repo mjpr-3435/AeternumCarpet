@@ -429,18 +429,16 @@ public final class StatsScreen extends UiScreen {
                 addDrawableChild(scoreSortButton);
             } else {
                 int dispLabelY = formDisplayLabelY(contentTop);
-                if (sbPanelMode == SbPanelMode.CREATE) {
-                    sbNameField = new UiTextField(textRenderer, contentX, contentTop + 35, contentW, 18, "ej: dig_diamantes");
-                    sbNameField.setMaxLength(16);
-                    sbNameField.setText(prevSbName);
-                    addDrawableChild(sbNameField);
+                sbNameField = new UiTextField(textRenderer, contentX, contentTop + 35, contentW, 18, "ej: dig_diamantes");
+                sbNameField.setMaxLength(16);
+                sbNameField.setText(prevSbName);
+                addDrawableChild(sbNameField);
 
-                    sbCriterionField = new UiTextField(textRenderer, contentX, contentTop + 69, contentW, 18, "vacío = dummy");
-                    sbCriterionField.setMaxLength(128);
-                    sbCriterionField.setText(prevSbCriterion);
-                    sbCriterionField.setChangedListener(s -> criterionSugScroll = 0);
-                    addDrawableChild(sbCriterionField);
-                }
+                sbCriterionField = new UiTextField(textRenderer, contentX, contentTop + 69, contentW, 18, "vacío = dummy");
+                sbCriterionField.setMaxLength(128);
+                sbCriterionField.setText(prevSbCriterion);
+                sbCriterionField.setChangedListener(s -> criterionSugScroll = 0);
+                addDrawableChild(sbCriterionField);
 
                 sbDisplayField = new UiTextField(textRenderer, contentX, dispLabelY + 11, contentW, 18, "Ej: \\gold\\boldMi Scoreboard (vacío = ID)");
                 sbDisplayField.setMaxLength(128);
@@ -670,7 +668,7 @@ public final class StatsScreen extends UiScreen {
         if (sbAliasField != null) {
             sbAliasField.renderBox(c, sbAliasField.boxX(), sbAliasField.boxY(), sbAliasField.getWidth() + 12, 18, mx, my, delta);
         }
-        if (activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE && sbCriterionField != null && sbCriterionField.isFocused()) {
+        if (activeTab == Tab.SCOREBOARDS && sbPanelMode != SbPanelMode.VIEW && sbCriterionField != null && sbCriterionField.isFocused()) {
             renderCriterionSuggestions(c, mx, my);
         }
 
@@ -1193,6 +1191,13 @@ public final class StatsScreen extends UiScreen {
         formTotalBots = obj.totalBots;
         formTotalUnknown = obj.totalUnknown;
         init();
+        if (sbNameField != null) {
+            sbNameField.setText(obj.name != null ? obj.name : "");
+        }
+        if (sbCriterionField != null) {
+            String crit = obj.criterion != null ? obj.criterion : "";
+            sbCriterionField.setText("dummy".equalsIgnoreCase(crit) ? "" : crit);
+        }
         if (sbDisplayField != null) {
             sbDisplayField.setText(obj.displayNameMarkup != null && !obj.displayNameMarkup.isEmpty()
                 ? obj.displayNameMarkup
@@ -1230,8 +1235,16 @@ public final class StatsScreen extends UiScreen {
             ClientPlayNetworking.send(new StatsRegistryActionPayload("create_objective", "", GSON.toJson(req)));
             init();
         } else if (sbPanelMode == SbPanelMode.EDIT) {
+            String nextName = sbNameField != null ? sbNameField.getText().trim() : "";
+            if (nextName.isEmpty()) {
+                statusMessage = "El ID interno no puede estar vacío.";
+                statusError = true;
+                return;
+            }
             EditObjectiveRequest req = new EditObjectiveRequest();
-            req.name = editingObjectiveName;
+            req.originalName = editingObjectiveName;
+            req.name = nextName;
+            req.criterion = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
             req.displayName = sbDisplayField != null ? sbDisplayField.getText().trim() : "";
             req.slot = formSlot;
             req.chatAlias = sbAliasField != null ? sbAliasField.getText().trim() : "";
@@ -1239,8 +1252,10 @@ public final class StatsScreen extends UiScreen {
             req.totalHumans = formTotalHumans;
             req.totalBots = formTotalBots;
             req.totalUnknown = formTotalUnknown;
+            selectedObjectiveName = nextName;
+            loadedObjectiveName = null;
             sbPanelMode = SbPanelMode.VIEW;
-            statusMessage = "Guardando '" + editingObjectiveName + "'…";
+            statusMessage = "Guardando '" + nextName + "'…";
             statusError = false;
             ClientPlayNetworking.send(new StatsRegistryActionPayload("edit_objective", "", GSON.toJson(req)));
             init();
@@ -1462,7 +1477,7 @@ public final class StatsScreen extends UiScreen {
     };
 
     private int formDisplayLabelY(int contentTop) {
-        return sbPanelMode == SbPanelMode.CREATE ? (contentTop + 111) : (contentTop + 40);
+        return contentTop + 111;
     }
 
     private void renderScoreboardForm(DrawContext c, int mx, int my) {
@@ -1475,32 +1490,28 @@ public final class StatsScreen extends UiScreen {
             : ("Editando: " + editingObjectiveName);
         c.drawTextWithShadow(textRenderer, header, contentX, contentTop + 8, AeternumTheme.TEXT_PRIMARY);
 
-        if (sbPanelMode == SbPanelMode.CREATE) {
-            c.drawText(textRenderer, "ID interno (sin espacios)", contentX, contentTop + 24, AeternumTheme.TEXT_SECONDARY, false);
-            c.drawText(textRenderer, "Criterio", contentX, contentTop + 58, AeternumTheme.TEXT_SECONDARY, false);
+        c.drawText(textRenderer, "ID interno (sin espacios)", contentX, contentTop + 24, AeternumTheme.TEXT_SECONDARY, false);
+        c.drawText(textRenderer, "Criterio", contentX, contentTop + 58, AeternumTheme.TEXT_SECONDARY, false);
 
-            int pillY = contentTop + 90;
-            int px = contentX;
-            for (String[] preset : CRITERION_PRESETS) {
-                int pw = textRenderer.getWidth(preset[0]) + 10;
-                boolean over = mx >= px && mx < px + pw && my >= pillY && my < pillY + 15;
-                AeternumTheme.drawCard(c, px, pillY, pw, 15,
-                    over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG,
-                    over ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
-                c.drawText(textRenderer, preset[0], px + 5, pillY + 4, AeternumTheme.TEXT_SECONDARY, false);
-                px += pw + 4;
+        int pillY = contentTop + 90;
+        int px = contentX;
+        for (String[] preset : CRITERION_PRESETS) {
+            int pw = textRenderer.getWidth(preset[0]) + 10;
+            boolean over = mx >= px && mx < px + pw && my >= pillY && my < pillY + 15;
+            AeternumTheme.drawCard(c, px, pillY, pw, 15,
+                over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG,
+                over ? AeternumTheme.BORDER_BRIGHT : AeternumTheme.BORDER_SUBTLE);
+            c.drawText(textRenderer, preset[0], px + 5, pillY + 4, AeternumTheme.TEXT_SECONDARY, false);
+            px += pw + 4;
+        }
+        String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
+        if (curCrit.isEmpty() || "dummy".equalsIgnoreCase(curCrit)) {
+            String hint = "Vacío = dummy  \u00B7  o elige dig_all/placed_blocks/mined/used/...";
+            int hx = px + 4;
+            int avail = contentX + contentW - hx;
+            if (avail > 50) {
+                c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, hint, avail), hx, pillY + 4, AeternumTheme.TEXT_MUTED, false);
             }
-            String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
-            if (curCrit.isEmpty() || "dummy".equalsIgnoreCase(curCrit)) {
-                String hint = "Vacío = dummy  \u00B7  o elige mined/used/crafted/killed/custom";
-                int hx = px + 4;
-                int avail = contentX + contentW - hx;
-                if (avail > 50) {
-                    c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, hint, avail), hx, pillY + 4, AeternumTheme.TEXT_MUTED, false);
-                }
-            }
-        } else {
-            c.drawText(textRenderer, "Criterio: " + editingObjectiveCriterion + " (solo lectura)", contentX, contentTop + 24, AeternumTheme.TEXT_MUTED, false);
         }
 
         int dispLabelY = formDisplayLabelY(contentTop);
@@ -1541,7 +1552,6 @@ public final class StatsScreen extends UiScreen {
 
         if (sbPanelMode == SbPanelMode.CREATE) {
             int btnY = panelY + panelH - 64;
-            String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
             boolean isStat = curCrit.contains(":");
             String box = (formFillFromStats && isStat) ? "[x] " : "[ ] ";
             String lbl = box + "Poblar con stats previas";
@@ -1572,29 +1582,29 @@ public final class StatsScreen extends UiScreen {
         int contentX = panelX + SIDEBAR_W + 10;
         int contentW = panelW - SIDEBAR_W - 22;
 
-        if (sbPanelMode == SbPanelMode.CREATE) {
-            int pillY = contentTop + 90;
-            if (my >= pillY && my < pillY + 15) {
-                int px = contentX;
-                for (String[] preset : CRITERION_PRESETS) {
-                    int pw = textRenderer.getWidth(preset[0]) + 10;
-                    if (mx >= px && mx < px + pw) {
-                        if (sbCriterionField != null) {
-                            if (sbNameField != null) sbNameField.setFocused(false);
-                            sbCriterionField.setText(preset[1]);
-                            sbCriterionField.setCursorToEnd(false);
-                            boolean keepFocus = preset[1].endsWith(".");
-                            sbCriterionField.setFocused(keepFocus);
-                            if (!keepFocus && getFocused() == sbCriterionField) {
-                                setFocused(null);
-                            }
+        int pillY = contentTop + 90;
+        if (my >= pillY && my < pillY + 15) {
+            int px = contentX;
+            for (String[] preset : CRITERION_PRESETS) {
+                int pw = textRenderer.getWidth(preset[0]) + 10;
+                if (mx >= px && mx < px + pw) {
+                    if (sbCriterionField != null) {
+                        if (sbNameField != null) sbNameField.setFocused(false);
+                        sbCriterionField.setText(preset[1]);
+                        sbCriterionField.setCursorToEnd(false);
+                        boolean keepFocus = preset[1].endsWith(".");
+                        sbCriterionField.setFocused(keepFocus);
+                        if (!keepFocus && getFocused() == sbCriterionField) {
+                            setFocused(null);
                         }
-                        return true;
                     }
-                    px += pw + 4;
+                    return true;
                 }
+                px += pw + 4;
             }
+        }
 
+        if (sbPanelMode == SbPanelMode.CREATE) {
             int btnY = panelY + panelH - 64;
             String curCrit = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
             if (curCrit.contains(":") && my >= btnY && my < btnY + 20) {
@@ -1878,7 +1888,7 @@ public final class StatsScreen extends UiScreen {
             close();
             return true;
         }
-        if (button == 0 && activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE
+        if (button == 0 && activeTab == Tab.SCOREBOARDS && sbPanelMode != SbPanelMode.VIEW
             && handleCriterionSuggestionClick(mx, my)) {
             return true;
         }
@@ -2194,7 +2204,7 @@ public final class StatsScreen extends UiScreen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double hAmt, double vAmt) {
-        if (activeTab == Tab.SCOREBOARDS && sbPanelMode == SbPanelMode.CREATE
+        if (activeTab == Tab.SCOREBOARDS && sbPanelMode != SbPanelMode.VIEW
             && sbCriterionField != null && sbCriterionField.isFocused()) {
             List<String> suggestions = criterionSuggestions();
             if (!suggestions.isEmpty()) {
