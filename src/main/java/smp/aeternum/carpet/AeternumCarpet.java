@@ -63,10 +63,12 @@ import smp.aeternum.carpet.command.CameraModeCommand;
 import smp.aeternum.carpet.command.HatCommand;
 import smp.aeternum.carpet.command.CarefulBreakCommand;
 import smp.aeternum.carpet.command.StatsCommand;
+import smp.aeternum.carpet.command.WaypointsCommand;
 import smp.aeternum.carpet.camera.CameraModeStore;
 import smp.aeternum.carpet.carefulbreak.CarefulBreakStore;
 import smp.aeternum.carpet.stats.PlayerRegistryStore;
 import smp.aeternum.carpet.stats.ScoreboardConfigStore;
+import smp.aeternum.carpet.waypoint.WaypointStore;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import smp.aeternum.carpet.bot.BotInventoryOpener;
 import smp.aeternum.carpet.bot.FakePlayerReloadManager;
@@ -110,6 +112,7 @@ public class AeternumCarpet implements ModInitializer {
 			FakePlayerReloadManager.load(server);
 			PlayerRegistryStore.load(server);
 			ScoreboardConfigStore.load(server);
+			WaypointStore.load(server);
 			CommandAvailabilityRefresher.initialize();
 		});
 		ServerLifecycleEvents.SERVER_STARTED.register(server ->
@@ -192,6 +195,7 @@ public class AeternumCarpet implements ModInitializer {
 			SitBehaviourCommand.register(dispatcher);
 			ViewInventoryCommand.register(dispatcher);
 			StatsCommand.register(dispatcher);
+			WaypointsCommand.register(dispatcher);
 		});
 	}
 

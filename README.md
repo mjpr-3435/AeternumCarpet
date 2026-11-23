@@ -52,6 +52,7 @@ Todas las reglas se configuran con `/carpet <regla> <valor>` o desde `/rules`.
 | `commandActions` | `false` | `true`, `false` | Habilita el editor `/actions` para automatización persistente de comandos del servidor. |
 | `commandGuide` | `false` | `true`, `false` | Habilita `/guide` para la biblioteca de guías Markdown del servidor. |
 | `commandDimension` | `false` | `true`, `false` | Habilita `/nether`, `/overworld` y `/end` en modo Creativo o Espectador. |
+| `commandWaypoints` | `false` | `true`, `false` | Habilita `/waypoints` (`list`, `add`, `del`, `tp`) para waypoints globales usables en cualquier modo de juego. |
 | `commandHat` | `false` | `true`, `false` | Permite equipar el ítem de la mano en la cabeza con `/hat`. |
 | `explorationManager` | `false` | `true`, `false` | Muestra `/exploration`; mientras está activo, no aplica restricciones de generación/exploración. |
 | `allowPlayerExploration` | `true` | `true`, `false` | Si está desactivado, restringe la exploración/generación a las áreas configuradas. |

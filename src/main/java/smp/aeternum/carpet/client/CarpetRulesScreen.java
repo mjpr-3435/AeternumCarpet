@@ -149,6 +149,7 @@ public final class CarpetRulesScreen extends UiScreen {
         Map.entry("commandHat", "Comandos"),
         Map.entry("commandViewInventory", "Comandos"),
         Map.entry("commandStats", "Comandos"),
+        Map.entry("commandWaypoints", "Comandos"),
         Map.entry("phantomSpawning", "Mundo & Mecánicas"),
         Map.entry("spectatorPortalTravel", "Mundo & Mecánicas"),
         Map.entry("openShulkerInHand", "Mundo & Mecánicas"),

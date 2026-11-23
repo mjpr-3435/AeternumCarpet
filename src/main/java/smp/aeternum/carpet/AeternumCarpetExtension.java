@@ -84,7 +84,9 @@ public class AeternumCarpetExtension implements CarpetExtension {
             Map.entry("carpet.rule.commandStats.name", "Command Stats"),
             Map.entry("carpet.rule.commandStats.desc", "Enables /stats and the Quick Dock Stats button for OPs to manage the player/bot registry and statistics."),
             Map.entry("carpet.rule.aeStackableShulkers.name", "AE Stackable Shulkers"),
-            Map.entry("carpet.rule.aeStackableShulkers.desc", "Empty shulker boxes of the same color/components stack up to 64 in inventories and on the ground, while hoppers process them 1 by 1 without stacking.")
+            Map.entry("carpet.rule.aeStackableShulkers.desc", "Empty shulker boxes of the same color/components stack up to 64 in inventories and on the ground, while hoppers process them 1 by 1 without stacking."),
+            Map.entry("carpet.rule.commandWaypoints.name", "Command Waypoints"),
+            Map.entry("carpet.rule.commandWaypoints.desc", "Enables /waypoints (list, add, del, tp) for global server waypoints usable by any player in any gamemode.")
         );
     }
 }

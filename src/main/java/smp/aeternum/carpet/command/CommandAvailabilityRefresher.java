@@ -29,6 +29,7 @@ public final class CommandAvailabilityRefresher {
     private static boolean lastPlayerSitEnabled;
     private static boolean lastViewInventoryEnabled;
     private static boolean lastStatsEnabled;
+    private static boolean lastWaypointsEnabled;
 
     private CommandAvailabilityRefresher() {
     }
@@ -55,6 +56,7 @@ public final class CommandAvailabilityRefresher {
         lastPlayerSitEnabled = AeternumCarpetSettings.playerSit;
         lastViewInventoryEnabled = AeternumCarpetSettings.commandViewInventory;
         lastStatsEnabled = AeternumCarpetSettings.commandStats;
+        lastWaypointsEnabled = AeternumCarpetSettings.commandWaypoints;
     }
 
     public static void tick(MinecraftServer server) {
@@ -79,12 +81,13 @@ public final class CommandAvailabilityRefresher {
         boolean playerSitEnabled = AeternumCarpetSettings.playerSit;
         boolean viewInventoryEnabled = AeternumCarpetSettings.commandViewInventory;
         boolean statsEnabled = AeternumCarpetSettings.commandStats;
+        boolean waypointsEnabled = AeternumCarpetSettings.commandWaypoints;
         if (todoEnabled == lastTodoEnabled
             && explorationManagerEnabled == lastExplorationManagerEnabled
             && explorationGuardEnabled == lastExplorationGuardEnabled
             && quickShulkerEnabled == lastQuickShulkerEnabled
             && quickEnderChestEnabled == lastQuickEnderChestEnabled
-            && perimetersEnabled == lastPerimetersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled && viewInventoryEnabled == lastViewInventoryEnabled && statsEnabled == lastStatsEnabled) {
+            && perimetersEnabled == lastPerimetersEnabled && finderEnabled == lastFinderEnabled && protectEnabled == lastProtectEnabled && actionsEnabled == lastActionsEnabled && joinMotdEnabled == lastJoinMotdEnabled && quickDockEnabled == lastQuickDockEnabled && guideEnabled == lastGuideEnabled && projectsEnabled == lastProjectsEnabled && dimensionEnabled == lastDimensionEnabled && botInventoryEnabled == lastBotInventoryEnabled && Objects.equals(cameraMode, lastCameraMode) && hatEnabled == lastHatEnabled && carefulBreakEnabled == lastCarefulBreakEnabled && playerSitEnabled == lastPlayerSitEnabled && viewInventoryEnabled == lastViewInventoryEnabled && statsEnabled == lastStatsEnabled && waypointsEnabled == lastWaypointsEnabled) {
             return;
         }
 
@@ -110,6 +113,7 @@ public final class CommandAvailabilityRefresher {
         lastPlayerSitEnabled = playerSitEnabled;
         lastViewInventoryEnabled = viewInventoryEnabled;
         lastStatsEnabled = statsEnabled;
+        lastWaypointsEnabled = waypointsEnabled;
         if (statsTurnedOn) {
             PlayerRegistryStore.scanFull(server);
         }
