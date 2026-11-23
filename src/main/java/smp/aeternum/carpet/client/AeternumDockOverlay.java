@@ -423,7 +423,13 @@ public final class AeternumDockOverlay {
                 if (item.separator || item.tooltip == null || item.tooltip.isEmpty()) continue;
                 int bx = l.dimX + item.xOffset;
                 if (mx >= bx && mx < bx + item.width && my >= by && my < by + DIM_TILE_H) {
-                    c.drawTooltip(tr, Text.literal(item.tooltip), mx, my);
+                    int tipW = tr.getWidth(item.tooltip) + 10;
+                    int tipH = 15;
+                    int tipX = Math.max(4, Math.min(width - tipW - 4, bx + item.width / 2 - tipW / 2));
+                    int tipY = Math.max(4, by - tipH - 4);
+                    c.fill(tipX - 1, tipY + 1, tipX + tipW + 1, tipY + tipH + 2, 0x60000000);
+                    AeternumTheme.drawCard(c, tipX, tipY, tipW, tipH, 0xF0101016, item.accent != 0 ? item.accent : AeternumTheme.BORDER_BRIGHT);
+                    c.drawTextWithShadow(tr, item.tooltip, tipX + 5, tipY + 4, AeternumTheme.TEXT_PRIMARY);
                     break;
                 }
             }
