@@ -35,7 +35,14 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.tooltip.TooltipType;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.NbtSizeTracker;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
@@ -45,10 +52,12 @@ import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.scoreboard.ScoreHolder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.stat.Stat;
 import net.minecraft.stat.StatType;
 import net.minecraft.stat.Stats;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
@@ -335,6 +344,7 @@ public final class StatsNetworking {
             case "delete_score_entry" -> handleDeleteScoreEntry(server, player, payload.value());
             case "request_player_detail" -> sendPlayerDetail(server, player, payload.uuid());
             case "open_player_inventory" -> openPlayerInventory(server, player, payload.uuid());
+            case "tp_player_last_pos" -> teleportToLastPosition(server, player, payload.uuid());
             case "set_type" -> {
                 EntryType nextType;
                 try {
@@ -1321,9 +1331,97 @@ public final class StatsNetworking {
         public boolean online;
         public boolean hasPlayerdata;
         public boolean hasStats;
+        public boolean hasLastPos;
+        public String lastDimension = "";
+        public double lastX;
+        public double lastY;
+        public double lastZ;
         public List<PlayerStatSnapshot> stats = new ArrayList<>();
         public List<ItemSlotSnapshot> inventory = new ArrayList<>();
         public List<ItemSlotSnapshot> enderChest = new ArrayList<>();
+    }
+
+    private record LastPositionData(String dimension, double x, double y, double z, float yaw, float pitch) {}
+
+    private static LastPositionData readOfflineLastPosition(MinecraftServer server, String uuidStr) {
+        Path datPath = server.getSavePath(WorldSavePath.PLAYERDATA).resolve(uuidStr + ".dat");
+        if (!Files.isRegularFile(datPath)) return null;
+        try {
+            NbtCompound root = NbtIo.readCompressed(datPath, NbtSizeTracker.ofUnlimitedBytes());
+            NbtList posList = root.getList("Pos").orElse(null);
+            if (posList == null || posList.size() < 3) return null;
+            double x = posList.getDouble(0).orElse(0.0);
+            double y = posList.getDouble(1).orElse(0.0);
+            double z = posList.getDouble(2).orElse(0.0);
+            String dim = root.getString("Dimension").orElse("minecraft:overworld");
+            float yaw = 0f;
+            float pitch = 0f;
+            NbtList rotList = root.getList("Rotation").orElse(null);
+            if (rotList != null && rotList.size() >= 2) {
+                yaw = rotList.getFloat(0).orElse(0f);
+                pitch = rotList.getFloat(1).orElse(0f);
+            }
+            return new LastPositionData(dim, x, y, z, yaw, pitch);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static void teleportToLastPosition(MinecraftServer server, ServerPlayerEntity viewer, String uuidStr) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException ignored) {
+            sendSnapshot(viewer, false, "UUID inválida.", true);
+            return;
+        }
+        Entry entry = PlayerRegistryStore.getEntriesSnapshot().get(uuidStr);
+        String label = (entry != null && entry.name != null && !entry.name.isBlank()) ? entry.name : uuidStr;
+
+        ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+        ServerWorld targetWorld;
+        double x;
+        double y;
+        double z;
+        float yaw;
+        float pitch;
+        String dimLabel;
+
+        if (online != null) {
+            targetWorld = online.getWorld();
+            x = online.getX();
+            y = online.getY();
+            z = online.getZ();
+            yaw = online.getYaw();
+            pitch = online.getPitch();
+            dimLabel = targetWorld.getRegistryKey().getValue().toString();
+            label = online.getName().getString();
+        } else {
+            LastPositionData pos = readOfflineLastPosition(server, uuidStr);
+            if (pos == null) {
+                sendSnapshot(viewer, false, "No existe última posición en playerdata para " + label + ".", true);
+                return;
+            }
+            Identifier dimId = Identifier.tryParse(pos.dimension());
+            targetWorld = dimId != null ? server.getWorld(RegistryKey.of(RegistryKeys.WORLD, dimId)) : null;
+            if (targetWorld == null) {
+                sendSnapshot(viewer, false, "Dimensión no disponible: " + pos.dimension(), true);
+                return;
+            }
+            x = pos.x();
+            y = pos.y();
+            z = pos.z();
+            yaw = pos.yaw();
+            pitch = pos.pitch();
+            dimLabel = pos.dimension();
+        }
+
+        viewer.teleport(targetWorld, x, y, z, Set.<PositionFlag>of(), yaw, pitch, true);
+        viewer.sendMessage(
+            Text.literal(String.format(Locale.ROOT, "[Stats] TP a última posición de %s (%s: %.1f, %.1f, %.1f).", label, dimLabel, x, y, z))
+                .formatted(Formatting.GREEN),
+            false
+        );
     }
 
     private static void openPlayerInventory(MinecraftServer server, ServerPlayerEntity viewer, String uuidStr) {
@@ -1368,6 +1466,11 @@ public final class StatsNetworking {
             if (detail.name.isEmpty()) detail.name = online.getName().getString();
             detail.hasPlayerdata = true;
             detail.hasStats = true;
+            detail.hasLastPos = true;
+            detail.lastDimension = online.getWorld().getRegistryKey().getValue().toString();
+            detail.lastX = online.getX();
+            detail.lastY = online.getY();
+            detail.lastZ = online.getZ();
             collectOnlineStats(online, detail.stats);
             collectInventorySlots(server, viewer, online.getInventory(), 41, detail.inventory);
             collectInventorySlots(server, viewer, online.getEnderChestInventory(), 27, detail.enderChest);
@@ -1383,6 +1486,14 @@ public final class StatsNetworking {
                 if (session != null) {
                     collectInventorySlots(server, viewer, session.inventory, 41, detail.inventory);
                     collectInventorySlots(server, viewer, session.enderChest, 27, detail.enderChest);
+                }
+                LastPositionData lastPos = readOfflineLastPosition(server, uuidStr);
+                if (lastPos != null) {
+                    detail.hasLastPos = true;
+                    detail.lastDimension = lastPos.dimension();
+                    detail.lastX = lastPos.x();
+                    detail.lastY = lastPos.y();
+                    detail.lastZ = lastPos.z();
                 }
             }
         }

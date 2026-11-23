@@ -18,6 +18,7 @@ import net.minecraft.item.Items;
 import net.minecraft.item.SpawnEggItem;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -165,6 +166,8 @@ public final class StatsScreen extends UiScreen {
     private Map<Integer, ItemStack> inspectingInvStacks = new HashMap<>();
     private Map<Integer, ItemStack> inspectingEnderStacks = new HashMap<>();
     private UiTextField playerStatSearchField;
+    private UiButton tpLastPosButton;
+    private long armedTpLastPosUntilMs;
     private String editingScoreOwner;
     private UiTextField inlineScoreField;
     private String armedDeleteScoreOwner;
@@ -411,8 +414,8 @@ public final class StatsScreen extends UiScreen {
                 addDrawableChild(UiButton.secondary(contentX, contentTop + 6, 62, 18, "\u2190 Volver", b -> closePlayerDetail()));
                 addDrawableChild(
                     "STATS".equals(playerDetailSubtab)
-                        ? UiButton.primary(contentX + 68, contentTop + 6, 86, 18, "Estadísticas", b -> {})
-                        : UiButton.secondary(contentX + 68, contentTop + 6, 86, 18, "Estadísticas", b -> {
+                        ? UiButton.primary(contentX + 66, contentTop + 6, 78, 18, "Estadísticas", b -> {})
+                        : UiButton.secondary(contentX + 66, contentTop + 6, 78, 18, "Estadísticas", b -> {
                             playerDetailSubtab = "STATS";
                             playerDetailScroll = targetPlayerDetailScroll = 0;
                             init();
@@ -420,13 +423,19 @@ public final class StatsScreen extends UiScreen {
                 );
                 addDrawableChild(
                     "INVENTORY".equals(playerDetailSubtab)
-                        ? UiButton.primary(contentX + 158, contentTop + 6, 114, 18, "Inventario / Ender", b -> {})
-                        : UiButton.secondary(contentX + 158, contentTop + 6, 114, 18, "Inventario / Ender", b -> {
+                        ? UiButton.primary(contentX + 148, contentTop + 6, 106, 18, "Inventario / Ender", b -> {})
+                        : UiButton.secondary(contentX + 148, contentTop + 6, 106, 18, "Inventario / Ender", b -> {
                             playerDetailSubtab = "INVENTORY";
                             playerDetailScroll = targetPlayerDetailScroll = 0;
                             init();
                         })
                 );
+                boolean tpArmed = System.currentTimeMillis() < armedTpLastPosUntilMs;
+                tpLastPosButton = tpArmed
+                    ? UiButton.danger(contentX + contentW - 210, contentTop + 6, 98, 18, "Confirmar TP", b -> handleTpLastPosClick())
+                    : UiButton.secondary(contentX + contentW - 210, contentTop + 6, 98, 18, "TP última pos.", b -> handleTpLastPosClick());
+                tpLastPosButton.active = inspectingPlayerDetail != null && inspectingPlayerDetail.hasLastPos;
+                addDrawableChild(tpLastPosButton);
                 addDrawableChild(UiButton.primary(contentX + contentW - 108, contentTop + 6, 108, 18, "Abrir editor inv.", b -> {
                     statusMessage = "Abriendo editor de inventario…";
                     statusError = false;
@@ -976,6 +985,19 @@ public final class StatsScreen extends UiScreen {
 
         if (inspectingPlayerUuid != null) {
             renderPlayerDetail(c, mx, my, delta);
+            if (tpLastPosButton != null && tpLastPosButton.isHovered() && inspectingPlayerDetail != null && inspectingPlayerDetail.hasLastPos) {
+                List<Text> tip = new ArrayList<>();
+                tip.add(Text.literal("Última posición registrada").formatted(Formatting.AQUA));
+                tip.add(Text.literal(String.format(Locale.ROOT, "%s · %.1f, %.1f, %.1f",
+                    inspectingPlayerDetail.lastDimension,
+                    inspectingPlayerDetail.lastX,
+                    inspectingPlayerDetail.lastY,
+                    inspectingPlayerDetail.lastZ)).formatted(Formatting.GRAY));
+                if (client != null && client.player != null && !client.player.isCreative() && !client.player.isSpectator()) {
+                    tip.add(Text.literal("Estás en Survival: pedirá confirmación.").formatted(Formatting.YELLOW));
+                }
+                c.drawTooltip(textRenderer, tip, mx, my);
+            }
             return;
         }
 
@@ -2982,8 +3004,29 @@ public final class StatsScreen extends UiScreen {
                     }
                 }
             }
+            if (tpLastPosButton != null) {
+                tpLastPosButton.active = snap != null && snap.hasLastPos;
+            }
         } catch (Exception ignored) {
         }
+    }
+
+    private void handleTpLastPosClick() {
+        if (inspectingPlayerUuid == null || inspectingPlayerDetail == null || !inspectingPlayerDetail.hasLastPos) {
+            return;
+        }
+        boolean inSurvival = client != null && client.player != null
+            && !client.player.isCreative() && !client.player.isSpectator();
+        if (inSurvival && System.currentTimeMillis() > armedTpLastPosUntilMs) {
+            armedTpLastPosUntilMs = System.currentTimeMillis() + 5000L;
+            statusMessage = "Estás en Survival: clic de nuevo en 'Confirmar TP' para teletransportarte.";
+            statusError = true;
+            init();
+            return;
+        }
+        armedTpLastPosUntilMs = 0L;
+        ClientPlayNetworking.send(new StatsRegistryActionPayload("tp_player_last_pos", inspectingPlayerUuid, ""));
+        close();
     }
 
     private static ItemStack buildClientStack(ItemSlotSnapshot s) {
@@ -3002,6 +3045,7 @@ public final class StatsScreen extends UiScreen {
         if (item == null || item.uuid == null) return;
         inspectingPlayerUuid = item.uuid;
         inspectingPlayerDetail = null;
+        armedTpLastPosUntilMs = 0L;
         inspectingInvStacks.clear();
         inspectingEnderStacks.clear();
         playerDetailSubtab = "STATS";
@@ -3013,6 +3057,8 @@ public final class StatsScreen extends UiScreen {
     private void closePlayerDetail() {
         inspectingPlayerUuid = null;
         inspectingPlayerDetail = null;
+        armedTpLastPosUntilMs = 0L;
+        tpLastPosButton = null;
         inspectingInvStacks.clear();
         inspectingEnderStacks.clear();
         playerDetailScroll = targetPlayerDetailScroll = 0;
