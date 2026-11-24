@@ -14,8 +14,7 @@ public record ProjectUploadPayload(
 	int y,
 	int z,
 	String rotation,
-	String mirror,
-	String subregionsJson
+	String mirror
 ) implements CustomPayload {
 	public static final Id<ProjectUploadPayload> ID = new Id<>(AeternumCarpet.id("project_upload"));
 	public static final PacketCodec<RegistryByteBuf, ProjectUploadPayload> CODEC = PacketCodec.of(
@@ -29,7 +28,6 @@ public record ProjectUploadPayload(
 			b.writeInt(p.z);
 			b.writeString(p.rotation, 32);
 			b.writeString(p.mirror, 32);
-			b.writeString(p.subregionsJson != null ? p.subregionsJson : "[]", 262144);
 		},
 		b -> new ProjectUploadPayload(
 			b.readString(64),
@@ -40,8 +38,7 @@ public record ProjectUploadPayload(
 			b.readInt(),
 			b.readInt(),
 			b.readString(32),
-			b.readString(32),
-			b.readString(262144)
+			b.readString(32)
 		)
 	);
 

@@ -119,6 +119,16 @@ public final class StatsNetworking {
         if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2)) {
             return;
         }
+        if (!ProtocolHandshake.hasVersion(player, 2)) {
+            if (openScreen) {
+                player.sendMessage(
+                    Text.literal("[Stats] Necesitas actualizar AeternumCarpet a 2.1.0 para abrir la interfaz de /stats (está en el canal de " + ProtocolHandshake.UPDATE_LOCATION + ").")
+                        .formatted(Formatting.YELLOW),
+                    false
+                );
+            }
+            return;
+        }
         if (openScreen) {
             ACTIVE_VIEWERS.add(player.getUuid());
             MinecraftServer server = player.getServer();
@@ -294,7 +304,7 @@ public final class StatsNetworking {
     }
 
     private static void handleAction(MinecraftServer server, ServerPlayerEntity player, StatsRegistryActionPayload payload) {
-        if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2)) {
+        if (!AeternumCarpetSettings.commandStats || !player.hasPermissionLevel(2) || !ProtocolHandshake.hasVersion(player, 2)) {
             return;
         }
         ACTIVE_VIEWERS.add(player.getUuid());

@@ -661,7 +661,8 @@ public final class PlayerRegistryStore {
     }
 
     private static String resolveKnownName(MinecraftServer server, UUID uuid) {
-        ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
+        var pm = server != null ? server.getPlayerManager() : null;
+        ServerPlayerEntity online = pm != null ? pm.getPlayer(uuid) : null;
         if (online != null) {
             return online.getName().getString();
         }

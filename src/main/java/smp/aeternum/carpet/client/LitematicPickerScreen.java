@@ -12,7 +12,7 @@ import smp.aeternum.carpet.client.ui.AeternumTheme;
 import smp.aeternum.carpet.client.ui.UiButton;
 import smp.aeternum.carpet.client.ui.UiScreen;
 import smp.aeternum.carpet.client.ui.UiTextField;
-import smp.aeternum.carpet.network.ProjectUploadPayload;
+import smp.aeternum.carpet.network.ProjectUploadV2Payload;
 
 public final class LitematicPickerScreen extends UiScreen {
     private static final int CARD_H = 40;
@@ -91,7 +91,7 @@ public final class LitematicPickerScreen extends UiScreen {
                 return;
             }
             byte[] bytes = Files.readAllBytes(selected.schematicFile());
-            ClientPlayNetworking.send(new ProjectUploadPayload(
+            ClientPlayNetworking.send(new ProjectUploadV2Payload(
                 projectName,
                 bytes,
                 true,

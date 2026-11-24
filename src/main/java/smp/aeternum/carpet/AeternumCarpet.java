@@ -52,6 +52,7 @@ import smp.aeternum.carpet.network.ExplorationMapNetworking;
 import smp.aeternum.carpet.network.MaterialsNetworking;
 import smp.aeternum.carpet.network.ScreenOpenNetworking;
 import smp.aeternum.carpet.network.CarpetRulesNetworking;
+import smp.aeternum.carpet.network.ProtocolHandshake;
 import smp.aeternum.carpet.network.StatsNetworking;
 import smp.aeternum.carpet.command.GuideCommand;
 import smp.aeternum.carpet.command.MaterialsCommand;
@@ -91,6 +92,7 @@ public class AeternumCarpet implements ModInitializer {
 		ScreenOpenNetworking.registerPayloads();
 		CarpetRulesNetworking.registerPayloads();
 		StatsNetworking.registerPayloads();
+		ProtocolHandshake.registerPayloads();
 		CarpetServer.manageExtension(new AeternumCarpetExtension());
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			AeternumCarpetConfig.load();
@@ -122,6 +124,7 @@ public class AeternumCarpet implements ModInitializer {
 			FakePlayerReloadManager.onServerStopping(server);
 			PlayerSitManager.onServerStopping();
 			MaterialsStore.onServerStopping();
+			ProtocolHandshake.onServerStopping();
 		});
 		ServerTickEvents.END_SERVER_TICK.register(PlayerExplorationGuard::tick);
 		ServerTickEvents.END_SERVER_TICK.register(ExplorationPregenerator::tick);
@@ -147,6 +150,7 @@ public class AeternumCarpet implements ModInitializer {
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			PlayerSitManager.onPlayerDisconnect(handler.player);
+			ProtocolHandshake.onPlayerDisconnect(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.onFakePlayerDisconnect(server);
 		});
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {

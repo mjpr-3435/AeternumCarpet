@@ -26,6 +26,7 @@ public final class MaterialsNetworking {
 		PayloadTypeRegistry.playC2S().register(MaterialsDeletePayload.ID, MaterialsDeletePayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(MaterialsScanPayload.ID, MaterialsScanPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(ProjectUploadPayload.ID, ProjectUploadPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(ProjectUploadV2Payload.ID, ProjectUploadV2Payload.CODEC);
 		PayloadTypeRegistry.playC2S().register(ProjectSubregionActionPayload.ID, ProjectSubregionActionPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(ProjectPlacementPayload.ID, ProjectPlacementPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(ProjectDownloadRequestPayload.ID, ProjectDownloadRequestPayload.CODEC);
@@ -50,6 +51,16 @@ public final class MaterialsNetworking {
 		}));
 
 		ServerPlayNetworking.registerGlobalReceiver(ProjectUploadPayload.ID, (p, c) -> c.server().execute(() -> {
+			ServerPlayerEntity player = c.player();
+			player.closeHandledScreen();
+			player.sendMessage(
+				Text.literal("[Proyectos] Necesitas actualizar AeternumCarpet a 2.1.0 para subir proyectos (disponible en " + ProtocolHandshake.UPDATE_LOCATION + ").")
+					.formatted(Formatting.YELLOW),
+				false
+			);
+		}));
+
+		ServerPlayNetworking.registerGlobalReceiver(ProjectUploadV2Payload.ID, (p, c) -> c.server().execute(() -> {
 			ServerPlayerEntity player = c.player();
 			if (!player.hasPermissionLevel(2)) {
 				player.sendMessage(Text.literal("[Proyectos] Solo administradores pueden subir proyectos.").formatted(Formatting.RED), false);
@@ -87,6 +98,15 @@ public final class MaterialsNetworking {
 
 		ServerPlayNetworking.registerGlobalReceiver(ProjectDownloadRequestPayload.ID, (p, c) -> c.server().execute(() -> {
 			ServerPlayerEntity player = c.player();
+			if (!ProtocolHandshake.hasVersion(player, 2)) {
+				player.closeHandledScreen();
+				player.sendMessage(
+					Text.literal("[Proyectos] Necesitas actualizar AeternumCarpet a 2.1.0 para descargar/cargar proyectos en Litematica (está en el canal de " + ProtocolHandshake.UPDATE_LOCATION + ").")
+						.formatted(Formatting.YELLOW),
+					false
+				);
+				return;
+			}
 			MaterialList project = MaterialsStore.get(p.projectName());
 			byte[] bytes = MaterialsStore.readSchematicBytes(p.projectName());
 			if (project == null || bytes == null) {

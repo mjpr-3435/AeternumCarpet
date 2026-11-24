@@ -23,6 +23,7 @@ import smp.aeternum.carpet.network.ScoreboardDetailPayload;
 import smp.aeternum.carpet.network.StatsDataPayload;
 import smp.aeternum.carpet.network.DockStatePayload;
 import smp.aeternum.carpet.network.BotOpenPayload;
+import smp.aeternum.carpet.network.ClientHelloPayload;
 import smp.aeternum.carpet.bot.BotOpenData;
 
 public final class AeternumCarpetClient implements ClientModInitializer {
@@ -53,7 +54,12 @@ public final class AeternumCarpetClient implements ClientModInitializer {
         PerimeterGuide.register();
         ScreenKeybinds.register();
         // Guides and list selections belong to this connection only, never to the next /server target.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> clearClientSession(client, false));
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            clearClientSession(client, false);
+            if (ClientPlayNetworking.canSend(ClientHelloPayload.ID)) {
+                ClientPlayNetworking.send(new ClientHelloPayload(ClientHelloPayload.CURRENT_PROTOCOL_VERSION));
+            }
+        });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> clearClientSession(client, false));
         ClientWorldEvents.AFTER_CLIENT_WORLD_CHANGE.register((client, world) -> clearClientSession(client, true));
         final Gson perimeterGson = new Gson();
