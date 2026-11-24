@@ -142,7 +142,8 @@ public final class MaterialsScreen extends UiScreen {
 				int badgeX = cardX + 16 + textRenderer.getWidth(title);
 				if (list.hasSchematic) {
 					int subCount = list.subregions != null ? list.subregions.size() : 0;
-					AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, subCount + " sec", 0xFF202028, AeternumTheme.TEXT_PRIMARY);
+					String secLabel = subCount == 1 ? "1 sección" : subCount + " secciones";
+					AeternumTheme.drawBadge(c, textRenderer, badgeX, cardY + 5, secLabel, 0xFF202028, AeternumTheme.TEXT_PRIMARY);
 				}
 
 				if (list.hasSchematic && list.totalBlocks > 0) {
