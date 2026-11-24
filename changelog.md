@@ -20,11 +20,12 @@
   - Endpoints JSON por RCON (`/stats api list|get|stat`) para consultar y paginar scoreboards desde Discord (`aeternumbot`).
 
 ### Nuevas Reglas y Comandos
-- **`aeStackableShulkers`**: las Shulker Boxes vacías del mismo color/componentes se apilan hasta `64` en inventarios y en el suelo, mientras los hoppers las mueven de `1` en `1` sin apilarlas ni romper sistemas de redstone.
+- **`aeStackableShulkers`**: las Shulker Boxes vacías del mismo color/componentes se apilan hasta `64` en inventarios y en el suelo, los hoppers las mueven de `1` en `1` sin apilarlas, y los comparadores mantienen la señal vanilla de ítem no apilable (`1`) cuando ningún slot del contenedor tiene shulkers apiladas (`count > 1`).
 - **`commandWaypoints`**: comando `/waypoints` (`list`, `add`, `del`, `tp`) para waypoints globales entre dimensiones con `[TP]`/`[X]` clickeables en chat, usable en cualquier modo de juego.
 
 ### Proyectos, Finder y Utilidades
 - **Proyectos / Litematica (`LitematicaBridge`)**: sincronización completa de colocación al compartir proyectos, incluyendo rotación/mirror raíz y estado de subregiones (`enabled`, `renderingEnabled`, posición relativa, rotación y mirror por subregión).
+- **Compatibilidad y Handshake `v2` (`ProtocolHandshake`)**: si un cliente `2.0.0` intenta descargar/cargar/subir un proyecto o abrir la UI de `/stats`, el servidor cierra la pantalla y le avisa en chat para evitar errores de red (`DecoderException`), documentado en `COMPATIBILIDAD_2.0_2.1.md`.
 - **Finder (`commandFinder`)**: autocompletado en `/find` y `/count` con IDs técnicos, nombres en inglés con espacios y nombres en español (`FinderItemNames`).
 - **`/cs` (`cameraMode`)**: eliminados los mensajes de feedback en chat al activar/desactivar cámara.
 - **`BotInventoryScreen`**: añadido botón de **Kick** para desconectar bots/jugadores desde la interfaz y mejoras de seguridad de sincronización.

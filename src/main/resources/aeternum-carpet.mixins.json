@@ -26,7 +26,8 @@
 		"PlayerManagerMixin",
 		"StatHandlerMixin",
 		"BlockItemMixin",
-		"ItemStackMixin"
+		"ItemStackMixin",
+		"ScreenHandlerMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",
