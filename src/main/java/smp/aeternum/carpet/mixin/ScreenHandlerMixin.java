@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.shulker.ShulkerStackHelper;
 
-@Mixin(ScreenHandler.class)
+@Mixin(value = ScreenHandler.class, priority = 500)
 public class ScreenHandlerMixin {
     @Inject(method = "calculateComparatorOutput(Lnet/minecraft/inventory/Inventory;)I", at = @At("HEAD"), cancellable = true)
     private static void aeternum$shulkerComparatorOutput(Inventory inventory, CallbackInfoReturnable<Integer> cir) {

@@ -1,6 +1,7 @@
 {
 	"required": true,
 	"package": "smp.aeternum.carpet.mixin",
+	"plugin": "smp.aeternum.carpet.mixin.AeternumMixinPlugin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"PhantomSpawnerMixin",
@@ -26,7 +27,8 @@
 		"PlayerManagerMixin",
 		"StatHandlerMixin",
 		"BlockItemMixin",
-		"ScreenHandlerMixin"
+		"ScreenHandlerMixin",
+		"LithiumHopperHelperMixin"
 	],
 	"client": [
 		"client.ClientPlayNetworkHandlerMixin",
