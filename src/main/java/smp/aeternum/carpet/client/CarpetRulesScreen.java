@@ -153,7 +153,7 @@ public final class CarpetRulesScreen extends UiScreen {
         Map.entry("phantomSpawning", "Mundo & Mecánicas"),
         Map.entry("spectatorPortalTravel", "Mundo & Mecánicas"),
         Map.entry("openShulkerInHand", "Mundo & Mecánicas"),
-        Map.entry("aeStackableShulkers", "Mundo & Mecánicas"),
+        Map.entry("aeStackableShulkersFixes", "Mundo & Mecánicas"),
         Map.entry("openEnderChestInHand", "Mundo & Mecánicas"),
         Map.entry("protectedPots", "Mundo & Mecánicas"),
         Map.entry("endermanGriefing", "Mundo & Mecánicas"),

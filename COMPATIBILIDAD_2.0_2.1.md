@@ -22,9 +22,9 @@ Gracias a `ProtocolHandshake` (`ClientHelloPayload`) y `project_upload_v2`, los 
 
 ---
 
-## 3. Desync de inventario si se activa `aeStackableShulkers`
-- Si `aeStackableShulkers = true` en el servidor, este apila shulkers vacías hasta `64` (y mantiene señal de comparador no-apilable cuando ningún slot tiene `count > 1`).
-- Un cliente `2.0.0` (o vanilla) sigue creyendo que el máximo es `1`, por lo que **no crashea**, pero sufrirá **desync visual/de inventario** al mover, dividir o juntar shulkers vacías hasta que actualice a `2.1.0`.
+## 3. Shulkers apilables (`stackableShulkerBoxes` + `aeStackableShulkersFixes`)
+- El apilado de shulkers vacías depende de la regla nativa `stackableShulkerBoxes` de Carpet Core (que Carpet sincroniza a clientes `2.0.0`, `2.1.0` y `fabric-carpet`), mientras que `aeStackableShulkersFixes` actúa en el servidor como regla independiente de fixes (hoppers `1` en `1` y comparadores sin romper unloaders).
+- Por ello, cualquier jugador con **`2.0.0` o `fabric-carpet`** puede apilar y mover shulkers sin desync. *(Solo un cliente **vanilla puro** sin Carpet sufriría desync visual si `stackableShulkerBoxes` está activo).*
 
 ---
 
@@ -43,5 +43,5 @@ Gracias a `ProtocolHandshake` (`ClientHelloPayload`) y `project_upload_v2`, los 
 ---
 
 ## Conclusión rápida
-- Si **no** está activa `aeStackableShulkers` ni necesitan descargar/cargar/subir `.litematic` en `/projects`, pueden seguir en `2.0.0` sin riesgo de crash ni desconexión.
-- En cuanto quieran **cargar/descargar/subir proyectos en `/projects`**, usar la **UI de `/stats`** (OPs) o se active **`aeStackableShulkers = true`**, **sí necesitan actualizar a `2.1.0`**.
+- Si no necesitan descargar/cargar/subir `.litematic` en `/projects` ni la UI de `/stats` (OPs), pueden seguir en `2.0.0` sin riesgo de crash, desconexión ni desync de shulkers.
+- En cuanto quieran **cargar/descargar/subir proyectos en `/projects`** o usar la **UI de `/stats`** (OPs), **sí necesitan actualizar a `2.1.0`**.

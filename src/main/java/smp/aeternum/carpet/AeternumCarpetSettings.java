@@ -107,7 +107,7 @@ public class AeternumCarpetSettings {
     public static boolean commandStats = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.FEATURE})
-    public static boolean aeStackableShulkers = false;
+    public static boolean aeStackableShulkersFixes = false;
 
     @Rule(categories = {"AETERNUM", RuleCategory.COMMAND})
     public static boolean commandWaypoints = false;

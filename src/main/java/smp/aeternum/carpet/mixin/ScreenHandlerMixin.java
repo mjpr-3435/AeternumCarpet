@@ -15,7 +15,7 @@ import smp.aeternum.carpet.shulker.ShulkerStackHelper;
 public class ScreenHandlerMixin {
     @Inject(method = "calculateComparatorOutput(Lnet/minecraft/inventory/Inventory;)I", at = @At("HEAD"), cancellable = true)
     private static void aeternum$shulkerComparatorOutput(Inventory inventory, CallbackInfoReturnable<Integer> cir) {
-        if (!AeternumCarpetSettings.aeStackableShulkers || inventory == null) {
+        if (!AeternumCarpetSettings.aeStackableShulkersFixes || inventory == null) {
             return;
         }
 

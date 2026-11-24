@@ -26,7 +26,6 @@
 		"PlayerManagerMixin",
 		"StatHandlerMixin",
 		"BlockItemMixin",
-		"ItemStackMixin",
 		"ScreenHandlerMixin"
 	],
 	"client": [

@@ -20,7 +20,7 @@
   - Endpoints JSON por RCON (`/stats api list|get|stat`) para consultar y paginar scoreboards desde Discord (`aeternumbot`).
 
 ### Nuevas Reglas y Comandos
-- **`aeStackableShulkers`**: las Shulker Boxes vacías del mismo color/componentes se apilan hasta `64` en inventarios y en el suelo, los hoppers las mueven de `1` en `1` sin apilarlas, y los comparadores mantienen la señal vanilla de ítem no apilable (`1`) cuando ningún slot del contenedor tiene shulkers apiladas (`count > 1`).
+- **`aeStackableShulkersFixes`**: fixes complementarios para `stackableShulkerBoxes` de Carpet Core: los hoppers mueven shulkers de `1` en `1` sin apilarlas, y los comparadores mantienen la señal vanilla de ítem no apilable (`1`) cuando ningún slot del contenedor tiene shulkers apiladas (`count > 1`).
 - **`commandWaypoints`**: comando `/waypoints` (`list`, `add`, `del`, `tp`) para waypoints globales entre dimensiones con `[TP]`/`[X]` clickeables en chat, usable en cualquier modo de juego.
 
 ### Proyectos, Finder y Utilidades

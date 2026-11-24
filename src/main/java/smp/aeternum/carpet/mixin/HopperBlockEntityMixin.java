@@ -27,14 +27,14 @@ public class HopperBlockEntityMixin {
 
     @Inject(method = "canMergeItems", at = @At("HEAD"), cancellable = true)
     private static void aeternum$neverStackShulkersInHopper(ItemStack first, ItemStack second, CallbackInfoReturnable<Boolean> cir) {
-        if (AeternumCarpetSettings.aeStackableShulkers && ShulkerStackHelper.isShulkerBox(first)) {
+        if (AeternumCarpetSettings.aeStackableShulkersFixes && ShulkerStackHelper.isShulkerBox(first)) {
             cir.setReturnValue(false);
         }
     }
 
     @Inject(method = "extract(Lnet/minecraft/inventory/Inventory;Lnet/minecraft/entity/ItemEntity;)Z", at = @At("HEAD"), cancellable = true)
     private static void aeternum$extractSingleShulkerFromGround(Inventory to, ItemEntity itemEntity, CallbackInfoReturnable<Boolean> cir) {
-        if (!AeternumCarpetSettings.aeStackableShulkers || itemEntity == null) return;
+        if (!AeternumCarpetSettings.aeStackableShulkersFixes || itemEntity == null) return;
         ItemStack stack = itemEntity.getStack();
         if (stack.getCount() <= 1 || !ShulkerStackHelper.isShulkerBox(stack)) return;
 
