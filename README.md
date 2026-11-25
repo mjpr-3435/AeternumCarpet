@@ -9,6 +9,9 @@
 
 Extensión de **Fabric Carpet** para **Minecraft 1.21.6** orientada a servidores técnicos, supervivencia avanzada y administración SMP.
 
+> [!NOTE]
+> **Ecosistema Aeternum:** Varias funciones de servidor (como `/stats api` por RCON y la vigilancia de World Eater en `/perimeter`) se integran directamente con **AeternumBot** para mostrar rankings y enviar alertas en Discord.
+
 ---
 
 ## Features y Comandos Principales
@@ -117,6 +120,29 @@ Extensión de **Fabric Carpet** para **Minecraft 1.21.6** orientada a servidores
     </td>
   </tr>
 </table>
+
+---
+
+## Guías de Uso
+
+Documentación detallada de cada interfaz, comandos, permisos y opciones configurables:
+
+### Interfaces
+- [Dock Rápido, Banner MOTD y Notas To-Do](docs/guides/01_dock_motd_todo.md) (`quickDock`, `joinMotd`, `todoList`)
+- [Stats Admin (`/stats`)](docs/guides/02_stats_admin.md) (`commandStats`)
+- [Perímetros y World Eater (`/perimeter`)](docs/guides/03_perimeters.md) (`commandPerimeters`)
+- [Proyectos y Materiales (`/projects`)](docs/guides/04_projects_materials.md) (`commandProjects`)
+- [Mapa de Exploración (`/exploration`)](docs/guides/05_exploration_map.md) (`explorationManager`, `allowPlayerExploration`)
+- [Paquetes de Acciones (`/actions`)](docs/guides/06_actions_packs.md) (`commandActions`)
+- [Reglas de Carpet (`/rules`)](docs/guides/07_carpet_rules.md)
+- [Guías del Servidor (`/guide`)](docs/guides/08_guide_reader.md) (`commandGuide`)
+- [Inventario de Bots e Inspección (`/viewinv` y `editBotInventory`)](docs/guides/09_bot_inventory_viewinv.md) (`commandViewInventory`, `editBotInventory`)
+
+### Comandos y Mecánicas Técnicas
+- [Finder (`/find`, `/count`, `/finder`)](docs/guides/10_finder.md) (`commandFinder`)
+- [Protección de Bloques (`/protect`)](docs/guides/11_protect.md) (`commandProtect`)
+- [Utilidades de Supervivencia (`/waypoints`, `/cs`, `/carefulbreak`, `/hat`, `/sitbehaviour`)](docs/guides/12_survival_utilities.md)
+- [Bots Persistentes y Mecánicas Técnicas](docs/guides/13_bots_and_mechanics.md)
 
 ---
 
