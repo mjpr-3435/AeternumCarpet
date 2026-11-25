@@ -35,6 +35,91 @@ Extensión de **Fabric Carpet** para **Minecraft 1.21.6** orientada a servidores
 
 ---
 
+## Showcase de Interfaces
+
+<p align="center">
+  <img src="docs/images/13_dock_and_motd.png" alt="Dock Rápido, MOTD y Notas" width="100%" />
+  <br />
+  <sub><b>Dock Rápido (<code>ALT</code>), Banner MOTD y Notas</b> — Acceso directo sobre la hotbar, tareas del servidor y notas personales.</sub>
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/01_stats_registry.png" alt="Stats Admin - Registro" />
+      <br />
+      <sub><b><code>/stats</code> · Registro</b> — Clasificación <code>HUMAN</code> / <code>BOT</code> / <code>UNKNOWN</code>, resúmenes y anomalías.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/02_stats_scoreboards.png" alt="Stats Admin - Scoreboards" />
+      <br />
+      <sub><b><code>/stats</code> · Scoreboards</b> — Rankings en vivo, filtros por tipo y trackers custom.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/03_perimeters.png" alt="Perímetros" />
+      <br />
+      <sub><b><code>/perimeter</code> · Perímetros</b> — Paleta de bloques, escaneo por chunks y vigilancia World Eater.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/08_exploration_map.png" alt="Mapa de Exploración" />
+      <br />
+      <sub><b><code>/exploration</code> · Mapa</b> — Vista 1px/bloque por dimensión, grillas y áreas permitidas.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/04_projects.png" alt="Proyectos" />
+      <br />
+      <sub><b><code>/projects</code> · Proyectos</b> — Esquemáticos <code>.litematic</code> con progreso de materiales y obra.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/05_materials_detail.png" alt="Detalle de Materiales" />
+      <br />
+      <sub><b><code>/projects</code> · Materiales</b> — Conteo en <code>SB</code>, faltantes, progreso por ítem y claims.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/06_subregions_detail.png" alt="Subregiones de Proyecto" />
+      <br />
+      <sub><b><code>/projects</code> · Subregiones</b> — Control individual de secciones y asignación de trabajo.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/07_carpet_rules.png" alt="Reglas de Carpet" />
+      <br />
+      <sub><b><code>/rules</code> · Reglas</b> — Gestor visual por categoría compatible con <code>carpet.conf</code>.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/09_actions_packs.png" alt="Paquetes de Acciones" />
+      <br />
+      <sub><b><code>/actions</code> · Paquetes</b> — Catálogo de automatizaciones con ejecución en un clic.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/10_actions_editor.png" alt="Editor de Paquetes de Acciones" />
+      <br />
+      <sub><b><code>/actions</code> · Editor</b> — Secuencias de comandos (<code>CMD</code>) y esperas (<code>ESPERA</code>).</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/11_guide_reader.png" alt="Guías del Servidor" />
+      <br />
+      <sub><b><code>/guide</code> · Guías</b> — Documentación interna del servidor con soporte ES/EN.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/12_bot_inventory.png" alt="Inventario de Bots" />
+      <br />
+      <sub><b><code>/viewinv</code> · Bots</b> — Edición en vivo de inventario, armadura, modo y Ender Chest.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Carpet Rules (`AETERNUM`)
 
 Todas las reglas se configuran con `/carpet <regla> <valor>` o desde `/rules`.
