@@ -29,6 +29,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.stat.Stat;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import smp.aeternum.carpet.AeternumCarpet;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.network.StatsNetworking;
 import smp.aeternum.carpet.stats.PlayerRegistryStore;
@@ -145,61 +146,76 @@ public final class StatsCommand {
     }
 
     private static int executeQuickScoreboard(ServerCommandSource source, String cat, String rawStat) {
-        String statPath = rawStat == null ? "" : rawStat.trim().toLowerCase(Locale.ROOT);
-        if (statPath.startsWith("minecraft:")) {
-            statPath = statPath.substring("minecraft:".length());
-        }
-        if (statPath.isEmpty() || statPath.contains(" ")) {
-            source.sendError(Text.literal("Stat inválida."));
-            return 0;
-        }
-        String criterionRaw = "minecraft." + cat + ":minecraft." + statPath;
-        ScoreboardCriterion criterion = ScoreboardCriterion.getOrCreateStatCriterion(criterionRaw).orElse(null);
-        if (criterion == null) {
-            source.sendError(Text.literal("Stat inválida: " + criterionRaw));
-            return 0;
-        }
-
-        MinecraftServer server = source.getServer();
-        Scoreboard sb = server.getScoreboard();
-        String objName = "ae-" + cat + "." + statPath;
-        ScoreboardObjective existing = null;
-        for (ScoreboardObjective obj : sb.getObjectives()) {
-            if (obj.getName().equals(objName)) {
-                existing = obj;
-                break;
+        try {
+            String statPath = rawStat == null ? "" : rawStat.trim().toLowerCase(Locale.ROOT);
+            if (statPath.startsWith("minecraft:")) {
+                statPath = statPath.substring("minecraft:".length());
             }
+            if (statPath.isEmpty() || statPath.contains(" ")) {
+                source.sendError(Text.literal("Stat inválida."));
+                return 0;
+            }
+            String criterionRaw = "minecraft." + cat + ":minecraft." + statPath;
+            ScoreboardCriterion criterion = ScoreboardCriterion.getOrCreateStatCriterion(criterionRaw).orElse(null);
+            if (criterion == null) {
+                source.sendError(Text.literal("Stat inválida: " + criterionRaw));
+                return 0;
+            }
+
+            MinecraftServer server = source.getServer();
+            Scoreboard sb = server.getScoreboard();
+            String objName = "ae-" + cat + "." + statPath;
+            ScoreboardObjective existing = null;
+            for (ScoreboardObjective obj : sb.getObjectives()) {
+                if (obj.getName().equals(objName)) {
+                    existing = obj;
+                    break;
+                }
+            }
+
+            String displayTitle = formatStatTitle(cat, statPath);
+            boolean createdNew = false;
+            ScoreboardObjective target = existing;
+            if (target == null) {
+                target = sb.addObjective(
+                    objName,
+                    criterion,
+                    Text.literal(displayTitle),
+                    criterion.getDefaultRenderType(),
+                    false,
+                    null
+                );
+                ObjectiveConfig cfg = new ObjectiveConfig();
+                cfg.totalEnabled = false;
+                cfg.totalHumans = true;
+                cfg.totalBots = false;
+                cfg.totalUnknown = false;
+                cfg.displayNameMarkup = displayTitle;
+                ScoreboardConfigStore.put(objName, cfg);
+                createdNew = true;
+            }
+
+            StatsNetworking.syncAeObjective(server, sb, target, criterionRaw);
+
+            sb.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, target);
+            String msg = (createdNew ? "Creada y mostrando en sidebar: " : "Mostrando en sidebar: ")
+                + displayTitle + " (" + objName + ")";
+            source.sendFeedback(() -> Text.literal(msg), false);
+            return 1;
+        } catch (Throwable t) {
+            AeternumCarpet.LOGGER.error("Error in /stats scoreboard {} {}", cat, rawStat, t);
+            StackTraceElement[] stack = t.getStackTrace();
+            StackTraceElement site = stack.length > 0 ? stack[0] : null;
+            for (StackTraceElement el : stack) {
+                if (el.getClassName().startsWith("smp.aeternum.carpet.")) {
+                    site = el;
+                    break;
+                }
+            }
+            String where = site != null ? (site.getClassName() + ":" + site.getLineNumber()) : "unknown";
+            source.sendError(Text.literal("Error en /stats scoreboard: " + t.getClass().getSimpleName() + " en " + where));
+            return 0;
         }
-
-        String displayTitle = formatStatTitle(cat, statPath);
-        boolean createdNew = false;
-        ScoreboardObjective target = existing;
-        if (target == null) {
-            target = sb.addObjective(
-                objName,
-                criterion,
-                Text.literal(displayTitle),
-                criterion.getDefaultRenderType(),
-                false,
-                null
-            );
-            ObjectiveConfig cfg = new ObjectiveConfig();
-            cfg.totalEnabled = false;
-            cfg.totalHumans = true;
-            cfg.totalBots = false;
-            cfg.totalUnknown = false;
-            cfg.displayNameMarkup = displayTitle;
-            ScoreboardConfigStore.put(objName, cfg);
-            createdNew = true;
-        }
-
-        StatsNetworking.syncAeObjective(server, sb, target, criterionRaw);
-
-        sb.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, target);
-        String msg = (createdNew ? "Creada y mostrando en sidebar: " : "Mostrando en sidebar: ")
-            + displayTitle + " (" + objName + ")";
-        source.sendFeedback(() -> Text.literal(msg), false);
-        return 1;
     }
 
     private static String formatStatTitle(String cat, String statPath) {

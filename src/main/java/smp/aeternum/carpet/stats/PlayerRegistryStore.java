@@ -528,7 +528,39 @@ public final class PlayerRegistryStore {
         return count;
     }
 
-    private static boolean deleteUnexpectedTarget(MinecraftServer server, String relativePath) {
+    public enum PromoteUnexpectedStatus {
+        PROMOTED,
+        OFFICIAL_EXISTS,
+        ONLINE,
+        CORRUPT_OR_EMPTY,
+        INVALID,
+        IO_ERROR
+    }
+
+    public static String extractUuidPrefix(String relativePath) {
+        if (relativePath == null) {
+            return "";
+        }
+        int slash = relativePath.indexOf('/');
+        String fileName = slash >= 0 ? relativePath.substring(slash + 1) : relativePath;
+        if (fileName.endsWith("/")) {
+            fileName = fileName.substring(0, fileName.length() - 1);
+        }
+        if (fileName.length() < 37) {
+            return "";
+        }
+        char sep = fileName.charAt(36);
+        if (sep != '-' && sep != '.') {
+            return "";
+        }
+        UUID parsed = tryParseCanonicalUuid(fileName.substring(0, 36));
+        return parsed != null ? parsed.toString() : "";
+    }
+
+    public static Path resolveUnexpectedTarget(MinecraftServer server, String relativePath) {
+        if (server == null || relativePath == null) {
+            return null;
+        }
         Path baseDir;
         String subPath;
         if (relativePath.startsWith("playerdata/")) {
@@ -541,18 +573,73 @@ public final class PlayerRegistryStore {
             baseDir = server.getSavePath(WorldSavePath.ADVANCEMENTS).toAbsolutePath().normalize();
             subPath = relativePath.substring("advancements/".length());
         } else {
-            return false;
+            return null;
         }
 
         if (subPath.endsWith("/")) {
             subPath = subPath.substring(0, subPath.length() - 1);
         }
         if (subPath.isEmpty() || subPath.contains("/") || subPath.contains("\\") || subPath.equals("..") || subPath.equals(".")) {
-            return false;
+            return null;
         }
 
         Path target = baseDir.resolve(subPath).normalize();
         if (!target.startsWith(baseDir) || target.equals(baseDir)) {
+            return null;
+        }
+        return target;
+    }
+
+    public static boolean isValidPlayerdataNbt(Path target) {
+        if (target == null || !Files.isRegularFile(target)) {
+            return false;
+        }
+        try {
+            if (Files.size(target) <= 0L) {
+                return false;
+            }
+            return NbtIo.readCompressed(target, NbtSizeTracker.ofUnlimitedBytes()) != null;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public static synchronized PromoteUnexpectedStatus promoteUnexpectedToOfficial(MinecraftServer server, String relativePath) {
+        if (server == null || relativePath == null || !unexpectedFiles.contains(relativePath)) {
+            return PromoteUnexpectedStatus.INVALID;
+        }
+        if (!relativePath.startsWith("playerdata/") || !relativePath.endsWith(".dat")) {
+            return PromoteUnexpectedStatus.INVALID;
+        }
+        Path source = resolveUnexpectedTarget(server, relativePath);
+        String uuidStr = extractUuidPrefix(relativePath);
+        UUID uuid = tryParseCanonicalUuid(uuidStr);
+        if (source == null || uuid == null || !Files.isRegularFile(source)) {
+            return PromoteUnexpectedStatus.INVALID;
+        }
+        if (server.getPlayerManager().getPlayer(uuid) != null) {
+            return PromoteUnexpectedStatus.ONLINE;
+        }
+        Path officialDat = server.getSavePath(WorldSavePath.PLAYERDATA).toAbsolutePath().normalize().resolve(uuidStr + ".dat");
+        if (Files.exists(officialDat)) {
+            return PromoteUnexpectedStatus.OFFICIAL_EXISTS;
+        }
+        if (!isValidPlayerdataNbt(source)) {
+            return PromoteUnexpectedStatus.CORRUPT_OR_EMPTY;
+        }
+        try {
+            Files.move(source, officialDat);
+            scanFull(server);
+            return PromoteUnexpectedStatus.PROMOTED;
+        } catch (IOException exception) {
+            AeternumCarpet.LOGGER.error("Failed to promote unexpected playerdata {} -> {}", source, officialDat, exception);
+            return PromoteUnexpectedStatus.IO_ERROR;
+        }
+    }
+
+    private static boolean deleteUnexpectedTarget(MinecraftServer server, String relativePath) {
+        Path target = resolveUnexpectedTarget(server, relativePath);
+        if (target == null) {
             return false;
         }
 

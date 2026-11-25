@@ -3,6 +3,9 @@ package smp.aeternum.carpet.client;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -44,18 +47,21 @@ import smp.aeternum.carpet.network.StatsNetworking.ScoreboardEntrySnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.ScoreboardObjectiveSnapshot;
 import smp.aeternum.carpet.network.StatsNetworking.SetScoreRequest;
 import smp.aeternum.carpet.network.StatsNetworking.StatsSnapshot;
+import smp.aeternum.carpet.network.StatsNetworking.UnexpectedFileSnapshot;
 import smp.aeternum.carpet.network.StatsRegistryActionPayload;
 
 public final class StatsScreen extends UiScreen {
     private static final Gson GSON = new Gson();
     private static final Type SCORE_ENTRY_LIST_TYPE = new TypeToken<List<ScoreboardEntrySnapshot>>() {}.getType();
+    private static final DateTimeFormatter UNEXPECTED_TIME_FMT =
+        DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(ZoneId.systemDefault());
     private static final int TAB_BAR_H = 24;
     private static final int SIDEBAR_W = 156;
     private static final int SIDEBAR_ROW_H = 19;
     private static final int CARD_H = 44;
     private static final int CARD_GAP = 4;
     private static final int ROW_STRIDE = CARD_H + CARD_GAP;
-    private static final int UNEXPECTED_ROW_H = 22;
+    private static final int UNEXPECTED_ROW_H = 40;
     private static final int SB_SIDEBAR_ROW_H = 28;
     private static final int SB_ENTRY_H = 26;
     private static final int SB_ENTRY_GAP = 3;
@@ -148,6 +154,9 @@ public final class StatsScreen extends UiScreen {
     private final List<String> displayOrder = new ArrayList<>();
     private boolean recomputeOrderOnNextSnapshot = true;
     private List<String> unexpectedFiles = List.of();
+    private final Map<String, UnexpectedFileSnapshot> unexpectedDetailsByPath = new HashMap<>();
+    private String armedPromotePath;
+    private long armedPromoteUntilMs;
     private List<ScoreboardObjectiveSnapshot> scoreboards = List.of();
     private String selectedObjectiveName;
     private String loadedObjectiveName;
@@ -298,6 +307,14 @@ public final class StatsScreen extends UiScreen {
             if (snap != null) {
                 this.entries = snap.entries != null ? snap.entries : List.of();
                 this.unexpectedFiles = snap.unexpectedFiles != null ? snap.unexpectedFiles : List.of();
+                this.unexpectedDetailsByPath.clear();
+                if (snap.unexpectedDetails != null) {
+                    for (UnexpectedFileSnapshot detail : snap.unexpectedDetails) {
+                        if (detail != null && detail.path != null) {
+                            this.unexpectedDetailsByPath.put(detail.path, detail);
+                        }
+                    }
+                }
                 this.scoreboards = snap.scoreboards != null ? snap.scoreboards : List.of();
                 if (this.scoreboards.isEmpty()) {
                     this.selectedObjectiveName = null;
@@ -337,6 +354,7 @@ public final class StatsScreen extends UiScreen {
         this.entriesByUuid.clear();
         this.displayOrder.clear();
         this.unexpectedFiles = List.of();
+        this.unexpectedDetailsByPath.clear();
     }
 
     private void recomputeDisplayOrder() {
@@ -2523,18 +2541,38 @@ public final class StatsScreen extends UiScreen {
             return;
         }
 
+        long nowMs = System.currentTimeMillis();
+        if (armedPromotePath != null && nowMs > armedPromoteUntilMs) {
+            armedPromotePath = null;
+        }
+
         c.enableScissor(panelX + 4, lTop, panelX + panelW - 8, lBottom);
         for (int i = 0; i < unexpectedFiles.size(); i++) {
             int cy = lTop + i * UNEXPECTED_ROW_H - (int) Math.round(listScroll);
             if (cy + UNEXPECTED_ROW_H < lTop || cy > lBottom) continue;
 
             String path = unexpectedFiles.get(i);
+            UnexpectedFileSnapshot detail = unexpectedDetailsByPath.get(path);
             int rowH = UNEXPECTED_ROW_H - 2;
-            AeternumTheme.drawCard(c, cardX, cy, cardW, rowH, AeternumTheme.CARD_BG, 0x60E59B53);
-            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, path, cardW - 32), cardX + 8, cy + 6, 0xFFE59B53, false);
+            boolean missingOfficial = detail != null && !detail.linkedUuid.isEmpty() && !detail.hasOfficialDat;
+            int borderColor = missingOfficial ? 0x90E55353 : 0x60E59B53;
+            AeternumTheme.drawCard(c, cardX, cy, cardW, rowH, AeternumTheme.CARD_BG, borderColor);
 
             int delX = cardX + cardW - 20;
-            int delY = cy + 2;
+            int delY = cy + 3;
+            String meta = formatUnexpectedMeta(detail);
+            int metaW = meta.isEmpty() ? 0 : textRenderer.getWidth(meta) + 8;
+            if (!meta.isEmpty()) {
+                boolean badDat = detail != null && detail.path != null && detail.path.startsWith("playerdata/")
+                    && detail.path.endsWith(".dat") && !detail.validNbt;
+                int metaColor = (detail != null && (detail.sizeBytes == 0L || badDat))
+                    ? AeternumTheme.ACCENT_RED
+                    : AeternumTheme.TEXT_SECONDARY;
+                c.drawText(textRenderer, meta, delX - metaW + 2, cy + 5, metaColor, false);
+            }
+            int pathMaxW = Math.max(60, delX - metaW - (cardX + 12));
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, path, pathMaxW), cardX + 8, cy + 5, 0xFFE59B53, false);
+
             boolean inArea = my >= lTop && my < lBottom;
             boolean overDel = inArea && mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16;
             if (overDel) {
@@ -2543,6 +2581,38 @@ public final class StatsScreen extends UiScreen {
                 c.drawBorder(delX, delY, 16, 16, AeternumTheme.withAlpha(AeternumTheme.ACCENT_RED, 0x90));
             }
             c.drawTextWithShadow(textRenderer, "\u00D7", delX + 5, delY + 4, overDel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
+
+            int btnRight = cardX + cardW - 8;
+            int btnY = cy + 19;
+            int btnH = 14;
+            if (detail != null && !detail.linkedUuid.isEmpty() && !detail.hasOfficialDat && detail.validNbt) {
+                boolean armed = path.equals(armedPromotePath);
+                String promLabel = armed ? "\u00BFConfirmar?" : "Hacer oficial";
+                int promW = textRenderer.getWidth(promLabel) + 10;
+                int promX = btnRight - promW;
+                boolean overProm = inArea && mx >= promX && mx < promX + promW && my >= btnY && my < btnY + btnH;
+                int fill = armed ? 0x604ADE80 : (overProm ? 0x454ADE80 : 0x254ADE80);
+                int bdr = armed ? 0xFF4ADE80 : 0x904ADE80;
+                c.fill(promX, btnY, promX + promW, btnY + btnH, fill);
+                c.drawBorder(promX, btnY, promW, btnH, bdr);
+                c.drawText(textRenderer, promLabel, promX + 5, btnY + 3, armed ? 0xFFFFFFFF : 0xFF86EFAC, false);
+                btnRight = promX - 4;
+            }
+            if (detail != null && detail.validNbt) {
+                String invLabel = "Ver inv.";
+                int invW = textRenderer.getWidth(invLabel) + 10;
+                int invX = btnRight - invW;
+                boolean overInv = inArea && mx >= invX && mx < invX + invW && my >= btnY && my < btnY + btnH;
+                c.fill(invX, btnY, invX + invW, btnY + btnH, overInv ? 0x4538BDF8 : 0x2538BDF8);
+                c.drawBorder(invX, btnY, invW, btnH, 0x8038BDF8);
+                c.drawText(textRenderer, invLabel, invX + 5, btnY + 3, overInv ? 0xFFFFFFFF : 0xFF7DD3FC, false);
+                btnRight = invX - 6;
+            }
+
+            String crossText = buildUnexpectedCrossRef(detail);
+            int crossMaxW = Math.max(40, btnRight - (cardX + 8));
+            int crossColor = missingOfficial ? 0xFFFCA5A5 : AeternumTheme.TEXT_SECONDARY;
+            c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, crossText, crossMaxW), cardX + 8, cy + 22, crossColor, false);
         }
         c.disableScissor();
 
@@ -2889,16 +2959,53 @@ public final class StatsScreen extends UiScreen {
                 int cardX = panelX + 12;
                 int cardW = panelW - 28;
                 int delX = cardX + cardW - 20;
+                long nowMs = System.currentTimeMillis();
                 for (int i = 0; i < unexpectedFiles.size(); i++) {
                     int cy = lTop + i * UNEXPECTED_ROW_H - (int) Math.round(listScroll);
                     if (cy + UNEXPECTED_ROW_H < lTop || cy > lBottom) continue;
-                    int delY = cy + 2;
+                    String path = unexpectedFiles.get(i);
+                    UnexpectedFileSnapshot detail = unexpectedDetailsByPath.get(path);
+                    int delY = cy + 3;
                     if (mx >= delX && mx < delX + 16 && my >= delY && my < delY + 16) {
-                        String path = unexpectedFiles.get(i);
                         statusMessage = "Borrando " + path + "…";
                         statusError = false;
                         ClientPlayNetworking.send(new StatsRegistryActionPayload("delete_unexpected", "", path));
                         return true;
+                    }
+                    int btnRight = cardX + cardW - 8;
+                    int btnY = cy + 19;
+                    int btnH = 14;
+                    if (detail != null && !detail.linkedUuid.isEmpty() && !detail.hasOfficialDat && detail.validNbt) {
+                        boolean armed = path.equals(armedPromotePath) && nowMs <= armedPromoteUntilMs;
+                        String promLabel = armed ? "\u00BFConfirmar?" : "Hacer oficial";
+                        int promW = textRenderer.getWidth(promLabel) + 10;
+                        int promX = btnRight - promW;
+                        if (mx >= promX && mx < promX + promW && my >= btnY && my < btnY + btnH) {
+                            if (armed) {
+                                armedPromotePath = null;
+                                statusMessage = "Convirtiendo en .dat oficial…";
+                                statusError = false;
+                                ClientPlayNetworking.send(new StatsRegistryActionPayload("promote_unexpected", "", path));
+                            } else {
+                                armedPromotePath = path;
+                                armedPromoteUntilMs = nowMs + 4000L;
+                                statusMessage = "Haz clic de nuevo en \u00BFConfirmar? para promover este archivo a .dat oficial.";
+                                statusError = false;
+                            }
+                            return true;
+                        }
+                        btnRight = promX - 4;
+                    }
+                    if (detail != null && detail.validNbt) {
+                        String invLabel = "Ver inv.";
+                        int invW = textRenderer.getWidth(invLabel) + 10;
+                        int invX = btnRight - invW;
+                        if (mx >= invX && mx < invX + invW && my >= btnY && my < btnY + btnH) {
+                            statusMessage = "Abriendo inventario de " + path + "…";
+                            statusError = false;
+                            ClientPlayNetworking.send(new StatsRegistryActionPayload("open_unexpected_inventory", "", path));
+                            return true;
+                        }
                     }
                 }
             }
@@ -2916,6 +3023,52 @@ public final class StatsScreen extends UiScreen {
         }
 
         return super.mouseClicked(mx, my, button);
+    }
+
+    private String formatUnexpectedMeta(UnexpectedFileSnapshot detail) {
+        if (detail == null) return "";
+        String date = detail.lastModifiedMs > 0L
+            ? UNEXPECTED_TIME_FMT.format(Instant.ofEpochMilli(detail.lastModifiedMs))
+            : "";
+        String size;
+        if (detail.sizeBytes < 0L) {
+            size = "carpeta";
+        } else if (detail.sizeBytes == 0L) {
+            size = "0 B (vac\u00edo)";
+        } else if (detail.sizeBytes < 1024L) {
+            size = detail.sizeBytes + " B";
+        } else {
+            size = String.format(Locale.ROOT, "%.1f KB", detail.sizeBytes / 1024.0);
+        }
+        boolean corruptDat = detail.sizeBytes > 0L && !detail.validNbt
+            && detail.path != null && detail.path.startsWith("playerdata/") && detail.path.endsWith(".dat");
+        if (corruptDat) {
+            size += " (NBT corrupto)";
+        }
+        return date.isEmpty() ? size : (date + " \u00B7 " + size);
+    }
+
+    private String buildUnexpectedCrossRef(UnexpectedFileSnapshot detail) {
+        if (detail == null || detail.linkedUuid == null || detail.linkedUuid.isEmpty()) {
+            return "Sin UUID reconocida";
+        }
+        String owner;
+        if (detail.linkedName != null && !detail.linkedName.isEmpty()) {
+            String role = "BOT".equals(detail.linkedType) ? "Bot" : ("HUMAN".equals(detail.linkedType) ? "Jugador" : "Registro");
+            owner = role + ": " + detail.linkedName;
+        } else {
+            owner = "UUID " + detail.linkedUuid.substring(0, 8) + " (no registrada)";
+        }
+        String datState;
+        if (detail.hasOfficialDat) {
+            datState = "\u2713 Tiene .dat";
+        } else if (detail.hasOfficialDatOld) {
+            datState = "\u26A0 Sin .dat (+ .dat_old)";
+        } else {
+            datState = "\u26A0 Sin .dat oficial";
+        }
+        String countStr = detail.sameUuidCount > 1 ? (" \u00B7 x" + detail.sameUuidCount + " temps") : "";
+        return owner + " \u00B7 " + datState + countStr;
     }
 
     private void startInlineScoreEdit(String owner, int currentScore) {

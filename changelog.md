@@ -5,6 +5,7 @@
 ### Sistema `/stats` y Scoreboards (`commandStats`)
 - **Registro de Jugadores (`StatsScreen`)**:
   - Clasificación de UUIDs (`HUMAN`, `BOT`, `UNKNOWN`), detección de anomalías en `playerdata/` · `stats/` · `advancements/`, consulta individual o por lotes a la API de Mojang, subsanación y borrado atómico de entradas y archivos inesperados.
+  - **Cruce y rescate en `Archivos raros`**: extrae la `<uuid>` de archivos `<uuid>-<número>.dat`, muestra jugador/bot asociado, estado del `.dat` oficial (`✓ Tiene .dat` / `⚠ Sin .dat oficial`), conteo de temporales por UUID (`xN temps`), fecha/tamaño e indicador rojo `(NBT corrupto)` si no es legible. Permite abrir su inventario (`Ver inv.`) y promover un temporal íntegro a `.dat` oficial (`Hacer oficial` con doble confirmación) cuando el jugador esté offline y no tenga `.dat`.
   - Resumen cacheado por `mtime` en segundo plano (`E:` Ender Chest slots, `I:` Inventario slots, `T:` Tiempo jugado, `M:` Minados, `C:` Crafteados) y lectura en vivo para jugadores conectados.
   - **Subvista de detalle de jugador**: al hacer clic en cualquier fila se abren sus estadísticas completas traducidas y formateadas (con icono por ítem/bloque/mob y buscador), vista de **Equipo + Inventario + Ender Chest** con tooltips completos, acceso directo a `/viewinv` (`Abrir editor inv.`) y botón **`TP última pos.`** (con tooltip de dimensión/coordenadas y confirmación si estás en Survival).
   - **Migración de cuentas por nombre (`Migrar`)**: permite migrar entre `Premium (v4)` y `No Premium (v3)` ingresando solo el nombre destino, con comprobación previa (API de Mojang, desconexión y colisiones), comparativa A vs B (`data`, `stats`, `adv`), decisiones independientes al colisionar (`Fusionar A+B`, `Conservar A` o `Conservar B`), respaldo automático en `world/migrationbackup/` y recálculo en vivo de resúmenes y scoreboards `ae-*`.
@@ -17,7 +18,8 @@
 - **Consultas rápidas (`/stats scoreboard`) y RCON API**:
   - Comando `/stats scoreboard <categoría> <stat>` (y `hide`) abierto a todos los jugadores: crea/reutiliza objetivos `ae-*` poblados solo con `HUMAN`s y sincronizados automáticamente al usar el comando o cambiar el tipo de un jugador.
   - Toggle `ae-*: OFF/ON` y botón `Limpiar` en la UI (prefijo `ae-` reservado).
-  - Endpoints JSON por RCON (`/stats api list|get|stat`) para consultar y paginar scoreboards desde Discord (`aeternumbot`).
+  - Endpoints JSON por RCON (`/stats api list|get|stat`) para consultar y paginar scoreboards desde Discord (`aeternumbot`, `/scoreboard ver` y `/scoreboard stat`).
+  - Compatibilidad con mods externos de scoreboard (ej. `chronos-carpet-addons`): uso de `safeScoreHolder` con `getDisplayName()` no nulo en todas las escrituras/borrados de score y reporte explícito de excepciones en `/stats scoreboard`.
 
 ### Nuevas Reglas y Comandos
 - **`aeStackableShulkersFixes`**: fixes complementarios para `stackableShulkerBoxes` de Carpet Core: los hoppers mueven shulkers de `1` en `1` sin apilarlas, y los comparadores mantienen la señal vanilla de ítem no apilable (`1`) cuando ningún slot del contenedor tiene shulkers apiladas (`count > 1`).

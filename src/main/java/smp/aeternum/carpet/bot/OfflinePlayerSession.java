@@ -47,12 +47,17 @@ public final class OfflinePlayerSession {
 
     public static OfflinePlayerSession load(MinecraftServer server, GameProfile profile) {
         Path datPath = server.getSavePath(WorldSavePath.PLAYERDATA).resolve(profile.getId().toString() + ".dat");
-        if (!Files.isRegularFile(datPath)) {
+        return loadFromPath(server, profile.getId(), datPath, profile.getName());
+    }
+
+    /** Loads an offline player session from an arbitrary playerdata .dat file path. */
+    public static OfflinePlayerSession loadFromPath(MinecraftServer server, UUID uuid, Path datPath, String label) {
+        if (server == null || uuid == null || datPath == null || !Files.isRegularFile(datPath)) {
             return null;
         }
         try {
             NbtCompound root = NbtIo.readCompressed(datPath, NbtSizeTracker.ofUnlimitedBytes());
-            OfflinePlayerSession session = new OfflinePlayerSession(server, profile.getId(), datPath, root);
+            OfflinePlayerSession session = new OfflinePlayerSession(server, uuid, datPath, root);
             ReadView view = NbtReadView.create(ErrorReporter.EMPTY, server.getRegistryManager(), root);
 
             view.getOptionalTypedListView("Inventory", StackWithSlot.CODEC).ifPresent(list -> {
@@ -85,7 +90,7 @@ public final class OfflinePlayerSession {
             session.gameMode = GameMode.byIndex(view.getInt("playerGameType", GameMode.SURVIVAL.getIndex()));
             return session;
         } catch (Exception e) {
-            AeternumCarpet.LOGGER.error("Failed to read offline playerdata for {}", profile.getName(), e);
+            AeternumCarpet.LOGGER.error("Failed to read offline playerdata for {}", label, e);
             return null;
         }
     }

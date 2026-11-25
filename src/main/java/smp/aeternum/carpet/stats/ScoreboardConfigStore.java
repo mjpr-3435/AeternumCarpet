@@ -188,11 +188,10 @@ public final class ScoreboardConfigStore {
             return;
         }
         Scoreboard sb = server.getScoreboard();
-        ScoreHolder holder = ScoreHolder.fromName(player.getName().getString());
         for (String name : matched) {
             for (ScoreboardObjective obj : sb.getObjectives()) {
                 if (obj.getName().equals(name)) {
-                    sb.getOrCreateScore(holder, obj).incrementScore(amount);
+                    sb.getOrCreateScore(player, obj).incrementScore(amount);
                     break;
                 }
             }

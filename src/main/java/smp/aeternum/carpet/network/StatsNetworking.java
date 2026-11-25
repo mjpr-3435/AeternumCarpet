@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
+import java.io.IOException;
 import java.io.Reader;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -184,6 +185,7 @@ public final class StatsNetworking {
         );
         snapshot.entries = list;
         snapshot.unexpectedFiles = PlayerRegistryStore.getUnexpectedFilesSnapshot();
+        snapshot.unexpectedDetails = buildUnexpectedDetails(server, snapshot.unexpectedFiles, rawEntries);
         snapshot.scoreboards = buildScoreboardSnapshots(server, typesByName);
         snapshot.lookupRunning = batchRunning;
         snapshot.lookupDone = batchDone;
@@ -390,6 +392,8 @@ public final class StatsNetworking {
                 int count = PlayerRegistryStore.deleteAllUnexpectedFiles(server);
                 sendSnapshot(player, false, "Eliminados " + count + " archivos raros.", false);
             }
+            case "open_unexpected_inventory" -> openUnexpectedInventory(server, player, payload.value());
+            case "promote_unexpected" -> handlePromoteUnexpected(server, player, payload.value());
             case "heal_anomalies" -> {
                 PlayerRegistryStore.HealResult res = PlayerRegistryStore.healAllAnomalies(server);
                 StringBuilder msg = new StringBuilder();
@@ -712,7 +716,7 @@ public final class StatsNetworking {
 
             if (total > 0) {
                 int clamped = (int) Math.min(Integer.MAX_VALUE, total);
-                sb.getOrCreateScore(ScoreHolder.fromName(entry.name), objective).setScore(clamped);
+                sb.getOrCreateScore(safeScoreHolder(entry.name), objective).setScore(clamped);
                 count++;
             }
         }
@@ -783,11 +787,26 @@ public final class StatsNetworking {
             }
 
             if (val > 0) {
-                sb.getOrCreateScore(ScoreHolder.fromName(entry.name), objective).setScore(val);
+                sb.getOrCreateScore(safeScoreHolder(entry.name), objective).setScore(val);
                 count++;
             }
         }
         return count;
+    }
+
+    /** Returns a ScoreHolder whose getDisplayName() is non-null for mods like chronos-carpet-addons. */
+    public static ScoreHolder safeScoreHolder(String name) {
+        return new ScoreHolder() {
+            @Override
+            public String getNameForScoreboard() {
+                return name;
+            }
+
+            @Override
+            public Text getDisplayName() {
+                return Text.literal(name);
+            }
+        };
     }
 
     public static void syncAeObjective(MinecraftServer server, Scoreboard sb, ScoreboardObjective target, String criterionRaw) {
@@ -807,7 +826,7 @@ public final class StatsNetworking {
             }
         }
         for (String owner : staleOwners) {
-            sb.removeScore(ScoreHolder.fromName(owner), target);
+            sb.removeScore(safeScoreHolder(owner), target);
         }
         if (target.getCriterion() instanceof Stat<?> stat) {
             String crit = (criterionRaw != null && !criterionRaw.isBlank())
@@ -834,7 +853,7 @@ public final class StatsNetworking {
         Scoreboard sb = server.getScoreboard();
         ServerPlayerEntity online = server.getPlayerManager().getPlayer(uuid);
         Path statsDir = server.getSavePath(WorldSavePath.STATS);
-        ScoreHolder holder = ScoreHolder.fromName(entry.name);
+        ScoreHolder holder = safeScoreHolder(entry.name);
 
         for (ScoreboardObjective obj : sb.getObjectives()) {
             if (!obj.getName().toLowerCase(Locale.ROOT).startsWith("ae-")) {
@@ -1001,7 +1020,7 @@ public final class StatsNetworking {
                 null
             );
             for (ScoreboardEntry entry : oldEntries) {
-                sb.getOrCreateScore(ScoreHolder.fromName(entry.owner()), finalObj).setScore(entry.value());
+                sb.getOrCreateScore(safeScoreHolder(entry.owner()), finalObj).setScore(entry.value());
             }
         } else {
             finalObj.setDisplayName(MotdMarkup.parse(disp));
@@ -1157,11 +1176,25 @@ public final class StatsNetworking {
     public static final class StatsSnapshot {
         public List<RegistryEntrySnapshot> entries = List.of();
         public List<String> unexpectedFiles = List.of();
+        public List<UnexpectedFileSnapshot> unexpectedDetails = List.of();
         public List<ScoreboardObjectiveSnapshot> scoreboards = List.of();
         public boolean lookupRunning;
         public int lookupDone;
         public int lookupTotal;
         public int lookupResolved;
+    }
+
+    public static final class UnexpectedFileSnapshot {
+        public String path = "";
+        public long sizeBytes = -1L;
+        public long lastModifiedMs;
+        public boolean validNbt;
+        public String linkedUuid = "";
+        public String linkedName = "";
+        public String linkedType = "";
+        public boolean hasOfficialDat;
+        public boolean hasOfficialDatOld;
+        public int sameUuidCount;
     }
 
     public static final class ScoreboardObjectiveSnapshot {
@@ -1212,7 +1245,7 @@ public final class StatsNetworking {
             sendSnapshot(player, false, "Scoreboard no encontrada: " + req.objective, true);
             return;
         }
-        sb.getOrCreateScore(ScoreHolder.fromName(req.owner), target).setScore(req.score);
+        sb.getOrCreateScore(safeScoreHolder(req.owner), target).setScore(req.score);
         sendObjectiveDetail(player, server, target.getName());
         sendSnapshot(player, false, "Score de " + req.owner + " actualizado a " + String.format(Locale.US, "%,d", req.score) + ".", false);
     }
@@ -1241,7 +1274,7 @@ public final class StatsNetworking {
             sendSnapshot(player, false, "Scoreboard no encontrada: " + req.objective, true);
             return;
         }
-        sb.removeScore(ScoreHolder.fromName(req.owner), target);
+        sb.removeScore(safeScoreHolder(req.owner), target);
         sendObjectiveDetail(player, server, target.getName());
         sendSnapshot(player, false, "Registro eliminado de " + target.getName() + ": " + req.owner, false);
     }
@@ -1910,6 +1943,94 @@ public final class StatsNetworking {
             return el.isJsonObject() ? el.getAsJsonObject() : new JsonObject();
         } catch (Exception e) {
             return new JsonObject();
+        }
+    }
+
+    private static List<UnexpectedFileSnapshot> buildUnexpectedDetails(
+        MinecraftServer server,
+        List<String> unexpectedFiles,
+        Map<String, Entry> rawEntries
+    ) {
+        if (server == null || unexpectedFiles == null || unexpectedFiles.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Integer> uuidCounts = new HashMap<>();
+        for (String path : unexpectedFiles) {
+            String u = PlayerRegistryStore.extractUuidPrefix(path);
+            if (!u.isEmpty()) {
+                uuidCounts.merge(u, 1, Integer::sum);
+            }
+        }
+        Path playerdataDir = server.getSavePath(WorldSavePath.PLAYERDATA).toAbsolutePath().normalize();
+        List<UnexpectedFileSnapshot> out = new ArrayList<>(unexpectedFiles.size());
+        for (String path : unexpectedFiles) {
+            UnexpectedFileSnapshot snap = new UnexpectedFileSnapshot();
+            snap.path = path;
+            snap.linkedUuid = PlayerRegistryStore.extractUuidPrefix(path);
+            if (!snap.linkedUuid.isEmpty()) {
+                snap.sameUuidCount = uuidCounts.getOrDefault(snap.linkedUuid, 1);
+                Entry entry = rawEntries.get(snap.linkedUuid);
+                if (entry != null) {
+                    snap.linkedName = entry.name != null ? entry.name : "";
+                    snap.linkedType = entry.type != null ? entry.type.name() : EntryType.UNKNOWN.name();
+                }
+                snap.hasOfficialDat = Files.isRegularFile(playerdataDir.resolve(snap.linkedUuid + ".dat"));
+                snap.hasOfficialDatOld = Files.isRegularFile(playerdataDir.resolve(snap.linkedUuid + ".dat_old"));
+            }
+            Path target = PlayerRegistryStore.resolveUnexpectedTarget(server, path);
+            if (target != null && Files.exists(target)) {
+                try {
+                    snap.lastModifiedMs = Files.getLastModifiedTime(target).toMillis();
+                    if (Files.isRegularFile(target)) {
+                        snap.sizeBytes = Files.size(target);
+                        snap.validNbt = path.startsWith("playerdata/") && path.endsWith(".dat")
+                            && PlayerRegistryStore.isValidPlayerdataNbt(target);
+                    }
+                } catch (IOException ignored) {
+                }
+            }
+            out.add(snap);
+        }
+        return out;
+    }
+
+    private static void openUnexpectedInventory(MinecraftServer server, ServerPlayerEntity viewer, String relativePath) {
+        if (!PlayerRegistryStore.getUnexpectedFilesSnapshot().contains(relativePath)
+            || !relativePath.startsWith("playerdata/")
+            || !relativePath.endsWith(".dat")) {
+            sendSnapshot(viewer, false, "Archivo no válido para previsualizar inventario.", true);
+            return;
+        }
+        Path target = PlayerRegistryStore.resolveUnexpectedTarget(server, relativePath);
+        String uuidStr = PlayerRegistryStore.extractUuidPrefix(relativePath);
+        UUID uuid;
+        try {
+            uuid = !uuidStr.isEmpty() ? UUID.fromString(uuidStr) : UUID.nameUUIDFromBytes(relativePath.getBytes());
+        } catch (IllegalArgumentException ignored) {
+            uuid = UUID.nameUUIDFromBytes(relativePath.getBytes());
+        }
+        Entry entry = !uuidStr.isEmpty() ? PlayerRegistryStore.getEntriesSnapshot().get(uuidStr) : null;
+        String baseName = (entry != null && entry.name != null && !entry.name.isBlank())
+            ? entry.name
+            : (!uuidStr.isEmpty() ? uuidStr.substring(0, 8) : "temp");
+        String fileName = target != null ? target.getFileName().toString() : relativePath;
+        String label = baseName + " [" + (fileName.length() > 18 ? fileName.substring(fileName.length() - 18) : fileName) + "]";
+        OfflinePlayerSession session = OfflinePlayerSession.loadFromPath(server, uuid, target, label);
+        if (session == null) {
+            sendSnapshot(viewer, false, "El archivo está vacío o corrupto (no se pudo leer NBT).", true);
+            return;
+        }
+        BotInventoryOpener.openOffline(viewer, label, session);
+    }
+
+    private static void handlePromoteUnexpected(MinecraftServer server, ServerPlayerEntity viewer, String relativePath) {
+        switch (PlayerRegistryStore.promoteUnexpectedToOfficial(server, relativePath)) {
+            case PROMOTED -> sendSnapshot(viewer, false, "Convertido en .dat oficial: " + relativePath, false);
+            case OFFICIAL_EXISTS -> sendSnapshot(viewer, false, "Ya existe un <uuid>.dat oficial para esa UUID.", true);
+            case ONLINE -> sendSnapshot(viewer, false, "El jugador está conectado; desconéctalo antes de restaurar su .dat.", true);
+            case CORRUPT_OR_EMPTY -> sendSnapshot(viewer, false, "Archivo vacío o NBT corrupto; no se puede convertir en oficial.", true);
+            case INVALID -> sendSnapshot(viewer, false, "Archivo inválido o fuera de playerdata/.", true);
+            case IO_ERROR -> sendSnapshot(viewer, false, "Error de disco al mover el archivo.", true);
         }
     }
 
