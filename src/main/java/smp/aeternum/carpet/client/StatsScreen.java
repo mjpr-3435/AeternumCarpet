@@ -103,7 +103,11 @@ public final class StatsScreen extends UiScreen {
         UNNAMED_FIRST("Sin nombre"),
         TYPE("Tipo"),
         ORIGIN("Online/Offline"),
-        ANOMALY("Anomalías");
+        ANOMALY("Anomalías"),
+        ENDER_INV("Ender + Inv"),
+        MINED("Minados"),
+        CRAFTED("Crafteados"),
+        PLAY_TIME("Horas jugadas");
 
         final String label;
 
@@ -378,6 +382,12 @@ public final class StatsScreen extends UiScreen {
                 default -> 2;
             }).thenComparing(byNameOrUuid);
             case ANOMALY -> Comparator.comparing((RegistryEntrySnapshot e) -> !e.anomaly).thenComparing(byNameOrUuid);
+            case ENDER_INV -> byDescMetric(e -> (e.enderSlots < 0 && e.invSlots < 0)
+                ? -1L
+                : (Math.max(0, e.enderSlots) + Math.max(0, e.invSlots)), byNameOrUuid);
+            case MINED -> byDescMetric(e -> e.mined, byNameOrUuid);
+            case CRAFTED -> byDescMetric(e -> e.crafted, byNameOrUuid);
+            case PLAY_TIME -> byDescMetric(e -> e.playTimeTicks, byNameOrUuid);
         };
         List<RegistryEntrySnapshot> sorted = new ArrayList<>(entries);
         sorted.sort(comparator);
@@ -387,6 +397,16 @@ public final class StatsScreen extends UiScreen {
                 displayOrder.add(e.uuid);
             }
         }
+    }
+
+    private static Comparator<RegistryEntrySnapshot> byDescMetric(
+        java.util.function.ToLongFunction<RegistryEntrySnapshot> getter,
+        Comparator<RegistryEntrySnapshot> tieBreaker
+    ) {
+        return Comparator
+            .comparing((RegistryEntrySnapshot e) -> getter.applyAsLong(e) < 0L)
+            .thenComparing(Comparator.comparingLong(getter).reversed())
+            .thenComparing(tieBreaker);
     }
 
     @Override
