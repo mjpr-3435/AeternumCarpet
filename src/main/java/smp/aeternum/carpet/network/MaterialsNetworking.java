@@ -1,7 +1,9 @@
 package smp.aeternum.carpet.network;
 
 import com.google.gson.Gson;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -9,11 +11,14 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import smp.aeternum.carpet.AeternumCarpet;
+import smp.aeternum.carpet.materials.MaterialEntry;
 import smp.aeternum.carpet.materials.MaterialList;
 import smp.aeternum.carpet.materials.MaterialsStore;
 
 public final class MaterialsNetworking {
 	private static final Gson GSON = new Gson();
+	private static final int MAX_DATA_JSON_CHARS = 895_000;
+
 	private MaterialsNetworking() {}
 
 	public static void registerPayloads() {
@@ -32,24 +37,37 @@ public final class MaterialsNetworking {
 		PayloadTypeRegistry.playC2S().register(ProjectDownloadRequestPayload.ID, ProjectDownloadRequestPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(MaterialsActionPayload.ID, (p, c) -> c.server().execute(() -> {
-			if (p.claim()) MaterialsStore.claim(p.listName(), p.itemId(), p.player());
-			else MaterialsStore.unclaim(p.listName(), p.itemId());
-			broadcast(c.server());
+			ServerPlayerEntity player = c.player();
+			String actor = player.getName().getString();
+			boolean isOp = player.hasPermissionLevel(2);
+			boolean changed = p.claim()
+				? MaterialsStore.claim(p.listName(), p.itemId(), actor)
+				: MaterialsStore.unclaim(p.listName(), p.itemId(), actor, isOp);
+			if (changed) {
+				broadcastData(c.server());
+				MaterialsStore.syncPlayerOverlay(player, false);
+			} else {
+				// Reconcile optimistic client UI if rejected (e.g. claimed by someone else)
+				sendSnapshot(player, false);
+			}
 		}));
-		ServerPlayNetworking.registerGlobalReceiver(MaterialsRefreshPayload.ID, (p, c) -> c.server().execute(() -> {
-			MaterialsStore.reload();
-			broadcast(c.server());
-		}));
+
+		ServerPlayNetworking.registerGlobalReceiver(MaterialsRefreshPayload.ID, (p, c) -> c.server().execute(() ->
+			MaterialsStore.refresh(c.player())
+		));
+
 		ServerPlayNetworking.registerGlobalReceiver(MaterialsDeletePayload.ID, (p, c) -> c.server().execute(() -> {
 			if (!c.player().hasPermissionLevel(2)) return;
 			MaterialsStore.delete(p.listName());
-			broadcast(c.server());
-		}));
-		ServerPlayNetworking.registerGlobalReceiver(MaterialsScanPayload.ID, (p, c) -> c.server().execute(() -> {
-			MaterialsStore.forceScan();
-			broadcast(c.server());
+			broadcastData(c.server());
 		}));
 
+		ServerPlayNetworking.registerGlobalReceiver(MaterialsScanPayload.ID, (p, c) -> c.server().execute(() -> {
+			MaterialsStore.forceScan();
+			broadcastData(c.server());
+		}));
+
+		// Legacy 2.0.0 upload guard — keep friendly notice intact
 		ServerPlayNetworking.registerGlobalReceiver(ProjectUploadPayload.ID, (p, c) -> c.server().execute(() -> {
 			ServerPlayerEntity player = c.player();
 			player.closeHandledScreen();
@@ -66,23 +84,36 @@ public final class MaterialsNetworking {
 				player.sendMessage(Text.literal("[Proyectos] Solo administradores pueden subir proyectos.").formatted(Formatting.RED), false);
 				return;
 			}
-			try {
-				MaterialList.PlacementInfo placement = p.hasPlacement()
-					? new MaterialList.PlacementInfo(p.dimension(), p.x(), p.y(), p.z(), p.rotation(), p.mirror(), p.subregionsJson())
-					: new MaterialList.PlacementInfo();
-				String savedName = MaterialsStore.uploadProject(p.name(), p.bytes(), player.getName().getString(), placement);
-				player.sendMessage(Text.literal("[Proyectos] Proyecto '" + savedName + "' cargado correctamente.").formatted(Formatting.GREEN), false);
-				broadcast(c.server());
-			} catch (IOException | RuntimeException e) {
-				AeternumCarpet.LOGGER.error("Failed to upload project {}", p.name(), e);
-				player.sendMessage(Text.literal("[Proyectos] Error al leer el .litematic: " + e.getMessage()).formatted(Formatting.RED), false);
-			}
+			MaterialList.PlacementInfo placement = p.hasPlacement()
+				? new MaterialList.PlacementInfo(p.dimension(), p.x(), p.y(), p.z(), p.rotation(), p.mirror(), p.subregionsJson())
+				: new MaterialList.PlacementInfo();
+			String uploader = player.getName().getString();
+			MaterialsStore.uploadProjectAsync(
+				p.name(),
+				p.bytes(),
+				uploader,
+				placement,
+				savedName -> {
+					if (!player.isDisconnected()) {
+						player.sendMessage(Text.literal("[Proyectos] Proyecto '" + savedName + "' cargado correctamente.").formatted(Formatting.GREEN), false);
+					}
+				},
+				errorMsg -> {
+					if (!player.isDisconnected()) {
+						player.sendMessage(Text.literal("[Proyectos] Error al leer el .litematic: " + errorMsg).formatted(Formatting.RED), false);
+					}
+				}
+			);
 		}));
 
 		ServerPlayNetworking.registerGlobalReceiver(ProjectSubregionActionPayload.ID, (p, c) -> c.server().execute(() -> {
-			String playerName = c.player().getName().getString();
-			if (MaterialsStore.subregionAction(p.projectName(), p.subregionName(), p.action(), playerName)) {
-				broadcast(c.server());
+			ServerPlayerEntity player = c.player();
+			String playerName = player.getName().getString();
+			boolean isOp = player.hasPermissionLevel(2);
+			if (MaterialsStore.subregionAction(p.projectName(), p.subregionName(), p.action(), playerName, isOp)) {
+				broadcastData(c.server());
+			} else {
+				sendSnapshot(player, false);
 			}
 		}));
 
@@ -92,10 +123,11 @@ public final class MaterialsNetworking {
 				p.dimension(), p.x(), p.y(), p.z(), p.rotation(), p.mirror()
 			);
 			if (MaterialsStore.updatePlacement(p.projectName(), info)) {
-				broadcast(c.server());
+				broadcastData(c.server());
 			}
 		}));
 
+		// Legacy 2.0.0 download/load guard — keep friendly notice intact
 		ServerPlayNetworking.registerGlobalReceiver(ProjectDownloadRequestPayload.ID, (p, c) -> c.server().execute(() -> {
 			ServerPlayerEntity player = c.player();
 			if (!ProtocolHandshake.hasVersion(player, 2)) {
@@ -132,24 +164,122 @@ public final class MaterialsNetworking {
 		}));
 	}
 
+	/** Opens the Projects screen on the player and refreshes their HUD overlay. */
 	public static void send(ServerPlayerEntity player) {
-		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
-			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), true));
-		sendOverlay(player);
+		sendSnapshot(player, true);
+		MaterialsStore.syncPlayerOverlay(player, true);
 	}
 
-	private static void send(ServerPlayerEntity player, boolean open) {
-		if (ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID))
-			ServerPlayNetworking.send(player, new MaterialsDataPayload(GSON.toJson(MaterialsStore.all()), open));
-		sendOverlay(player);
+	/** Sends compact MaterialsDataPayload to a single player. */
+	public static void sendSnapshot(ServerPlayerEntity player, boolean open) {
+		if (player == null || player.isDisconnected()) return;
+		if (!ServerPlayNetworking.canSend(player, MaterialsDataPayload.ID)) return;
+		String json = encodeWireDataJson();
+		if (json == null) return;
+		ServerPlayNetworking.send(player, new MaterialsDataPayload(json, open));
 	}
 
-	private static void sendOverlay(ServerPlayerEntity player) {
-		if (ServerPlayNetworking.canSend(player, MaterialsOverlayPayload.ID))
-			ServerPlayNetworking.send(player, new MaterialsOverlayPayload(MaterialsStore.overlayJsonFor(player)));
+	/** Serializes MaterialsDataPayload once and broadcasts it to all connected capable clients. */
+	public static void broadcastData(MinecraftServer server) {
+		if (server == null) return;
+		List<ServerPlayerEntity> players = server.getPlayerManager().getPlayerList();
+		if (players.isEmpty()) return;
+
+		String json = null;
+		MaterialsDataPayload payload = null;
+		for (ServerPlayerEntity p : players) {
+			if (p.isDisconnected() || !ServerPlayNetworking.canSend(p, MaterialsDataPayload.ID)) continue;
+			if (payload == null) {
+				json = encodeWireDataJson();
+				if (json == null) return;
+				payload = new MaterialsDataPayload(json, false);
+			}
+			ServerPlayNetworking.send(p, payload);
+		}
 	}
 
-	public static void broadcast(MinecraftServer server) {
-		for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) send(p, false);
+	public static boolean canSendOverlay(ServerPlayerEntity player) {
+		return player != null && !player.isDisconnected() && ServerPlayNetworking.canSend(player, MaterialsOverlayPayload.ID);
+	}
+
+	public static void sendOverlayJson(ServerPlayerEntity player, String json) {
+		if (!canSendOverlay(player) || json == null) return;
+		ServerPlayNetworking.send(player, new MaterialsOverlayPayload(json));
+	}
+
+	/**
+	 * Compact DTO matching MaterialList[] expected by both 2.0.0 and 2.1.0 clients.
+	 * Intentionally omits placement/subregionsJson, uploadedBy, scannedAvailable, nextScanAt,
+	 * and empty subregion entries which are never read by MaterialsScreen/MaterialsDetailScreen.
+	 */
+	private static String encodeWireDataJson() {
+		Collection<MaterialList> all = MaterialsStore.all();
+		List<WireMaterialList> wire = new ArrayList<>(all.size());
+		for (MaterialList list : all) {
+			List<WireSubregion> wireSubs = new ArrayList<>(list.subregions != null ? list.subregions.size() : 0);
+			if (list.subregions != null) {
+				for (MaterialList.SubregionInfo s : list.subregions) {
+					wireSubs.add(new WireSubregion(s.name, s.totalBlocks, s.placedBlocks, s.status, s.claimedBy));
+				}
+			}
+			wire.add(new WireMaterialList(
+				list.name,
+				list.hasSchematic,
+				list.totalBlocks,
+				list.placedBlocks,
+				list.entries != null ? list.entries : List.of(),
+				wireSubs
+			));
+		}
+		String json = GSON.toJson(wire);
+		if (json.length() > MAX_DATA_JSON_CHARS) {
+			AeternumCarpet.LOGGER.error(
+				"MaterialsDataPayload JSON exceeded safe limit ({} > {} chars); skipping send to prevent client disconnect",
+				json.length(), MAX_DATA_JSON_CHARS
+			);
+			return null;
+		}
+		return json;
+	}
+
+	private static final class WireMaterialList {
+		final String name;
+		final boolean hasSchematic;
+		final int totalBlocks;
+		final int placedBlocks;
+		final List<MaterialEntry> entries;
+		final List<WireSubregion> subregions;
+
+		WireMaterialList(
+			String name,
+			boolean hasSchematic,
+			int totalBlocks,
+			int placedBlocks,
+			List<MaterialEntry> entries,
+			List<WireSubregion> subregions
+		) {
+			this.name = name;
+			this.hasSchematic = hasSchematic;
+			this.totalBlocks = totalBlocks;
+			this.placedBlocks = placedBlocks;
+			this.entries = entries;
+			this.subregions = subregions;
+		}
+	}
+
+	private static final class WireSubregion {
+		final String name;
+		final int totalBlocks;
+		final int placedBlocks;
+		final String status;
+		final String claimedBy;
+
+		WireSubregion(String name, int totalBlocks, int placedBlocks, String status, String claimedBy) {
+			this.name = name;
+			this.totalBlocks = totalBlocks;
+			this.placedBlocks = placedBlocks;
+			this.status = status;
+			this.claimedBy = claimedBy;
+		}
 	}
 }

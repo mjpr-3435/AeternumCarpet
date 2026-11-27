@@ -4,6 +4,9 @@ import carpet.CarpetServer;
 import carpet.patches.EntityPlayerMPFake;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -138,6 +141,7 @@ public class AeternumCarpet implements ModInitializer {
 		ServerTickEvents.END_SERVER_TICK.register(PlayerSitManager::tickServer);
 		ServerTickEvents.END_SERVER_TICK.register(StatsNetworking::tick);
 		ServerTickEvents.END_SERVER_TICK.register(server -> MaterialsStore.tick());
+		ServerChunkEvents.CHUNK_LOAD.register(MaterialsStore::onChunkLoad);
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> {
 			String content = message.getContent().getString();
 			return !ActionsCommand.handleChat(player, content) && !ScoreboardConfigStore.handleChat(player, content);
@@ -146,13 +150,21 @@ public class AeternumCarpet implements ModInitializer {
 			PlayerRegistryStore.onPlayerJoin(server, handler.player);
 			ScreenOpenNetworking.sendDockState(handler.player, AeternumCarpetSettings.joinMotd);
 			PerimeterNetworking.sendHud(handler.player);
+			MaterialsStore.onPlayerJoin(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake bot) FakePlayerReloadManager.onFakePlayerJoin(bot);
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			PlayerSitManager.onPlayerDisconnect(handler.player);
 			ProtocolHandshake.onPlayerDisconnect(handler.player);
+			MaterialsStore.onPlayerDisconnect(handler.player);
 			if (handler.player instanceof EntityPlayerMPFake) FakePlayerReloadManager.onFakePlayerDisconnect(server);
 		});
+		ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register((player, origin, destination) ->
+			MaterialsStore.onPlayerWorldChange(player)
+		);
+		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) ->
+			MaterialsStore.onPlayerRespawn(newPlayer)
+		);
 		PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
 			if (!world.isClient) PerimeterScanner.onPlayerBlockBroken((net.minecraft.server.world.ServerWorld) world, pos, state);
 		});

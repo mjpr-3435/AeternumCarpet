@@ -3,6 +3,7 @@ package smp.aeternum.carpet.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import java.util.List;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.server.command.ServerCommandSource;
@@ -15,7 +16,7 @@ import net.minecraft.util.math.BlockPos;
 import smp.aeternum.carpet.AeternumCarpetSettings;
 import smp.aeternum.carpet.materials.MaterialsStore;
 import smp.aeternum.carpet.network.MaterialsNetworking;
-import java.util.List;
+
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
@@ -25,7 +26,30 @@ public final class MaterialsCommand {
 	public static void register(CommandDispatcher<ServerCommandSource> d) {
 		d.register(literal("projects")
 			.requires(s -> AeternumCarpetSettings.commandProjects)
-			.executes(c -> { try { MaterialsNetworking.send(c.getSource().getPlayerOrThrow()); return 1; } catch (Exception e) { c.getSource().sendError(Text.literal("La lista de proyectos se abre en el juego.")); return 0; } })
+			.executes(c -> {
+				try {
+					MaterialsNetworking.send(c.getSource().getPlayerOrThrow());
+					return 1;
+				} catch (Exception e) {
+					c.getSource().sendError(Text.literal("La lista de proyectos se abre en el juego."));
+					return 0;
+				}
+			})
+			.then(literal("status")
+				.requires(s -> s.hasPermissionLevel(2))
+				.executes(c -> showStatus(c.getSource(), null))
+				.then(argument("name", StringArgumentType.word())
+					.suggests((c, b) -> CommandSource.suggestMatching(MaterialsStore.all().stream().map(l -> l.name), b))
+					.executes(c -> showStatus(c.getSource(), StringArgumentType.getString(c, "name")))))
+			.then(literal("rescan")
+				.requires(s -> s.hasPermissionLevel(2))
+				.executes(c -> rescan(c.getSource(), null))
+				.then(argument("name", StringArgumentType.word())
+					.suggests((c, b) -> CommandSource.suggestMatching(MaterialsStore.all().stream().map(l -> l.name), b))
+					.executes(c -> rescan(c.getSource(), StringArgumentType.getString(c, "name")))))
+			.then(literal("reload")
+				.requires(s -> s.hasPermissionLevel(2))
+				.executes(c -> reloadProjects(c.getSource())))
 			.then(literal("storage")
 				.requires(s -> s.hasPermissionLevel(2))
 				.then(literal("list").executes(MaterialsCommand::listRegions))
@@ -37,6 +61,43 @@ public final class MaterialsCommand {
 					.then(argument("pos1", BlockPosArgumentType.blockPos())
 						.then(argument("pos2", BlockPosArgumentType.blockPos())
 							.executes(MaterialsCommand::addRegion)))))));
+	}
+
+	private static int showStatus(ServerCommandSource source, String name) {
+		List<String> lines = MaterialsStore.formatStatusLines(name);
+		if (lines.isEmpty()) {
+			if (name != null) source.sendError(Text.literal("No existe un proyecto con el nombre '" + name + "'."));
+			else source.sendFeedback(() -> Text.literal("No hay proyectos registrados.").formatted(Formatting.GRAY), false);
+			return name != null ? 0 : 1;
+		}
+		source.sendFeedback(() -> Text.literal("[Proyectos] Estado del motor:").formatted(Formatting.GOLD), false);
+		for (String line : lines) {
+			source.sendFeedback(() -> Text.literal(" • " + line).formatted(Formatting.GRAY), false);
+		}
+		return 1;
+	}
+
+	private static int rescan(ServerCommandSource source, String name) {
+		int queued = MaterialsStore.rescanProject(name);
+		if (queued < 0) {
+			source.sendError(Text.literal("No existe un proyecto activo con placement llamado '" + name + "'."));
+			return 0;
+		}
+		String scope = name != null ? ("'" + name + "'") : "todos los proyectos";
+		source.sendFeedback(
+			() -> Text.literal("[Proyectos] Re-escaneo iniciado para " + scope + " (" + queued + " chunks cargados en cola; el resto se verificará al cargarse).")
+				.formatted(Formatting.GREEN),
+			false
+		);
+		return 1;
+	}
+
+	private static int reloadProjects(ServerCommandSource source) {
+		source.sendFeedback(() -> Text.literal("[Proyectos] Recargando proyectos en segundo plano...").formatted(Formatting.GRAY), false);
+		MaterialsStore.reloadAsync(msg ->
+			source.sendFeedback(() -> Text.literal("[Proyectos] " + msg).formatted(Formatting.GREEN), false)
+		);
+		return 1;
 	}
 
 	private static int addRegion(com.mojang.brigadier.context.CommandContext<ServerCommandSource> c) {

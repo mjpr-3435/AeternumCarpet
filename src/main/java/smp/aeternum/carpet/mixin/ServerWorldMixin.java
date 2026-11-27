@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import smp.aeternum.carpet.AeternumCarpetSettings;
+import smp.aeternum.carpet.materials.MaterialsStore;
 import smp.aeternum.carpet.perimeters.PerimeterScanner;
 
 @Mixin(net.minecraft.server.world.ServerWorld.class)
@@ -28,6 +29,8 @@ public class ServerWorldMixin {
 
     @Inject(method = "onBlockStateChanged", at = @At("HEAD"))
     private void aeternum$trackPerimeterDirtyChunk(BlockPos pos, BlockState oldBlock, BlockState newBlock, CallbackInfo ci) {
-        PerimeterScanner.onBlockStateChange((ServerWorld) (Object) this, pos, oldBlock, newBlock);
+        ServerWorld self = (ServerWorld) (Object) this;
+        PerimeterScanner.onBlockStateChange(self, pos, oldBlock, newBlock);
+        MaterialsStore.onWorldBlockChanged(self, pos, oldBlock, newBlock);
     }
 }
