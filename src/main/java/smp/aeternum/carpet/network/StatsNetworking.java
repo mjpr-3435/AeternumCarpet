@@ -212,9 +212,11 @@ public final class StatsNetworking {
             snap.name = obj.getName();
             snap.displayName = obj.getDisplayName() != null ? obj.getDisplayName().getString() : obj.getName();
             snap.criterion = obj.getCriterion() != null ? obj.getCriterion().getName() : "dummy";
-            if (obj == sidebarObj) snap.slot = "SIDEBAR";
-            else if (obj == listObj) snap.slot = "LIST";
-            else if (obj == belowObj) snap.slot = "BELOW_NAME";
+            List<String> slots = new ArrayList<>(3);
+            if (obj == sidebarObj) slots.add("SIDEBAR");
+            if (obj == listObj) slots.add("LIST");
+            if (obj == belowObj) slots.add("BELOW_NAME");
+            snap.slots = slots;
             snap.entryCount = sb.getScoreboardEntries(obj).size();
             ObjectiveConfig cfg = ScoreboardConfigStore.getOrDefault(obj.getName());
             if (cfg.tracker != null && !cfg.tracker.isEmpty()) {
@@ -643,7 +645,7 @@ public final class StatsNetworking {
             false,
             null
         );
-        applyObjectiveSlot(sb, created, req.slot);
+        applyObjectiveSlots(sb, created, req.slots);
 
         ObjectiveConfig cfg = new ObjectiveConfig();
         cfg.totalEnabled = req.totalEnabled;
@@ -1026,7 +1028,7 @@ public final class StatsNetworking {
             finalObj.setDisplayName(MotdMarkup.parse(disp));
         }
 
-        applyObjectiveSlot(sb, finalObj, req.slot);
+        applyObjectiveSlots(sb, finalObj, req.slots);
 
         ObjectiveConfig cfg = new ObjectiveConfig();
         cfg.totalEnabled = req.totalEnabled;
@@ -1110,21 +1112,28 @@ public final class StatsNetworking {
         return new AreaRegion();
     }
 
-    private static void applyObjectiveSlot(Scoreboard sb, ScoreboardObjective target, String slotName) {
-        for (ScoreboardDisplaySlot slot : ScoreboardDisplaySlot.values()) {
-            if (sb.getObjectiveForSlot(slot) == target) {
-                sb.setObjectiveSlot(slot, null);
+    private static void applyObjectiveSlots(Scoreboard sb, ScoreboardObjective target, List<String> slotNames) {
+        EnumSet<ScoreboardDisplaySlot> desired = EnumSet.noneOf(ScoreboardDisplaySlot.class);
+        if (slotNames != null) {
+            for (String name : slotNames) {
+                if (name == null) continue;
+                switch (name) {
+                    case "SIDEBAR" -> desired.add(ScoreboardDisplaySlot.SIDEBAR);
+                    case "LIST" -> desired.add(ScoreboardDisplaySlot.LIST);
+                    case "BELOW_NAME" -> desired.add(ScoreboardDisplaySlot.BELOW_NAME);
+                    default -> {}
+                }
             }
         }
-        if (slotName != null && !slotName.isEmpty()) {
-            ScoreboardDisplaySlot nextSlot = switch (slotName) {
-                case "SIDEBAR" -> ScoreboardDisplaySlot.SIDEBAR;
-                case "LIST" -> ScoreboardDisplaySlot.LIST;
-                case "BELOW_NAME" -> ScoreboardDisplaySlot.BELOW_NAME;
-                default -> null;
-            };
-            if (nextSlot != null) {
-                sb.setObjectiveSlot(nextSlot, target);
+        for (ScoreboardDisplaySlot slot : new ScoreboardDisplaySlot[]{
+            ScoreboardDisplaySlot.SIDEBAR,
+            ScoreboardDisplaySlot.LIST,
+            ScoreboardDisplaySlot.BELOW_NAME
+        }) {
+            if (desired.contains(slot)) {
+                sb.setObjectiveSlot(slot, target);
+            } else if (sb.getObjectiveForSlot(slot) == target) {
+                sb.setObjectiveSlot(slot, null);
             }
         }
     }
@@ -1140,7 +1149,7 @@ public final class StatsNetworking {
         public String displayName = "";
         public String criterion = "dummy";
         public boolean fillFromStats;
-        public String slot = "";
+        public List<String> slots = List.of();
         public String chatAlias = "";
         public boolean totalEnabled;
         public boolean totalHumans = true;
@@ -1159,7 +1168,7 @@ public final class StatsNetworking {
         public String name = "";
         public String criterion = "dummy";
         public String displayName = "";
-        public String slot = "";
+        public List<String> slots = List.of();
         public String chatAlias = "";
         public boolean totalEnabled;
         public boolean totalHumans = true;
@@ -1202,7 +1211,7 @@ public final class StatsNetworking {
         public String displayName = "";
         public String displayNameMarkup = "";
         public String criterion = "dummy";
-        public String slot = "";
+        public List<String> slots = List.of();
         public int entryCount;
         public String chatAlias = "";
         public boolean totalEnabled;

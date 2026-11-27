@@ -9,9 +9,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.EntityType;
@@ -199,7 +201,7 @@ public final class StatsScreen extends UiScreen {
     private String editingObjectiveName = "";
     private String editingObjectiveCriterion = "dummy";
     private boolean formFillFromStats;
-    private String formSlot = "";
+    private final Set<String> formSlots = new LinkedHashSet<>();
     private boolean formTotalEnabled;
     private boolean formTotalHumans = true;
     private boolean formTotalBots;
@@ -1499,7 +1501,7 @@ public final class StatsScreen extends UiScreen {
         editingObjectiveName = "";
         editingObjectiveCriterion = "dummy";
         formFillFromStats = false;
-        formSlot = "";
+        formSlots.clear();
         formTotalEnabled = false;
         formTotalHumans = true;
         formTotalBots = false;
@@ -1522,7 +1524,10 @@ public final class StatsScreen extends UiScreen {
         editingObjectiveName = obj.name;
         editingObjectiveCriterion = obj.criterion != null ? obj.criterion : "dummy";
         formFillFromStats = false;
-        formSlot = obj.slot != null ? obj.slot : "";
+        formSlots.clear();
+        if (obj.slots != null) {
+            formSlots.addAll(obj.slots);
+        }
         formTotalEnabled = obj.totalEnabled;
         formTotalHumans = obj.totalHumans;
         formTotalBots = obj.totalBots;
@@ -1611,7 +1616,7 @@ public final class StatsScreen extends UiScreen {
             req.criterion = sbCriterionField != null ? sbCriterionField.getText().trim() : "dummy";
             req.displayName = sbDisplayField != null ? sbDisplayField.getText().trim() : "";
             req.fillFromStats = formFillFromStats;
-            req.slot = formSlot;
+            req.slots = new ArrayList<>(formSlots);
             req.chatAlias = sbAliasField != null ? sbAliasField.getText().trim() : "";
             req.totalEnabled = formTotalEnabled;
             req.totalHumans = formTotalHumans;
@@ -1648,7 +1653,7 @@ public final class StatsScreen extends UiScreen {
             req.name = nextName;
             req.criterion = sbCriterionField != null ? sbCriterionField.getText().trim() : "";
             req.displayName = sbDisplayField != null ? sbDisplayField.getText().trim() : "";
-            req.slot = formSlot;
+            req.slots = new ArrayList<>(formSlots);
             req.chatAlias = sbAliasField != null ? sbAliasField.getText().trim() : "";
             req.totalEnabled = formTotalEnabled;
             req.totalHumans = formTotalHumans;
@@ -1745,7 +1750,7 @@ public final class StatsScreen extends UiScreen {
                 c.drawTextWithShadow(textRenderer, lbl, panelX + 10, ry + 3, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY);
                 StringBuilder meta = new StringBuilder();
                 meta.append(obj.entryCount).append(" ent.");
-                if (obj.slot != null && !obj.slot.isEmpty()) meta.append(" \u00B7 ").append(obj.slot);
+                if (obj.slots != null && !obj.slots.isEmpty()) meta.append(" \u00B7 ").append(String.join(", ", obj.slots));
                 if (obj.chatAlias != null && !obj.chatAlias.isEmpty()) meta.append(" \u00B7 !!").append(obj.chatAlias);
                 c.drawText(textRenderer, AeternumTheme.ellipsize(textRenderer, meta.toString(), SIDEBAR_W - 50), panelX + 10, ry + 14, AeternumTheme.TEXT_MUTED, false);
             }
@@ -1940,11 +1945,10 @@ public final class StatsScreen extends UiScreen {
         {"custom", "minecraft.custom:minecraft."}
     };
 
-    private static final String[][] SLOT_OPTIONS = {
-        {"", "Ninguno"},
-        {"SIDEBAR", "SIDEBAR"},
-        {"LIST", "LIST"},
-        {"BELOW_NAME", "BELOW_NAME"}
+    private static final String[] SLOT_OPTIONS = {
+        "SIDEBAR",
+        "LIST",
+        "BELOW_NAME"
     };
 
     private int formDisplayLabelY(int contentTop) {
@@ -2039,15 +2043,9 @@ public final class StatsScreen extends UiScreen {
         c.drawText(textRenderer, "Slot en pantalla", slotX, aliasLabelY, AeternumTheme.TEXT_SECONDARY, false);
         int slotPillY = aliasLabelY + 11;
         int sx = slotX;
-        for (String[] opt : SLOT_OPTIONS) {
-            int sw = textRenderer.getWidth(opt[1]) + 10;
-            boolean sel = opt[0].equals(formSlot);
-            boolean over = mx >= sx && mx < sx + sw && my >= slotPillY && my < slotPillY + 18;
-            AeternumTheme.drawCard(c, sx, slotPillY, sw, 18,
-                sel ? AeternumTheme.CARD_SELECTED : (over ? AeternumTheme.CARD_HOVER : AeternumTheme.CARD_ALT_BG),
-                sel ? AeternumTheme.ACCENT_GOLD : AeternumTheme.BORDER_SUBTLE);
-            c.drawText(textRenderer, opt[1], sx + 5, slotPillY + 5, sel ? AeternumTheme.TEXT_PRIMARY : AeternumTheme.TEXT_SECONDARY, false);
-            sx += sw + 4;
+        for (String opt : SLOT_OPTIONS) {
+            boolean on = formSlots.contains(opt);
+            sx += drawTogglePill(c, sx, slotPillY, opt, on, AeternumTheme.ACCENT_GOLD, mx, my) + 4;
         }
 
         int totalLabelY = aliasLabelY + 37;
@@ -2235,10 +2233,12 @@ public final class StatsScreen extends UiScreen {
         int slotPillY = aliasLabelY + 11;
         if (my >= slotPillY && my < slotPillY + 18) {
             int sx = slotX;
-            for (String[] opt : SLOT_OPTIONS) {
-                int sw = textRenderer.getWidth(opt[1]) + 10;
+            for (String opt : SLOT_OPTIONS) {
+                int sw = textRenderer.getWidth(opt) + 14;
                 if (mx >= sx && mx < sx + sw) {
-                    formSlot = opt[0];
+                    if (!formSlots.remove(opt)) {
+                        formSlots.add(opt);
+                    }
                     return true;
                 }
                 sx += sw + 4;
